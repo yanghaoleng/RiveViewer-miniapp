@@ -12,7 +12,7 @@
 - ✅ Animojis 的 Rive Layout 与嵌套画板布局已恢复。
 - ✅ 已移除旧 H5 预览页面、桥接、本地服务、资源和配置。
 - ✅ 许可证采用 `PolyForm-Noncommercial-1.0.0`，第三方 MIT 声明已补齐。
-- ⏳ GitHub 公开仓库 `RiveViewer-miniapp` 待本轮完成创建与推送。
+- ✅ GitHub 公开仓库已创建并推送：<https://github.com/yanghaoleng/RiveViewer-miniapp>。
 
 ## 验证命令
 

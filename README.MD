@@ -2,6 +2,8 @@
 
 一款在微信小程序内本地预览、检查和交互调试 `.riv` 文件的工具。文件只保存在小程序本地目录，不经过业务服务器。
 
+公开仓库：<https://github.com/yanghaoleng/RiveViewer-miniapp>
+
 ## 产品目标
 
 - 让动效、设计和研发人员在手机上快速检查 Rive 文件。
