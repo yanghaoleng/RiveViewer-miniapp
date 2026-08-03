@@ -1,0 +1,102 @@
+<navigation-bar title="Rive 预览台" back="{{false}}" color="#f2f0e8" background="#0b0f14"></navigation-bar>
+
+<scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+  <view class="page-shell">
+    <view
+      class="import-dropzone"
+      bindtap="showImportMenu"
+      role="button"
+      aria-label="导入 Rive 文件"
+    >
+      <view class="import-dropzone__mark">
+        <image class="import-dropzone__plus" src="/assets/icons/plus.svg"></image>
+      </view>
+      <text class="import-dropzone__title">导入 Rive 文件</text>
+    </view>
+
+    <view class="library-section">
+      <view class="section-heading">
+        <text class="section-title">最近文件</text>
+        <text class="section-note">{{files.length}} 个</text>
+      </view>
+
+      <view class="file-list">
+        <view
+          class="file-row {{expandedFileId === item.id ? 'file-row--menu-open' : ''}}"
+          wx:for="{{files}}"
+          wx:key="id"
+        >
+          <view
+            class="file-open"
+            data-id="{{item.id}}"
+            data-index="{{index}}"
+            catchtap="openFile"
+            hover-class="file-row--pressed"
+            hover-stay-time="100"
+            role="button"
+            aria-label="预览 {{item.name}}"
+          >
+            <view class="file-cover">
+              <image
+                wx:if="{{item.cover}}"
+                class="file-cover__image"
+                src="{{item.cover}}"
+                mode="aspectFill"
+              ></image>
+              <view wx:else class="file-cover__fallback">
+                <text>RIV</text>
+              </view>
+            </view>
+            <view class="file-main">
+              <view class="file-title-line">
+                <text class="file-name">{{item.name}}</text>
+                <text wx:if="{{item.builtin}}" class="file-badge">示例</text>
+              </view>
+              <text class="file-summary">{{item.summary}}</text>
+              <text class="file-meta">{{item.displaySize}} / {{item.displayDate}}</text>
+            </view>
+          </view>
+          <view class="file-action">
+            <view
+              class="file-menu-toggle {{expandedFileId === item.id ? 'is-open' : ''}}"
+              data-id="{{item.id}}"
+              catchtap="toggleFileMenu"
+              role="button"
+              aria-label="文件操作"
+            >
+              <image class="file-menu-chevron" src="/assets/icons/chevron-down.svg"></image>
+            </view>
+          </view>
+          <view
+            wx:if="{{expandedFileId === item.id}}"
+            class="file-menu"
+            catchtap="toggleFileMenu"
+          >
+            <button data-id="{{item.id}}" catchtap="saveToDevice">{{saveTargetLabel}}</button>
+            <button data-id="{{item.id}}" catchtap="shareFile">发送文件</button>
+            <button
+              class="file-menu__danger {{item.builtin ? 'is-disabled' : ''}}"
+              disabled="{{item.builtin}}"
+              data-id="{{item.id}}"
+              catchtap="deleteFile"
+            >{{item.builtin ? '不能删' : '删除文件'}}</button>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view
+      class="author-contact"
+      bindtap="copyAuthorWechat"
+      role="button"
+      aria-label="联系作者反馈意见，复制微信号 yanghaoeleng"
+    >联系作者反馈意见</view>
+  </view>
+</scroll-view>
+
+<canvas
+  id="thumbnailCanvas"
+  class="thumbnail-canvas"
+  type="2d"
+  aria-hidden="true"
+></canvas>

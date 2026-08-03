@@ -1,0 +1,18 @@
+{
+  "name": "riveviewer-miniapp",
+  "version": "1.0.1",
+  "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "description": "微信小程序 Rive 文件本地预览工具",
+  "scripts": {
+    "vendor:rive": "node scripts/vendor-rive.mjs",
+    "inspect:rive": "node scripts/inspect-rive.mjs",
+    "benchmark:rive": "node scripts/benchmark-rive.mjs",
+    "verify:interactions": "node scripts/verify-rive-interactions.mjs",
+    "check": "node scripts/check-project.mjs"
+  },
+  "dependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "@rive-app/canvas-advanced": "2.39.1"
+  }
+}
