@@ -28,3 +28,4 @@
 | 背景色圆圈 | Canvas tone swatches | `.tone-options`、`.tone`、`canvasTone` |
 | 右上角下载按钮 | File export menu | `.file-heading__save`、`showSaveMenu` |
 | 文件本地仓库 | Mini Program user data storage | `rive-library`、`utils/library.js` |
+| 发布版本号 | Release version | `package.json.version`、`package-lock.json.version`、开发者工具上传版本 |

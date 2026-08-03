@@ -4,6 +4,8 @@
 
 公开仓库：<https://github.com/yanghaoleng/RiveViewer-miniapp>
 
+当前微信开发者工具上传版本：`1.0.2`，更新备注：`修复BUG`。
+
 ## 产品目标
 
 - 让动效、设计和研发人员在手机上快速检查 Rive 文件。
