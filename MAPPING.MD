@@ -76,7 +76,7 @@
 | H5 右侧预览 | Desktop preview side panel | `.drawer-workspace`、`.drawer-home-pane`、`.drawer-preview-panel`、`@media (min-width: 860px)` |
 | Mac 双页中缝 | Custom desktop split workspace | `.desktop-workspace`、`.desktop-home-pane`、`.desktop-preview-pane`、`desktopSplitEnabled`、`desktopPreviewFileId` |
 | 小程序嵌入式预览 | Embedded native preview panel | `components/preview-panel`、`preview-definition.js`、`isEmbeddedPreview` |
-| 桌面分栏阈值 | Desktop split breakpoint | `DESKTOP_SPLIT_MIN_WIDTH = 960`、`supportsDesktopSplit`、`getDesktopSplitUrl` |
+| 桌面分栏阈值 | Desktop split logical-pixel breakpoint | `DESKTOP_SPLIT_MIN_WIDTH = 960`、`windowInfo.windowWidth`、`supportsDesktopSplit`、`getDesktopSplitUrl` |
 | Mac 分栏重编译包 | Desktop split DevTools rebuild archive | `dist/RiveViewer-miniapp-1.0.4-mac-split-devtools-rebuild.zip` |
 | H5 分栏过渡 | Responsive split transition | `.drawer-workspace`、`.drawer-workspace.is-open`、`grid-template-columns`、`260ms cubic-bezier(.16, 1, .3, 1)` |
 | H5 侧栏关闭 | Preview panel close button | `.drawer-close`、`X`、`Escape`、`setActiveFile(null)` |
