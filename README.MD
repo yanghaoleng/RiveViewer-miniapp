@@ -107,6 +107,8 @@ npm run verify:interactions
 npm run benchmark:rive
 ```
 
+Mac 同页分栏试验包输出为 `dist/RiveViewer-miniapp-1.0.4-mac-split-test.zip`，压缩包根目录可直接导入微信开发者工具。打包时排除 H5、测试素材、依赖目录、脚本、本地配置与项目文档。
+
 `rive测试文件/` 是本机性能与兼容性素材目录，已从公开仓库排除。小程序实际内置资源位于 `assets/samples/`。
 
 网页版与原生小程序文件库相互独立：H5 文件保存在浏览器自己的 IndexedDB 中，不上传服务器，也不会自动读取原生小程序已导入的文件。
