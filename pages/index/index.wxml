@@ -75,28 +75,38 @@
             <button data-id="{{item.id}}" catchtap="saveToDevice">{{saveTargetLabel}}</button>
             <button data-id="{{item.id}}" catchtap="shareFile">发送文件</button>
             <button
-              class="file-menu__danger {{item.builtin ? 'is-disabled' : ''}}"
-              disabled="{{item.builtin}}"
+              class="file-menu__danger"
               data-id="{{item.id}}"
               catchtap="deleteFile"
-            >{{item.builtin ? '不能删' : '删除文件'}}</button>
+            >删除文件</button>
           </view>
         </view>
       </view>
     </view>
 
+    <view class="web-link-footer">
+      <text class="web-link-footer__label">复杂文件用网页版更流畅：</text>
+      <view class="web-link-footer__url-wrap">
+        <text class="web-link-footer__url" user-select="true">mikeywa.site/rive-viewer/</text>
+        <view class="web-link-footer__url-fade" aria-hidden="true"></view>
+      </view>
+      <view
+        class="web-link-footer__copy"
+        bindtap="copyWebViewerUrl"
+        hover-class="web-link-footer__copy--pressed"
+        hover-stay-time="100"
+        role="button"
+        aria-label="复制网页版预览地址"
+      >
+        <image class="web-link-footer__copy-icon" src="/assets/icons/copy-simple.svg"></image>
+      </view>
+    </view>
+
     <view
       class="author-contact"
-      bindtap="copyAuthorWechat"
+      bindtap="showAuthorWechat"
       role="button"
-      aria-label="联系作者反馈意见，复制微信号 yanghaoeleng"
+      aria-label="联系作者反馈意见，查看作者微信号"
     >联系作者反馈意见</view>
   </view>
 </scroll-view>
-
-<canvas
-  id="thumbnailCanvas"
-  class="thumbnail-canvas"
-  type="2d"
-  aria-hidden="true"
-></canvas>

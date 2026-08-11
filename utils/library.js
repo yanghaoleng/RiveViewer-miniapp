@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'rive-preview-library-v1'
 const COVER_STORAGE_KEY = 'rive-preview-covers-v1'
+const HIDDEN_BUILTIN_STORAGE_KEY = 'rive-preview-hidden-builtins-v1'
 const LIBRARY_DIR = `${wx.env.USER_DATA_PATH}/rive-library`
 const BUNDLED_FILE_READERS = {
   'assets/samples/guide.riv': () => require('../assets/samples/guide'),
@@ -61,6 +62,15 @@ function writeCoverCache(covers) {
   wx.setStorageSync(COVER_STORAGE_KEY, covers)
 }
 
+function readHiddenBuiltinIds() {
+  const stored = wx.getStorageSync(HIDDEN_BUILTIN_STORAGE_KEY)
+  return Array.isArray(stored) ? stored.filter((id) => typeof id === 'string') : []
+}
+
+function writeHiddenBuiltinIds(ids) {
+  wx.setStorageSync(HIDDEN_BUILTIN_STORAGE_KEY, [...new Set(ids)])
+}
+
 function formatSize(bytes) {
   if (!Number.isFinite(bytes)) return '大小未知'
   if (bytes < 1024) return `${bytes} B`
@@ -97,7 +107,9 @@ function decorate(file, coverCache = readCoverCache()) {
 
 function getAllFiles() {
   const coverCache = readCoverCache()
-  return [...BUILTIN_FILES, ...readUserFiles()].map((file) => decorate(file, coverCache))
+  const hiddenBuiltinIds = new Set(readHiddenBuiltinIds())
+  const visibleBuiltins = BUILTIN_FILES.filter((file) => !hiddenBuiltinIds.has(file.id))
+  return [...visibleBuiltins, ...readUserFiles()].map((file) => decorate(file, coverCache))
 }
 
 function getFileById(id) {
@@ -374,6 +386,16 @@ function prepareShareFileSync(id) {
 }
 
 async function removeFile(id) {
+  const builtinFile = BUILTIN_FILES.find((item) => item.id === id)
+  if (builtinFile) {
+    const covers = readCoverCache()
+    await unlinkIfPresent(covers[id] || builtinFile.cover)
+    delete covers[id]
+    writeCoverCache(covers)
+    writeHiddenBuiltinIds([...readHiddenBuiltinIds(), id])
+    return
+  }
+
   const file = readUserFiles().find((item) => item.id === id)
   if (!file) return
   await unlinkIfPresent(file.path)

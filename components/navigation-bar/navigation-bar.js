@@ -1,3 +1,37 @@
+const { calculateNavigationLayout } = require('./navigation-layout')
+
+const HOME_PATH = '/pages/index/index'
+
+function getWindowInfo() {
+  try {
+    return typeof wx.getWindowInfo === 'function'
+      ? wx.getWindowInfo()
+      : wx.getSystemInfoSync()
+  } catch (error) {
+    return {}
+  }
+}
+
+function getDeviceInfo() {
+  try {
+    return typeof wx.getDeviceInfo === 'function'
+      ? wx.getDeviceInfo()
+      : wx.getSystemInfoSync()
+  } catch (error) {
+    return {}
+  }
+}
+
+function getMenuRect() {
+  try {
+    return typeof wx.getMenuButtonBoundingClientRect === 'function'
+      ? wx.getMenuButtonBoundingClientRect()
+      : {}
+  } catch (error) {
+    return {}
+  }
+}
+
 Component({
   options: {
     multipleSlots: true // 在组件定义时的选项中启用多slot支持
@@ -55,27 +89,47 @@ Component({
    * 组件的初始数据
    */
   data: {
-    displayStyle: ''
+    displayStyle: '',
+    innerPaddingRight: '',
+    leftWidth: '',
+    safeAreaTop: ''
   },
   lifetimes: {
     attached() {
-      const rect = wx.getMenuButtonBoundingClientRect()
-      const platform = (wx.getDeviceInfo() || wx.getSystemInfoSync()).platform
-      const isAndroid = platform === 'android'
-      const isDevtools = platform === 'devtools'
-      const { windowWidth, safeArea: { top = 0, bottom = 0 } = {} } = wx.getWindowInfo() || wx.getSystemInfoSync()
-      this.setData({
-        ios: !isAndroid,
-        innerPaddingRight: `padding-right: ${windowWidth - rect.left}px`,
-        leftWidth: `width: ${windowWidth - rect.left}px`,
-        safeAreaTop: isDevtools || isAndroid ? `height: calc(var(--height) + ${top}px); padding-top: ${top}px` : ``
-      })
+      this._windowResizeHandler = () => this._updateLayout()
+      this._updateLayout()
+      if (typeof wx.onWindowResize === 'function') {
+        wx.onWindowResize(this._windowResizeHandler)
+      }
     },
+    detached() {
+      if (this._windowResizeHandler && typeof wx.offWindowResize === 'function') {
+        wx.offWindowResize(this._windowResizeHandler)
+      }
+      this._windowResizeHandler = null
+    }
   },
   /**
    * 组件的方法列表
    */
   methods: {
+    _updateLayout() {
+      const layout = calculateNavigationLayout({
+        windowInfo: getWindowInfo(),
+        deviceInfo: getDeviceInfo(),
+        menuRect: getMenuRect()
+      })
+      const safeAreaTop = layout.topInset
+        ? `height: calc(var(--height) + ${layout.topInset}px); padding-top: ${layout.topInset}px`
+        : ''
+      this.setData({
+        ios: !layout.isAndroid,
+        desktop: layout.isDesktop,
+        innerPaddingRight: `padding-right: ${layout.edgeWidth}px`,
+        leftWidth: `width: ${layout.edgeWidth}px`,
+        safeAreaTop
+      })
+    },
     _showChange(show) {
       const animated = this.data.animated
       let displayStyle = ''
@@ -91,12 +145,27 @@ Component({
     },
     back() {
       const data = this.data
-      if (data.delta) {
+      const delta = Math.max(1, Number(data.delta) || 1)
+      const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
+      if (data.delta && pages.length > delta) {
         wx.navigateBack({
-          delta: data.delta
+          delta,
+          fail: () => this._goHome()
         })
+      } else if (data.delta) {
+        this._goHome()
       }
       this.triggerEvent('back', { delta: data.delta }, {})
+    },
+    home() {
+      this._goHome()
+    },
+    _goHome() {
+      if (typeof wx.reLaunch === 'function') {
+        wx.reLaunch({ url: HOME_PATH })
+        return
+      }
+      wx.redirectTo({ url: HOME_PATH })
     }
   },
 })

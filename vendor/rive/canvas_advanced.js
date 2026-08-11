@@ -16,6 +16,7 @@ function(moduleArg = {}) {
   var requestAnimationFrame = moduleArg.requestAnimationFrame;
   var cancelAnimationFrame = moduleArg.cancelAnimationFrame;
   var Path2D = moduleArg.Path2D;
+  var DOMMatrix = moduleArg.DOMMatrix;
   var Image = moduleArg.Image;
   var Blob = moduleArg.Blob;
   var URL = moduleArg.URL;
@@ -371,17 +372,29 @@ k.onRuntimeInitialized = function() {
     this.ha = p;
     this.sa = u;
   }, __destruct:function() {
-    this.Ca && (ma.Bb(this.Ca), URL.revokeObjectURL(this.Oa));
+    this.Ca && ma.Bb(this.Ca);
+    this.Oa && URL.revokeObjectURL(this.Oa);
     this.__parent.__destruct.call(this);
   }, decode:function(p) {
     var u = this;
     u.sa && u.sa(u);
     var I = new Image();
     u.Oa = URL.createObjectURL(new Blob([p], {type:"image/png",}));
+    var completed = !1;
     I.onload = function() {
+      if (completed) return;
+      completed = !0;
       u.tb = I;
       u.Ca = ma.Ab(I);
       u.size(I.width, I.height);
+      u.ha && u.ha(u);
+    };
+    I.onerror = function() {
+      if (completed) return;
+      completed = !0;
+      console.warn("Rive embedded image decode failed");
+      URL.revokeObjectURL(u.Oa);
+      u.Oa = "";
       u.ha && u.ha(u);
     };
     I.src = u.Oa;
@@ -749,19 +762,19 @@ function Ya(a, b) {
   }));
 }
 var Za, $a, db = {487293:(a, b, c, d, e) => {
-  if ("undefined" === typeof window || void 0 === (window.AudioContext || window.webkitAudioContext)) {
+  if (!moduleArg.audioWindow || void 0 === (moduleArg.audioWindow.AudioContext || moduleArg.audioWindow.webkitAudioContext)) {
     return 0;
   }
-  if ("undefined" === typeof window.miniaudio) {
-    window.miniaudio = {referenceCount:0};
-    window.miniaudio.device_type = {};
-    window.miniaudio.device_type.playback = a;
-    window.miniaudio.device_type.capture = b;
-    window.miniaudio.device_type.duplex = c;
-    window.miniaudio.device_state = {};
-    window.miniaudio.device_state.stopped = d;
-    window.miniaudio.device_state.started = e;
-    let f = window.miniaudio;
+  if ("undefined" === typeof moduleArg.audioWindow.miniaudio) {
+    moduleArg.audioWindow.miniaudio = {referenceCount:0};
+    moduleArg.audioWindow.miniaudio.device_type = {};
+    moduleArg.audioWindow.miniaudio.device_type.playback = a;
+    moduleArg.audioWindow.miniaudio.device_type.capture = b;
+    moduleArg.audioWindow.miniaudio.device_type.duplex = c;
+    moduleArg.audioWindow.miniaudio.device_state = {};
+    moduleArg.audioWindow.miniaudio.device_state.stopped = d;
+    moduleArg.audioWindow.miniaudio.device_state.started = e;
+    let f = moduleArg.audioWindow.miniaudio;
     f.devices = [];
     f.track_device = function(g) {
       for (var h = 0; h < f.devices.length; ++h) {
@@ -809,37 +822,37 @@ var Za, $a, db = {487293:(a, b, c, d, e) => {
       document.addEventListener(g, f.unlock, !0);
     });
   }
-  window.miniaudio.referenceCount += 1;
+  moduleArg.audioWindow.miniaudio.referenceCount += 1;
   return 1;
 }, 489471:() => {
-  "undefined" !== typeof window.miniaudio && (window.miniaudio.unlock_event_types.map(function(a) {
-    document.removeEventListener(a, window.miniaudio.unlock, !0);
-  }), --window.miniaudio.referenceCount, 0 === window.miniaudio.referenceCount && delete window.miniaudio);
-}, 489775:() => void 0 !== navigator.mediaDevices && void 0 !== navigator.mediaDevices.getUserMedia, 489879:() => {
+  "undefined" !== typeof moduleArg.audioWindow.miniaudio && (moduleArg.audioWindow.miniaudio.unlock_event_types.map(function(a) {
+    document.removeEventListener(a, moduleArg.audioWindow.miniaudio.unlock, !0);
+  }), --moduleArg.audioWindow.miniaudio.referenceCount, 0 === moduleArg.audioWindow.miniaudio.referenceCount && delete moduleArg.audioWindow.miniaudio);
+}, 489775:() => !1, 489879:() => {
   try {
-    var a = new (window.AudioContext || window.webkitAudioContext)(), b = a.sampleRate;
+    var a = new (moduleArg.audioWindow.AudioContext || moduleArg.audioWindow.webkitAudioContext)(), b = a.sampleRate;
     a.close();
     return b;
   } catch (c) {
     return 0;
   }
 }, 490050:(a, b, c, d, e, f) => {
-  if ("undefined" === typeof window.miniaudio) {
+  if ("undefined" === typeof moduleArg.audioWindow.miniaudio) {
     return -1;
   }
   var g = {}, h = {};
-  a == window.miniaudio.device_type.playback && 0 != c && (h.sampleRate = c);
-  g.I = new (window.AudioContext || window.webkitAudioContext)(h);
+  a == moduleArg.audioWindow.miniaudio.device_type.playback && 0 != c && (h.sampleRate = c);
+  g.I = new (moduleArg.audioWindow.AudioContext || moduleArg.audioWindow.webkitAudioContext)(h);
   g.I.suspend();
-  g.state = window.miniaudio.device_state.stopped;
+  g.state = moduleArg.audioWindow.miniaudio.device_state.stopped;
   c = 0;
-  a != window.miniaudio.device_type.playback && (c = b);
+  a != moduleArg.audioWindow.miniaudio.device_type.playback && (c = b);
   g.W = g.I.createScriptProcessor(d, c, b);
   g.W.onaudioprocess = function(n) {
     if (null == g.na || 0 == g.na.length) {
       g.na = new Float32Array(Ia.buffer, e, d * b);
     }
-    if (a == window.miniaudio.device_type.capture || a == window.miniaudio.device_type.duplex) {
+    if (a == moduleArg.audioWindow.miniaudio.device_type.capture || a == moduleArg.audioWindow.miniaudio.device_type.duplex) {
       for (var m = 0; m < b; m += 1) {
         for (var r = n.inputBuffer.getChannelData(m), w = g.na, x = 0; x < d; x += 1) {
           w[x * b + m] = r[x];
@@ -847,7 +860,7 @@ var Za, $a, db = {487293:(a, b, c, d, e) => {
       }
       bb(f, d, e);
     }
-    if (a == window.miniaudio.device_type.playback || a == window.miniaudio.device_type.duplex) {
+    if (a == moduleArg.audioWindow.miniaudio.device_type.playback || a == moduleArg.audioWindow.miniaudio.device_type.duplex) {
       for (cb(f, d, e), m = 0; m < n.outputBuffer.numberOfChannels; ++m) {
         for (r = n.outputBuffer.getChannelData(m), w = g.na, x = 0; x < d; x += 1) {
           r[x] = w[x * b + m];
@@ -859,18 +872,18 @@ var Za, $a, db = {487293:(a, b, c, d, e) => {
       }
     }
   };
-  a != window.miniaudio.device_type.capture && a != window.miniaudio.device_type.duplex || navigator.mediaDevices.getUserMedia({audio:!0, video:!1}).then(function(n) {
+  a != moduleArg.audioWindow.miniaudio.device_type.capture && a != moduleArg.audioWindow.miniaudio.device_type.duplex || Promise.reject(new Error("Audio capture disabled")).then(function(n) {
     g.wa = g.I.createMediaStreamSource(n);
     g.wa.connect(g.W);
     g.W.connect(g.I.destination);
   }).catch(function(n) {
     console.log("Failed to get user media: " + n);
   });
-  a == window.miniaudio.device_type.playback && g.W.connect(g.I.destination);
+  a == moduleArg.audioWindow.miniaudio.device_type.playback && g.W.connect(g.I.destination);
   g.hb = f;
-  return window.miniaudio.track_device(g);
-}, 492927:a => window.miniaudio.get_device_by_index(a).I.sampleRate, 493E3:a => {
-  a = window.miniaudio.get_device_by_index(a);
+  return moduleArg.audioWindow.miniaudio.track_device(g);
+}, 492927:a => moduleArg.audioWindow.miniaudio.get_device_by_index(a).I.sampleRate, 493E3:a => {
+  a = moduleArg.audioWindow.miniaudio.get_device_by_index(a);
   void 0 !== a.W && (a.W.onaudioprocess = function() {
   }, a.W.disconnect(), a.W = void 0);
   void 0 !== a.wa && (a.wa.disconnect(), a.wa = void 0);
@@ -878,15 +891,15 @@ var Za, $a, db = {487293:(a, b, c, d, e) => {
   a.I = void 0;
   a.hb = void 0;
 }, 493400:a => {
-  window.miniaudio.untrack_device_by_index(a);
+  moduleArg.audioWindow.miniaudio.untrack_device_by_index(a);
 }, 493450:a => {
-  a = window.miniaudio.get_device_by_index(a);
+  a = moduleArg.audioWindow.miniaudio.get_device_by_index(a);
   a.I.resume();
-  a.state = window.miniaudio.device_state.started;
+  a.state = moduleArg.audioWindow.miniaudio.device_state.started;
 }, 493589:a => {
-  a = window.miniaudio.get_device_by_index(a);
+  a = moduleArg.audioWindow.miniaudio.get_device_by_index(a);
   a.I.suspend();
-  a.state = window.miniaudio.device_state.stopped;
+  a.state = moduleArg.audioWindow.miniaudio.device_state.stopped;
 }}, eb = a => {
   for (; 0 < a.length;) {
     a.shift()(k);

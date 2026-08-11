@@ -4,8 +4,10 @@ import path from 'node:path'
 import { brotliDecompress } from 'node:zlib'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const requireModule = createRequire(import.meta.url)
 const decompressBrotli = promisify(brotliDecompress)
 const packageManifest = JSON.parse(
   await fs.readFile(path.join(root, 'package.json'), 'utf8')
@@ -13,17 +15,25 @@ const packageManifest = JSON.parse(
 const appManifest = JSON.parse(
   await fs.readFile(path.join(root, 'app.json'), 'utf8')
 )
+const projectManifest = JSON.parse(
+  await fs.readFile(path.join(root, 'project.config.json'), 'utf8')
+)
 const requiredFiles = [
   'app.json',
   'project.config.json',
   'vendor/rive/canvas_advanced.js',
   'vendor/rive/rive.wasm.br',
+  'vendor/rive/rive_fallback.wasm.br',
   'assets/samples/guide.riv',
   'assets/samples/question.riv',
   'assets/samples/guide.js',
   'assets/samples/question.js',
+  'assets/icons/copy-simple.svg',
+  'share-friend.png',
+  'share-timeline.png',
   'pages/index/index.js',
   'pages/preview/index.js',
+  'components/navigation-bar/navigation-layout.js',
   'utils/share.js',
   'scripts/verify-rive-interactions.mjs'
 ]
@@ -50,10 +60,9 @@ try {
 }
 
 for (const relativePath of [
-  'h5',
   'pages/h5-preview',
-  'scripts/h5-server.mjs',
-  'assets/icons/browser.svg'
+  'pages/web',
+  'scripts/h5-server.mjs'
 ]) {
   try {
     await fs.access(path.join(root, relativePath))
@@ -61,6 +70,20 @@ for (const relativePath of [
   } catch (error) {
     if (error.code !== 'ENOENT') throw error
   }
+}
+
+for (const relativePath of [
+  'h5/package.json',
+  'h5/app/rive-viewer/page.tsx',
+  'h5/lib/rive-player.ts',
+  'h5/public/rive-viewer/rive.wasm'
+]) {
+  await fs.access(path.join(root, relativePath))
+}
+
+const ignoredPackPaths = projectManifest.packOptions?.ignore || []
+if (!ignoredPackPaths.some((item) => item.type === 'folder' && item.value === 'h5')) {
+  throw new Error('独立 H5 目录必须从微信小程序上传包中排除')
 }
 
 for (const relativePath of ['assets/samples/guide.riv', 'assets/samples/question.riv']) {
@@ -82,6 +105,7 @@ for (const relativePath of visibleFiles) {
 }
 
 const previewMarkup = await fs.readFile(path.join(root, 'pages/preview/index.wxml'), 'utf8')
+const homeMarkup = await fs.readFile(path.join(root, 'pages/index/index.wxml'), 'utf8')
 const previewLogic = await fs.readFile(path.join(root, 'pages/preview/index.js'), 'utf8')
 const homeLogic = await fs.readFile(path.join(root, 'pages/index/index.js'), 'utf8')
 const appLogic = await fs.readFile(path.join(root, 'app.js'), 'utf8')
@@ -90,6 +114,72 @@ const shareLogic = await fs.readFile(path.join(root, 'utils/share.js'), 'utf8')
 const nativeRuntime = await fs.readFile(path.join(root, 'utils/rive-native.js'), 'utf8')
 const nativeVendor = await fs.readFile(path.join(root, 'vendor/rive/canvas_advanced.js'), 'utf8')
 const vendorScript = await fs.readFile(path.join(root, 'scripts/vendor-rive.mjs'), 'utf8')
+const navigationLogic = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.js'), 'utf8')
+const navigationStyle = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.wxss'), 'utf8')
+const { calculateNavigationLayout } = requireModule(
+  path.join(root, 'components/navigation-bar/navigation-layout.js')
+)
+
+const desktopNavigationLayout = calculateNavigationLayout({
+  windowInfo: { windowWidth: 414, statusBarHeight: 0, safeArea: { top: 0 } },
+  deviceInfo: { platform: 'mac' },
+  menuRect: { left: 289, top: 26, width: 60, height: 32 }
+})
+const phoneNavigationLayout = calculateNavigationLayout({
+  windowInfo: { windowWidth: 375, statusBarHeight: 47, safeArea: { top: 47 } },
+  deviceInfo: { platform: 'ios' },
+  menuRect: { left: 278, top: 51, width: 87, height: 32 }
+})
+const invalidDesktopNavigationLayout = calculateNavigationLayout({
+  windowInfo: { windowWidth: 800 },
+  deviceInfo: { platform: 'windows' },
+  menuRect: {}
+})
+if (
+  desktopNavigationLayout.topInset !== 20
+  || desktopNavigationLayout.edgeWidth !== 125
+  || phoneNavigationLayout.topInset !== 0
+  || phoneNavigationLayout.edgeWidth !== 97
+  || invalidDesktopNavigationLayout.edgeWidth !== 72
+) {
+  throw new Error('自定义导航栏的桌面胶囊对齐或异常坐标兜底失效')
+}
+if (
+  !/wx\.onWindowResize\s*\(/.test(navigationLogic)
+  || !/wx\.offWindowResize\s*\(/.test(navigationLogic)
+  || !/getCurrentPages\(\)/.test(navigationLogic)
+  || !/wx\.reLaunch\(\{\s*url:\s*HOME_PATH/.test(navigationLogic)
+  || /align-items:\s*flex-start/.test(navigationStyle)
+  || !/\.weui-navigation-bar__left\s*\{[\s\S]{0,260}align-items:\s*center/.test(navigationStyle)
+  || !/\.weui-navigation-bar__btn_goback_wrapper\s*\{[\s\S]{0,260}width:\s*44px[\s\S]{0,160}height:\s*44px/.test(navigationStyle)
+  || /margin:\s*-11px/.test(navigationStyle)
+) {
+  throw new Error('自定义导航栏缺少电脑端对齐、完整返回热区或单页栈回首页兜底')
+}
+async function readJavaScriptTree(relativeDirectory) {
+  const absoluteDirectory = path.join(root, relativeDirectory)
+  let entries = []
+  try {
+    entries = await fs.readdir(absoluteDirectory, { withFileTypes: true })
+  } catch (error) {
+    if (error.code === 'ENOENT') return []
+    throw error
+  }
+  const sources = await Promise.all(entries.map(async (entry) => {
+    const relativePath = path.join(relativeDirectory, entry.name)
+    if (entry.isDirectory()) return readJavaScriptTree(relativePath)
+    if (!entry.isFile() || !entry.name.endsWith('.js')) return []
+    return [await fs.readFile(path.join(root, relativePath), 'utf8')]
+  }))
+  return sources.flat()
+}
+
+const businessJavaScript = [
+  appLogic,
+  ...await readJavaScriptTree('pages'),
+  ...await readJavaScriptTree('components'),
+  ...await readJavaScriptTree('utils')
+].join('\n')
 
 function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex')
@@ -99,19 +189,39 @@ const packageWasm = await fs.readFile(
   path.join(root, 'node_modules/@rive-app/canvas-advanced/rive.wasm')
 )
 const nativeCompressedWasm = await fs.readFile(path.join(root, 'vendor/rive/rive.wasm.br'))
+const fallbackPackageWasm = await fs.readFile(
+  path.join(root, 'node_modules/@rive-app/canvas-advanced/rive_fallback.wasm')
+)
+const fallbackCompressedWasm = await fs.readFile(
+  path.join(root, 'vendor/rive/rive_fallback.wasm.br')
+)
 
 if (sha256(packageWasm) !== sha256(await decompressBrotli(nativeCompressedWasm))) {
   throw new Error('原生 Brotli WASM 与依赖中的 Rive 运行时未保持一致')
 }
+if (sha256(fallbackPackageWasm) !== sha256(await decompressBrotli(fallbackCompressedWasm))) {
+  throw new Error('兼容版 Brotli WASM 与依赖中的 Rive 运行时未保持一致')
+}
 
 if (
   appManifest.pages.some((page) => /h5/i.test(page))
-  || packageManifest.scripts?.['dev:h5']
-  || /h5Preview|switchToH5|retryWithH5|h5Origin|web-view|h5-preview/i.test(
+  || /h5Preview|switchToH5|retryWithH5|h5Origin|h5-preview/i.test(
     appLogic + previewLogic + previewMarkup
   )
 ) {
-  throw new Error('项目中仍有废弃的 H5 预览入口或配置')
+  throw new Error('小程序包中仍有废弃的旧 H5 预览入口或配置')
+}
+if (
+  appManifest.pages.includes('pages/web/index')
+  || /openWebViewer|web-view-entry|<web-view/.test(homeLogic + homeMarkup)
+  || !/WEB_VIEW_URL\s*=\s*['"]https:\/\/mikeywa\.site\/rive-viewer\/['"]/.test(homeLogic)
+  || !/bindtap="copyWebViewerUrl"/.test(homeMarkup)
+  || !/复杂文件用网页版更流畅：/.test(homeMarkup)
+  || !/web-link-footer__url-fade/.test(homeMarkup)
+  || !/>mikeywa\.site\/rive-viewer\/<\/text>/.test(homeMarkup)
+  || !/\/assets\/icons\/copy-simple\.svg/.test(homeMarkup)
+) {
+  throw new Error('首页网页版底部提示、复制入口或旧 web-view 清理不完整')
 }
 
 if (/pageResize(Start|Move|End)/.test(previewMarkup + previewLogic)) {
@@ -130,15 +240,52 @@ if (
 if (!/count:\s*100/.test(homeLogic) || !/importSelectedFiles/.test(homeLogic)) {
   throw new Error('微信聊天文件多选导入未启用')
 }
+const clipboardReadCalls = businessJavaScript.match(/wx\.getClipboardData\s*\(/g) || []
+const clipboardWriteCalls = businessJavaScript.match(/wx\.setClipboardData\s*\(/g) || []
+if (
+  clipboardReadCalls.length
+  || clipboardWriteCalls.length !== 1
+  || !/copyWebViewerUrl\(\)\s*\{[\s\S]{0,500}wx\.setClipboardData\(\{[\s\S]{0,160}data:\s*WEB_VIEW_URL/.test(homeLogic)
+  || !/success:\s*\(\)\s*=>\s*\{[\s\S]{0,120}title:\s*['"]已复制网址['"]/.test(homeLogic)
+) {
+  throw new Error('剪贴板仅允许在用户点击后写入网页版地址，禁止读取或后台写入')
+}
+if (/thumbnailCanvas|generateMissingThumbnails|scheduleMissingThumbnails/.test(homeLogic + homeMarkup)) {
+  throw new Error('首页仍在后台创建 Rive 缩略图画布')
+}
 if (
   !/showShareMenu/.test(shareLogic)
+  || !/FRIEND_SHARE_IMAGE\s*=\s*['"]\/share-friend\.png['"]/.test(shareLogic)
+  || !/TIMELINE_SHARE_IMAGE\s*=\s*['"]\/share-timeline\.png['"]/.test(shareLogic)
+  || !/menus:\s*SHARE_MENUS/.test(shareLogic)
   || !/shareAppMessage/.test(shareLogic)
   || !/shareTimeline/.test(shareLogic)
+  || !/showShareMenu\.object\.menus/.test(shareLogic)
+  || /canIUse\(['"]showShareMenu\.menus['"]\)/.test(shareLogic)
   || ![homeLogic, previewLogic].every((source) => (
-    /onShareAppMessage\(\)/.test(source) && /onShareTimeline\(\)/.test(source)
+    /onShareAppMessage:\s*function\s*\(\)/.test(source)
+    && /onShareTimeline:\s*function\s*\(\)/.test(source)
+    && /imageUrl:\s*FRIEND_SHARE_IMAGE/.test(source)
+    && /imageUrl:\s*TIMELINE_SHARE_IMAGE/.test(source)
+    && /onShow\(\)\s*{[\s\S]{0,120}enableShareMenu\(\)/.test(source)
   ))
 ) {
   throw new Error('首页或原生预览没有完整开启微信分享菜单')
+}
+
+const friendShareBytes = (await fs.stat(path.join(root, 'share-friend.png'))).size
+const timelineShareBytes = (await fs.stat(path.join(root, 'share-timeline.png'))).size
+if (friendShareBytes > 140 * 1024 || timelineShareBytes > 40 * 1024) {
+  throw new Error('分享缩略图体积过大，请先压缩再打包')
+}
+if (
+  !/HIDDEN_BUILTIN_STORAGE_KEY/.test(libraryLogic)
+  || !/writeHiddenBuiltinIds/.test(libraryLogic)
+  || !/visibleBuiltins/.test(libraryLogic)
+  || /disabled="\{\{item\.builtin\}\}"/.test(homeMarkup)
+  || /file\.builtin\) return/.test(homeLogic)
+) {
+  throw new Error('示例文件仍不能从本地列表删除')
 }
 if (
   !/loadingProgress/.test(previewMarkup)
@@ -196,10 +343,97 @@ if (
 }
 if (
   !/Image:\s*root\.Image/.test(nativeRuntime)
+  || !/DOMMatrix:\s*root\.DOMMatrix/.test(nativeRuntime)
   || !/var Image = moduleArg\.Image/.test(nativeVendor)
+  || !/var DOMMatrix = moduleArg\.DOMMatrix/.test(nativeVendor)
   || !/var URL = moduleArg\.URL/.test(nativeVendor)
+  || !/I\.onerror = function\(\)/.test(nativeVendor)
+  || !/this\.Oa && URL\.revokeObjectURL\(this\.Oa\)/.test(nativeVendor)
 ) {
-  throw new Error('嵌入图片运行时缺少 Image / URL 显式注入')
+  throw new Error('原生运行时缺少图片失败回退或 DOMMatrix 兼容层')
+}
+if (
+  /return canvas\.createPath2D\(\)/.test(nativeRuntime)
+  || !/return animationCanvas\.createPath2D\(\)/.test(nativeRuntime)
+  || !/this\.runtime\.requestAnimationFrame\(callback\)/.test(nativeRuntime)
+  || !/this\.runtime\.cancelAnimationFrame\(requestId\)/.test(nativeRuntime)
+) {
+  throw new Error('Rive 运行时仍可能绑定到已销毁的旧 Canvas')
+}
+if (
+  projectManifest.setting?.babelSetting?.ignore?.includes('vendor/rive/canvas_advanced.js')
+  || !projectManifest.packOptions?.ignore?.some((item) => (
+    item.type === 'file' && item.value === 'project.private.config.json'
+  ))
+) {
+  throw new Error('上传构建跳过了兼容编译或仍会打包本地私有配置')
+}
+if (
+  !/rive_fallback\.wasm\.br/.test(nativeRuntime)
+  || !/loadPlayerWithTimeout/.test(previewLogic)
+) {
+  throw new Error('真机 WASM 或加载超时回退不完整')
+}
+if (
+  !/prewarmRuntime/.test(homeLogic)
+  || !/setTimeout\(\(\) => this\.startRivePrewarm\(\), 600\)/.test(homeLogic)
+  || !/installRuntimeShims\(null, \{ probeAudio: false \}\)/.test(nativeRuntime)
+  || !/IOS_AUDIO_FRAME_INTERVAL/.test(nativeRuntime)
+  || !/IOS_AUDIO_PIXEL_RATIO_LIMIT/.test(nativeRuntime)
+  || !/audioResumeTasks/.test(nativeRuntime)
+  || !/queueActiveState/.test(previewLogic)
+) {
+  throw new Error('Rive 首页预热或 iOS 音频性能档不完整')
+}
+if (
+  !/loadArtboardCatalog/.test(nativeRuntime)
+  || !/artboardCatalogLoaded/.test(nativeRuntime + previewLogic)
+  || !/artboardCount/.test(nativeRuntime + previewLogic)
+  || !/bindtap="expandArtboardCatalog"/.test(previewMarkup)
+  || !/IOS_COMPLEX_FRAME_INTERVAL/.test(nativeRuntime)
+  || !/IOS_COMPLEX_PIXEL_RATIO_LIMIT/.test(nativeRuntime)
+  || !/cancelFrame\(this\.frameRequest\)/.test(nativeRuntime)
+  || /artboards:\s*metadata\.artboards/.test(previewLogic)
+) {
+  throw new Error('复杂 Rive 首帧懒解析、画板按需展开或暂停绘制保护不完整')
+}
+if (
+  !/class MiniProgramCueAudio/.test(nativeRuntime)
+  || !/createBufferSource\(\)/.test(nativeRuntime)
+  || !/isPianoAudioCandidate/.test(nativeRuntime)
+  || !/nativePianoAudio && asset\?\.isAudio/.test(nativeRuntime)
+  || !/nativePianoAudio\.capture\(asset, bytes\)[\s\S]{0,80}return true/.test(nativeRuntime)
+  || !/collectPianoCueChanges/.test(nativeRuntime)
+  || !/disableNativePianoAudio/.test(nativeRuntime)
+  || !/hasRequiredPianoCues/.test(nativeRuntime)
+  || !/PIANO_AUDIO_DECODE_TIMEOUT/.test(nativeRuntime)
+  || !/MAX_ACTIVE_PIANO_SOURCES/.test(nativeRuntime)
+  || !/fileName:\s*this\.data\.file\.name/.test(previewLogic)
+) {
+  throw new Error('iOS 钢琴低延迟音效通道不完整')
+}
+if (
+  !/audioEnabled:\s*true/.test(previewLogic)
+  || !/riveAudioEnabled/.test(previewLogic)
+  || !/sourceSize:\s*fileSize/.test(previewLogic)
+  || !/bind:select="toggleAudio"/.test(previewMarkup)
+  || !/wx:if="\{\{hasAudio\}\}"/.test(previewMarkup)
+  || !/wx\.createWebAudioContext/.test(nativeRuntime)
+  || !/context\.createScriptProcessor/.test(nativeRuntime)
+  || !/miniProgramAudioCapability === true/.test(nativeRuntime)
+  || /miniProgramAudioCapability\s*=\s*false/.test(nativeRuntime)
+  || !/shouldBypassEmbeddedAudio/.test(nativeRuntime)
+  || !/artboard\.volume/.test(nativeRuntime)
+  || !/suspendRuntimeAudio/.test(nativeRuntime)
+  || !/MAX_AUDIO_SOURCE_BYTES/.test(nativeRuntime)
+  || !/audioWindow:\s*runtimeAudioWindow/.test(nativeRuntime)
+  || !/moduleArg\.audioWindow\.AudioContext/.test(nativeVendor)
+  || !/moduleArg\.audioWindow\.miniaudio/.test(nativeVendor)
+  || /window\.(?:AudioContext|webkitAudioContext|miniaudio)/.test(nativeVendor)
+  || /getUserMedia/.test(nativeVendor)
+  || !/replaceAll\('window\.AudioContext'/.test(vendorScript)
+) {
+  throw new Error('Rive 声音默认开启、切换、性能保护或微信 WebAudio 兼容层不完整')
 }
 
 console.log('项目结构、JSON、Rive 文件头与可见文案检查通过。')

@@ -1,5 +1,5 @@
 <view class="weui-navigation-bar {{extClass}}">
-  <view class="weui-navigation-bar__inner {{ios ? 'ios' : 'android'}}" style="color: {{color}}; background: {{background}}; {{displayStyle}}; {{innerPaddingRight}}; {{safeAreaTop}};">
+  <view class="weui-navigation-bar__inner {{ios ? 'ios' : 'android'}} {{desktop ? 'desktop' : ''}}" style="color: {{color}}; background: {{background}}; {{displayStyle}}; {{innerPaddingRight}}; {{safeAreaTop}};">
 
     <!-- 左侧按钮 -->
     <view class='weui-navigation-bar__left' style="{{leftWidth}};">
@@ -12,7 +12,7 @@
               class="weui-navigation-bar__btn_goback_wrapper"
               hover-class="weui-active"
               hover-stay-time="100"
-              aria-role="button"
+              role="button"
               aria-label="返回"
             >
               <view class="weui-navigation-bar__button weui-navigation-bar__btn_goback"></view>
@@ -26,7 +26,7 @@
               bindtap="home"
               class="weui-navigation-bar__btn_home_wrapper"
               hover-class="weui-active"
-              aria-role="button"
+              role="button"
               aria-label="首页"
             >
               <view class="weui-navigation-bar__button weui-navigation-bar__btn_home"></view>

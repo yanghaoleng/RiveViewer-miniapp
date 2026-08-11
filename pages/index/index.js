@@ -2,9 +2,7 @@ const {
   getAllFiles,
   getFileById,
   importTempFiles,
-  readFile,
-  removeFile,
-  saveCover
+  removeFile
 } = require('../../utils/library')
 const {
   describeFileActionError,
@@ -13,14 +11,16 @@ const {
   savePreparedFileToDisk,
   sharePreparedFile
 } = require('../../utils/file-actions')
-const { NativeRivePlayer } = require('../../utils/rive-native')
 const {
-  createShareAppMessage,
-  createShareTimeline,
-  enableShareMenu
+  enableShareMenu,
+  FRIEND_SHARE_IMAGE,
+  HOME_PATH,
+  SHARE_TITLE,
+  TIMELINE_SHARE_IMAGE,
+  TIMELINE_QUERY
 } = require('../../utils/share')
 
-const AUTO_THUMBNAIL_SIZE_LIMIT = 2 * 1024 * 1024
+const WEB_VIEW_URL = 'https://mikeywa.site/rive-viewer/'
 
 Page({
   data: {
@@ -31,37 +31,51 @@ Page({
     saveTargetLabel: isDesktopWechat() ? '保存到电脑' : '保存到手机'
   },
 
-  onLoad() {
-    enableShareMenu()
-  },
-
-  onShareAppMessage() {
-    return createShareAppMessage()
-  },
-
-  onShareTimeline() {
-    return createShareTimeline()
-  },
-
-  onShow() {
-    this.pageVisible = true
-    this.refreshFiles()
-    this.scheduleMissingThumbnails()
-  },
-
   onReady() {
-    this.pageReady = true
-    this.scheduleMissingThumbnails(500)
+    this.rivePrewarmTimer = setTimeout(() => this.startRivePrewarm(), 600)
   },
 
   onHide() {
-    this.pageVisible = false
-    this.stopThumbnailGeneration()
+    clearTimeout(this.rivePrewarmTimer)
+    this.rivePrewarmTimer = 0
   },
 
   onUnload() {
-    this.pageVisible = false
-    this.stopThumbnailGeneration()
+    clearTimeout(this.rivePrewarmTimer)
+    this.rivePrewarmTimer = 0
+  },
+
+  onShareAppMessage: function () {
+    return {
+      title: SHARE_TITLE,
+      path: HOME_PATH,
+      imageUrl: FRIEND_SHARE_IMAGE
+    }
+  },
+
+  onShareTimeline: function () {
+    return {
+      title: SHARE_TITLE,
+      query: TIMELINE_QUERY,
+      imageUrl: TIMELINE_SHARE_IMAGE
+    }
+  },
+
+  onShow() {
+    enableShareMenu()
+    this.refreshFiles()
+  },
+
+  startRivePrewarm() {
+    clearTimeout(this.rivePrewarmTimer)
+    this.rivePrewarmTimer = 0
+    if (this.rivePrewarmStarted) return
+    this.rivePrewarmStarted = true
+    const { prewarmRuntime } = require('../../utils/rive-native')
+    prewarmRuntime().catch((error) => {
+      this.rivePrewarmStarted = false
+      console.warn('Rive 运行时预热失败，将在预览时重试', error)
+    })
   },
 
   refreshFiles() {
@@ -70,114 +84,6 @@ Page({
       files,
       userFileCount: files.filter((file) => !file.builtin).length
     })
-  },
-
-  scheduleMissingThumbnails(delay = 700) {
-    if (!this.pageReady || !this.pageVisible || this.thumbnailGenerationRunning) return
-    clearTimeout(this.thumbnailTimer)
-    this.thumbnailTimer = setTimeout(() => this.generateMissingThumbnails(), delay)
-  },
-
-  stopThumbnailGeneration() {
-    clearTimeout(this.thumbnailTimer)
-    clearTimeout(this.thumbnailFrameTimer)
-    this.thumbnailGenerationToken = (this.thumbnailGenerationToken || 0) + 1
-    this.thumbnailPlayer?.dispose()
-    this.thumbnailPlayer = null
-  },
-
-  async generateMissingThumbnails() {
-    if (!this.pageReady || !this.pageVisible || this.thumbnailGenerationRunning) return
-    const missingFiles = getAllFiles()
-      .filter((file) => !file.cover && file.size <= AUTO_THUMBNAIL_SIZE_LIMIT)
-      .slice(0, 1)
-    if (!missingFiles.length) return
-    this.thumbnailGenerationRunning = true
-    const token = (this.thumbnailGenerationToken || 0) + 1
-    this.thumbnailGenerationToken = token
-
-    try {
-      const canvasInfo = await this.getThumbnailCanvas()
-      for (const file of missingFiles) {
-        if (token !== this.thumbnailGenerationToken || !this.pageVisible) break
-        await this.generateThumbnail(file, canvasInfo, token)
-      }
-    } finally {
-      this.thumbnailPlayer?.dispose()
-      this.thumbnailPlayer = null
-      this.thumbnailGenerationRunning = false
-      if (this.pageVisible) this.scheduleMissingThumbnails(350)
-    }
-  },
-
-  getThumbnailCanvas() {
-    return new Promise((resolve, reject) => {
-      wx.createSelectorQuery()
-        .select('#thumbnailCanvas')
-        .fields({ node: true, size: true })
-        .exec((result) => {
-          if (result[0]?.node) resolve(result[0])
-          else reject(new Error('无法创建缩略图画布'))
-        })
-    })
-  },
-
-  waitForThumbnailFrame(duration = 120) {
-    return new Promise((resolve) => {
-      this.thumbnailFrameTimer = setTimeout(resolve, duration)
-    })
-  },
-
-  exportThumbnail(canvas) {
-    return new Promise((resolve, reject) => {
-      wx.canvasToTempFilePath({
-        canvas,
-        fileType: 'png',
-        quality: 0.86,
-        destWidth: 360,
-        destHeight: 240,
-        success: (result) => resolve(result.tempFilePath),
-        fail: reject
-      }, this)
-    })
-  },
-
-  async generateThumbnail(file, canvasInfo, token) {
-    let bytes = null
-    let player = null
-    try {
-      bytes = await readFile(file.path)
-      if (token !== this.thumbnailGenerationToken || !this.pageVisible) return
-      const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
-      player = new NativeRivePlayer({
-        canvas: canvasInfo.node,
-        width: canvasInfo.width,
-        height: canvasInfo.height,
-        pixelRatio: Math.min(windowInfo.pixelRatio || 1, 2)
-      })
-      this.thumbnailPlayer = player
-      await player.load(bytes)
-      player.setFit('cover')
-      player.setAlignment('center')
-      await this.waitForThumbnailFrame()
-      if (
-        token !== this.thumbnailGenerationToken ||
-        !this.pageVisible ||
-        !getFileById(file.id)
-      ) return
-      const tempFilePath = await this.exportThumbnail(canvasInfo.node)
-      const cover = await saveCover(file.id, tempFilePath)
-      const files = this.data.files.map((item) => (
-        item.id === file.id ? { ...item, cover } : item
-      ))
-      this.setData({ files })
-    } catch (error) {
-      console.warn(`缩略图生成失败: ${file.name}`, error)
-    } finally {
-      player?.dispose()
-      if (this.thumbnailPlayer === player) this.thumbnailPlayer = null
-      bytes = null
-    }
   },
 
   showImportMenu() {
@@ -194,6 +100,23 @@ Page({
       success: ({ tapIndex }) => {
         if (tapIndex === 0) this.chooseMessageFile()
         if (tapIndex === 1 && canChooseSystemFile) this.chooseSystemFile()
+      }
+    })
+  },
+
+  copyWebViewerUrl() {
+    if (typeof wx.setClipboardData !== 'function') {
+      wx.showToast({ title: '请长按网址复制', icon: 'none' })
+      return
+    }
+    wx.setClipboardData({
+      data: WEB_VIEW_URL,
+      success: () => {
+        wx.showToast({ title: '已复制网址', icon: 'none' })
+      },
+      fail: (error) => {
+        console.error('网页版地址复制失败', error)
+        wx.showToast({ title: '复制失败，请长按网址', icon: 'none' })
       }
     })
   },
@@ -265,8 +188,6 @@ Page({
       }
       if (imported.length === 1 && selectedFiles.length === 1) {
         this.openById(imported[0].id)
-      } else {
-        this.scheduleMissingThumbnails(900)
       }
     } catch (error) {
       wx.hideLoading()
@@ -294,6 +215,7 @@ Page({
 
   openWithCoverTransition(file, index) {
     if (this.transitioningFileId) return
+    this.startRivePrewarm()
     this.transitioningFileId = file.id
     wx.createSelectorQuery()
       .selectAll('.file-cover')
@@ -336,25 +258,18 @@ Page({
   },
 
   openById(id) {
+    this.startRivePrewarm()
     wx.navigateTo({
       url: `/pages/preview/index?id=${encodeURIComponent(id)}`
     })
   },
 
-  copyAuthorWechat() {
-    wx.setClipboardData({
-      data: 'yanghaoeleng',
-      success: () => {
-        wx.showModal({
-          title: '微信号已复制',
-          content: 'yanghaoeleng\n请打开微信“添加朋友”粘贴搜索。',
-          showCancel: false,
-          confirmText: '知道了'
-        })
-      },
-      fail: () => {
-        wx.showToast({ title: '复制失败，请手动输入', icon: 'none' })
-      }
+  showAuthorWechat() {
+    wx.showModal({
+      title: '联系作者反馈意见',
+      content: '微信号：yanghaoeleng\n请在微信“添加朋友”中手动输入。',
+      showCancel: false,
+      confirmText: '知道了'
     })
   },
 
@@ -406,11 +321,13 @@ Page({
   deleteFile(event) {
     const id = event.currentTarget.dataset.id
     const file = this.data.files.find((item) => item.id === id)
-    if (!file || file.builtin) return
+    if (!file) return
     this.setData({ expandedFileId: '' })
     wx.showModal({
-      title: '删除本地文件',
-      content: `将从小程序本地存储中删除“${file.name}”。`,
+      title: file.builtin ? '删除示例文件' : '删除本地文件',
+      content: file.builtin
+        ? `删除后“${file.name}”将不再显示。清除小程序本地数据后可恢复。`
+        : `将从小程序本地存储中删除“${file.name}”。`,
       confirmText: '删除',
       confirmColor: '#b94040',
       success: async (result) => {

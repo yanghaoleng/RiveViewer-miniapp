@@ -76,6 +76,10 @@ page {
   white-space: nowrap;
 }
 
+.file-heading__fps {
+  white-space: nowrap;
+}
+
 .file-heading__name {
   display: block;
   min-width: 0;
@@ -755,6 +759,63 @@ page {
   gap: 8rpx;
 }
 
+.parameter-disclosure {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48rpx;
+  margin: 0;
+  padding: 0 calc(15rpx + 8px);
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f2c94c;
+  font-size: 22rpx;
+  font-weight: 640;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(242, 201, 76, .06);
+  border: 1rpx solid rgba(242, 201, 76, .28);
+  border-radius: 9rpx;
+}
+
+.parameter-disclosure::after {
+  border: 0;
+}
+
+.parameter-disclosure.is-pressed {
+  color: #f2f0e8;
+  background: rgba(242, 201, 76, .14);
+  border-color: rgba(242, 201, 76, .56);
+  transform: scale(.96);
+}
+
+.parameter-disclosure.is-loading,
+.parameter-disclosure[disabled] {
+  color: #f2f0e8;
+  background: #1a2330;
+  border-color: rgba(242, 201, 76, .24);
+  opacity: 1;
+  transform: none;
+}
+
+.parameter-disclosure__label {
+  position: relative;
+  z-index: 2;
+}
+
+.parameter-disclosure__progress {
+  height: 100%;
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  background: rgba(242, 201, 76, .24);
+  transition: width 120ms linear;
+}
+
 .timeline-actions {
   overflow: visible;
   flex-wrap: wrap;
@@ -828,7 +889,8 @@ page {
   .resize-guide,
   .speed-popover,
   .file-popover,
-  .loading-ring__spinner {
+  .loading-ring__spinner,
+  .parameter-disclosure__progress {
     transition: none;
     animation: none;
   }

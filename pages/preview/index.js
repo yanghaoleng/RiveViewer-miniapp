@@ -15,11 +15,14 @@ const {
 } = require('../../utils/file-actions')
 const { NativeRivePlayer } = require('../../utils/rive-native')
 const {
-  createShareAppMessage,
-  createShareTimeline,
   enableShareMenu,
+  FRIEND_SHARE_IMAGE,
+  HOME_PATH,
   isShareLanding,
-  openShareLanding
+  openShareLanding,
+  SHARE_TITLE,
+  TIMELINE_SHARE_IMAGE,
+  TIMELINE_QUERY
 } = require('../../utils/share')
 
 const FIT_OPTIONS = [
@@ -33,6 +36,13 @@ const SPEED_OPTIONS = [
   { value: 2, label: '2x' },
   { value: 8, label: '8x' },
   { value: 0.5, label: '0.5x' },
+]
+const AUDIO_STORAGE_KEY = 'riveAudioEnabled'
+const QUALITY_STORAGE_KEY = 'riveQualityMode'
+const QUALITY_OPTIONS = [
+  { key: 'performance', label: '性能' },
+  { key: 'balanced', label: '平衡' },
+  { key: 'high', label: '高清' }
 ]
 
 function formatTimelineTime(seconds) {
@@ -53,6 +63,25 @@ function sortTimelineNames(names = []) {
   })
 }
 
+function loadPlayerWithTimeout(player, bytes, timeoutMs) {
+  let timeoutId = 0
+  const timeout = new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error('Rive 解析超时，请重试或换用较小的文件'))
+    }, timeoutMs)
+  })
+  return Promise.race([player.load(bytes), timeout])
+    .finally(() => clearTimeout(timeoutId))
+}
+
+function waitForLoadingPaint() {
+  return new Promise((resolve) => {
+    const finish = () => setTimeout(resolve, 16)
+    if (typeof wx.nextTick === 'function') wx.nextTick(finish)
+    else finish()
+  })
+}
+
 Page({
   data: {
     file: null,
@@ -61,6 +90,8 @@ Page({
     loadingPhase: '正在准备文件',
     error: '',
     fitOptions: FIT_OPTIONS,
+    qualityOptions: QUALITY_OPTIONS,
+    qualityMode: 'performance',
     speedMenuOptions: [...SPEED_OPTIONS].reverse(),
     fit: 'cover',
     alignment: 'center',
@@ -71,20 +102,27 @@ Page({
     speedMenuStyle: '',
     speedHoverValue: 1,
     isPlaying: true,
-    artboards: [],
     artboardNames: [],
     artboardIndex: 0,
-    stateMachines: [],
+    artboardCount: 0,
+    artboardRemainingCount: 0,
+    artboardCatalogLoaded: true,
+    artboardCatalogLoading: false,
+    artboardCatalogProgress: 0,
     stateMachineNames: [],
     stateMachineIndex: 0,
-    animations: [],
     animationNames: [],
     activeAnimation: '',
     animationProgress: 0,
     timelineTimecode: '--:--.- / --:--.-',
     inputs: [],
+    hasAudio: false,
+    audioEnabled: true,
+    audioSupported: true,
+    audioBlockedReason: '',
     dimensions: '',
     activeState: '等待状态变化',
+    fps: 0,
     canvasTone: 'mist',
     stageHeight: 480,
     stageWidth: 702,
@@ -110,11 +148,18 @@ Page({
   },
 
   onLoad(options) {
-    enableShareMenu()
     if (isShareLanding(options)) {
       openShareLanding()
       return
     }
+    const storedAudioEnabled = wx.getStorageSync(AUDIO_STORAGE_KEY)
+    const storedQualityMode = wx.getStorageSync(QUALITY_STORAGE_KEY)
+    this.setData({
+      audioEnabled: storedAudioEnabled !== false,
+      qualityMode: QUALITY_OPTIONS.some((item) => item.key === storedQualityMode)
+        ? storedQualityMode
+        : 'performance'
+    })
     this.resizeGuideDismissed = Boolean(wx.getStorageSync('riveResizeGuideDismissed'))
     this.initializeStageMetrics()
     const fileId = decodeURIComponent(options.id || '')
@@ -142,12 +187,20 @@ Page({
     this.setData({ file })
   },
 
-  onShareAppMessage() {
-    return createShareAppMessage()
+  onShareAppMessage: function () {
+    return {
+      title: SHARE_TITLE,
+      path: HOME_PATH,
+      imageUrl: FRIEND_SHARE_IMAGE
+    }
   },
 
-  onShareTimeline() {
-    return createShareTimeline()
+  onShareTimeline: function () {
+    return {
+      title: SHARE_TITLE,
+      query: TIMELINE_QUERY,
+      imageUrl: TIMELINE_SHARE_IMAGE
+    }
   },
 
   onReady() {
@@ -159,6 +212,7 @@ Page({
   },
 
   onShow() {
+    enableShareMenu()
     this.pageVisible = true
     if (this.previewReady && this.data.file && !this.player && !this.previewLoading) {
       this.startPreview()
@@ -188,13 +242,31 @@ Page({
     clearTimeout(this.previewTransitionStartTimer)
     clearTimeout(this.previewTransitionFadeTimer)
     clearTimeout(this.previewTransitionEndTimer)
+    clearTimeout(this.activeStateTimer)
     clearInterval(this.runtimeProgressTimer)
     clearTimeout(this.firstFrameFallbackTimer)
     clearTimeout(this.loadingHideTimer)
     this.previewLoadToken = (this.previewLoadToken || 0) + 1
+    this.artboardCatalogRequestToken = (this.artboardCatalogRequestToken || 0) + 1
     this.previewLoading = false
+    this.activeStateTimer = 0
+    this.pendingActiveState = ''
     this.player?.dispose()
     this.player = null
+  },
+
+  queueActiveState(states) {
+    this.pendingActiveState = states.join(' / ') || '状态机运行中'
+    if (this.activeStateTimer) return
+    const elapsed = Date.now() - (this.lastActiveStateUpdateAt || 0)
+    this.activeStateTimer = setTimeout(() => {
+      this.activeStateTimer = 0
+      if (!this.pageVisible || !this.pendingActiveState) return
+      const activeState = this.pendingActiveState
+      this.pendingActiveState = ''
+      this.lastActiveStateUpdateAt = Date.now()
+      this.setData({ activeState })
+    }, Math.max(0, 100 - elapsed))
   },
 
   setLoadingProgress(progress, phase, loadToken = this.previewLoadToken) {
@@ -338,11 +410,24 @@ Page({
     const loadToken = (this.previewLoadToken || 0) + 1
     this.previewLoadToken = loadToken
     this.completedLoadToken = 0
+    this.failedLoadToken = 0
     this.loadProgressValue = 0
     this.setData({
       loading: true,
       loadingProgress: 0,
       loadingPhase: '正在准备文件',
+      artboardNames: [],
+      artboardIndex: 0,
+      artboardCount: 0,
+      artboardCatalogLoaded: true,
+      artboardCatalogLoading: false,
+      artboardCatalogProgress: 0,
+      artboardRemainingCount: 0,
+      stateMachineNames: [],
+      stateMachineIndex: 0,
+      animationNames: [],
+      inputs: [],
+      fps: 0,
       error: ''
     })
     wx.createSelectorQuery()
@@ -371,20 +456,21 @@ Page({
           if (loadToken !== this.previewLoadToken || !this.pageVisible) return
           this.setLoadingProgress(62, '正在初始化 Rive', loadToken)
           this.startRuntimeProgress(loadToken)
+          await waitForLoadingPaint()
+          if (loadToken !== this.previewLoadToken || !this.pageVisible) return
           const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
           const fileSize = this.data.file.size || bytes.byteLength || 0
-          const ratioLimit = fileSize >= 16 * 1024 * 1024
-            ? 1.25
-            : (fileSize >= 4 * 1024 * 1024 ? 1.75 : 2.5)
           const player = new NativeRivePlayer({
             canvas: canvasInfo.node,
+            fileName: this.data.file.name,
             width: canvasInfo.width,
             height: canvasInfo.height,
-            pixelRatio: Math.min(windowInfo.pixelRatio || 1, ratioLimit),
+            pixelRatio: Math.min(windowInfo.pixelRatio || 1, 2),
+            sourceSize: fileSize,
+            qualityMode: this.data.qualityMode,
+            audioEnabled: this.data.audioEnabled,
             onMetadata: (metadata) => this.applyMetadata(metadata),
-            onStateChange: (states) => {
-              this.setData({ activeState: states.join(' / ') || '状态机运行中' })
-            },
+            onStateChange: (states) => this.queueActiveState(states),
             onPlaybackChange: ({ isPlaying, activeState, animation }) => {
               const isTimelineStatus = /^播放\s+/.test(activeState || '')
               this.setData({
@@ -405,9 +491,14 @@ Page({
               })
             },
             onFirstFrame: () => this.finishPreviewLoading(loadToken, canvasInfo.node),
+            onPerformance: (fps) => {
+              if (loadToken === this.previewLoadToken && this.pageVisible) this.setData({ fps })
+            },
             onError: (error) => {
               console.error('Rive 原生运行时加载失败', error)
+              this.failedLoadToken = loadToken
               clearInterval(this.runtimeProgressTimer)
+              clearTimeout(this.firstFrameFallbackTimer)
               this.setData({
                 loading: false,
                 error: error.message || 'Rive 运行时加载失败'
@@ -415,10 +506,13 @@ Page({
             }
           })
           this.player = player
-          const loaded = await player.load(bytes)
+          const fileSizeForTimeout = this.data.file.size || bytes.byteLength || 0
+          const loadTimeout = fileSizeForTimeout >= 16 * 1024 * 1024 ? 45000 : 22000
+          const loaded = await loadPlayerWithTimeout(player, bytes, loadTimeout)
           if (
             !loaded
             || loadToken !== this.previewLoadToken
+            || this.failedLoadToken === loadToken
             || !this.pageVisible
             || this.player !== player
           ) return
@@ -444,17 +538,42 @@ Page({
   },
 
   applyMetadata(metadata) {
-    const artboardNames = metadata.artboards.map((item) => item.name)
-    const stateMachineNames = metadata.stateMachines.map((item) => item.name)
+    const rawArtboardNames = (Array.isArray(metadata.artboards) ? metadata.artboards : [])
+      .map((item) => typeof item === 'string' ? item : item?.name)
+      .filter(Boolean)
+    const artboardCatalogLoaded = typeof metadata.artboardCatalogLoaded === 'boolean'
+      ? metadata.artboardCatalogLoaded
+      : true
+    const activeArtboard = metadata.activeArtboard || rawArtboardNames[0] || ''
+    const artboardNames = artboardCatalogLoaded
+      ? [...new Set(rawArtboardNames)]
+      : [activeArtboard].filter(Boolean)
+    const artboardCount = Math.max(
+      artboardNames.length,
+      Number(metadata.artboardCount) || rawArtboardNames.length
+    )
+    const stateMachineNames = (Array.isArray(metadata.stateMachines) ? metadata.stateMachines : [])
+      .map((item) => typeof item === 'string' ? item : item?.name)
+      .filter(Boolean)
+    const animationNames = sortTimelineNames(
+      (Array.isArray(metadata.animations) ? metadata.animations : [])
+        .map((item) => typeof item === 'string' ? item : item?.name)
+        .filter(Boolean)
+    )
+    const inputs = (Array.isArray(metadata.inputs) ? metadata.inputs : []).map((input) => ({
+      name: input.name,
+      type: input.type,
+      value: input.value
+    }))
     const summary = `${metadata.width} × ${metadata.height}${metadata.activeStateMachine ? ` · ${metadata.activeStateMachine}` : ''}`
     updateMetadata(this.data.file.id, {
-      artboard: metadata.activeArtboard,
-      animations: metadata.animations,
+      artboard: activeArtboard,
+      animations: animationNames,
       stateMachine: metadata.activeStateMachine,
-      inputs: metadata.inputs.map((input) => input.name),
+      inputs: inputs.map((input) => input.name),
       summary
     })
-    const artboardChanged = this.lastActiveArtboard !== metadata.activeArtboard
+    const artboardChanged = this.lastActiveArtboard !== activeArtboard
     const stageViewMode = artboardChanged ? 'auto' : this.data.stageViewMode
     const stageSize = stageViewMode === 'compact'
       ? this.calculateCompactStageSize(metadata.width, metadata.height)
@@ -463,21 +582,29 @@ Page({
         : this.calculateStageSize(metadata.width, metadata.height)
     const sizeChanged = stageSize.height !== this.data.stageHeight
       || stageSize.width !== this.data.stageWidth
-    this.lastActiveArtboard = metadata.activeArtboard
+    this.lastActiveArtboard = activeArtboard
     this.activeResourceSize = { width: metadata.width, height: metadata.height }
     this.setData({
-      artboards: metadata.artboards,
       artboardNames,
-      artboardIndex: Math.max(0, artboardNames.indexOf(metadata.activeArtboard)),
-      stateMachines: metadata.stateMachines,
+      artboardIndex: Math.max(0, artboardNames.indexOf(activeArtboard)),
+      artboardCount,
+      artboardRemainingCount: Math.max(0, artboardCount - artboardNames.length),
+      artboardCatalogLoaded,
+      artboardCatalogLoading: false,
+      artboardCatalogProgress: artboardCatalogLoaded ? 100 : 0,
       stateMachineNames,
       stateMachineIndex: Math.max(0, stateMachineNames.indexOf(metadata.activeStateMachine)),
-      animations: metadata.animations,
-      animationNames: sortTimelineNames(metadata.animations),
+      animationNames,
       activeAnimation: metadata.activeAnimation || '',
-      inputs: metadata.inputs,
+      inputs,
+      hasAudio: Boolean(metadata.hasAudio),
+      audioEnabled: metadata.audioEnabled !== false,
+      audioSupported: metadata.audioSupported !== false,
+      audioBlockedReason: metadata.audioBlockedReason || '',
       dimensions: `${metadata.width} × ${metadata.height}`,
-      isPlaying: true,
+      isPlaying: metadata.isPlaying === undefined
+        ? this.data.isPlaying
+        : Boolean(metadata.isPlaying),
       stageHeight: stageSize.height,
       stageWidth: stageSize.width,
       stageMinHeight: stageSize.minHeight,
@@ -486,6 +613,79 @@ Page({
     }, () => {
       if (sizeChanged) this.scheduleCanvasResize(360)
     })
+  },
+
+  async expandArtboardCatalog() {
+    if (
+      this.data.artboardCatalogLoaded
+      || this.data.artboardCatalogLoading
+      || !this.data.artboardRemainingCount
+    ) return
+    const player = this.player
+    if (!player || typeof player.loadArtboardCatalog !== 'function') {
+      this.setData({ artboardCatalogLoaded: true })
+      return
+    }
+    const requestToken = (this.artboardCatalogRequestToken || 0) + 1
+    this.artboardCatalogRequestToken = requestToken
+    this.lastArtboardCatalogProgress = -1
+    this.lastArtboardCatalogProgressAt = 0
+    this.setData({
+      artboardCatalogLoading: true,
+      artboardCatalogProgress: 0
+    })
+    await waitForLoadingPaint()
+    if (
+      requestToken !== this.artboardCatalogRequestToken
+      || this.player !== player
+      || !this.pageVisible
+    ) return
+    try {
+      await player.loadArtboardCatalog((detail = {}) => {
+        if (
+          requestToken !== this.artboardCatalogRequestToken
+          || this.player !== player
+          || !this.pageVisible
+        ) return
+        const rawProgress = typeof detail === 'number' ? detail : detail.progress
+        const progress = Math.max(0, Math.min(100, Math.round(Number(rawProgress) || 0)))
+        const now = Date.now()
+        if (
+          progress < 100
+          && progress - this.lastArtboardCatalogProgress < 5
+          && now - this.lastArtboardCatalogProgressAt < 120
+        ) return
+        this.lastArtboardCatalogProgress = progress
+        this.lastArtboardCatalogProgressAt = now
+        this.setData({ artboardCatalogProgress: progress })
+      })
+      if (
+        requestToken !== this.artboardCatalogRequestToken
+        || this.player !== player
+        || !this.pageVisible
+      ) return
+      this.setData({
+        artboardCatalogLoaded: true,
+        artboardCatalogLoading: false,
+        artboardCatalogProgress: 100,
+        artboardRemainingCount: 0
+      })
+    } catch (error) {
+      if (
+        requestToken !== this.artboardCatalogRequestToken
+        || this.player !== player
+        || !this.pageVisible
+      ) return
+      console.error('画板列表解析失败', error)
+      this.setData({
+        artboardCatalogLoading: false,
+        artboardCatalogProgress: 0
+      })
+      wx.showToast({
+        title: error.message || '画板列表解析失败',
+        icon: 'none'
+      })
+    }
   },
 
   scheduleCanvasResize(delay = 0) {
@@ -979,6 +1179,14 @@ Page({
     })
   },
 
+  selectQuality(event) {
+    const qualityMode = event.currentTarget.dataset.key
+    if (!QUALITY_OPTIONS.some((item) => item.key === qualityMode)) return
+    this.player?.setQualityMode(qualityMode)
+    this.setData({ qualityMode })
+    wx.setStorageSync(QUALITY_STORAGE_KEY, qualityMode)
+  },
+
   changeArtboard(event) {
     const artboardIndex = Number(event.detail.value)
     this.stageUserAdjusted = false
@@ -1094,6 +1302,28 @@ Page({
 
   setCanvasTone(event) {
     this.setData({ canvasTone: event.currentTarget.dataset.tone })
+  },
+
+  toggleAudio() {
+    if (!this.data.hasAudio) return
+    if (!this.data.audioSupported) {
+      wx.showToast({
+        title: this.data.audioBlockedReason || '当前设备不支持声音',
+        icon: 'none'
+      })
+      return
+    }
+    const audioEnabled = !this.data.audioEnabled
+    const result = this.player?.setAudioEnabled(audioEnabled)
+    if (result?.supported === false) {
+      wx.showToast({
+        title: result.blockedReason || '当前设备不支持声音',
+        icon: 'none'
+      })
+      return
+    }
+    this.setData({ audioEnabled })
+    wx.setStorageSync(AUDIO_STORAGE_KEY, audioEnabled)
   },
 
   getCanvasTouchPoint(touch) {

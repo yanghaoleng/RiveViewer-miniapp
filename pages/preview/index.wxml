@@ -16,6 +16,7 @@
       <view class="file-heading__meta">
         <text>{{file.displaySize}}{{dimensions ? ' / ' + dimensions : ''}}</text>
         <text class="file-heading__status file-heading__timecode">{{timelineTimecode}}</text>
+        <text class="file-heading__status file-heading__fps">{{fps || '--'}} FPS</text>
       </view>
     </view>
     <button class="file-heading__save" bindtap="showSaveMenu" hover-class="none" aria-label="保存或发送文件">
@@ -95,7 +96,7 @@
   <view class="transport">
     <view class="transport__left">
       <view class="transport__playback">
-        <button class="transport__primary" bindtap="resetAnimation" aria-label="重置">
+        <button class="transport__primary" bindtap="resetAnimation" aria-label="重播">
           <image class="transport__icon" src="/assets/icons/restore.svg"></image>
         </button>
         <button
@@ -175,6 +176,22 @@
             tagvalue="{{item}}"
             bind:select="selectArtboardTag"
           ></parameter-tag>
+          <button
+            wx:if="{{!artboardCatalogLoaded && artboardRemainingCount > 0}}"
+            class="parameter-disclosure {{artboardCatalogLoading ? 'is-loading' : ''}}"
+            bindtap="expandArtboardCatalog"
+            disabled="{{artboardCatalogLoading}}"
+            hover-class="is-pressed"
+            aria-label="{{artboardCatalogLoading ? '正在解析画板列表 ' + artboardCatalogProgress + '%' : '展开其余 ' + artboardRemainingCount + ' 个画板'}}"
+          >
+            <view
+              wx:if="{{artboardCatalogLoading}}"
+              class="parameter-disclosure__progress"
+              style="width: {{artboardCatalogProgress}}%;"
+              aria-hidden="true"
+            ></view>
+            <text class="parameter-disclosure__label">{{artboardCatalogLoading ? '正在解析 ' + artboardCatalogProgress + '%' : '展开其余 ' + artboardRemainingCount + ' 个'}}</text>
+          </button>
           <text wx:if="{{artboardNames.length === 0}}" class="parameter-empty">无画板</text>
         </view>
       </view>
@@ -230,6 +247,19 @@
         </view>
       </view>
 
+      <view wx:if="{{hasAudio}}" class="parameter-row">
+        <text class="parameter-row__label">声音</text>
+        <view class="parameter-actions">
+          <parameter-tag
+            label="{{audioSupported ? (audioEnabled ? '开启' : '静音') : (audioBlockedReason === '大文件已启用性能保护' ? '性能保护' : '不可用')}}"
+            selected="{{audioEnabled && audioSupported}}"
+            tagvalue="audio"
+            arialabel="{{audioSupported ? (audioEnabled ? '声音已开启，点击静音' : '声音已静音，点击开启') : (audioBlockedReason || '当前设备不支持声音')}}"
+            bind:select="toggleAudio"
+          ></parameter-tag>
+        </view>
+      </view>
+
       <view class="parameter-row">
         <text class="parameter-row__label">缩放方式</text>
         <view class="compact-switch">
@@ -239,6 +269,19 @@
             class="compact-option {{fit === item.key ? 'is-active' : ''}}"
             data-key="{{item.key}}"
             bindtap="selectFit"
+          >{{item.label}}</button>
+        </view>
+      </view>
+
+      <view class="parameter-row">
+        <text class="parameter-row__label">渲染质量</text>
+        <view class="compact-switch">
+          <button
+            wx:for="{{qualityOptions}}"
+            wx:key="key"
+            class="compact-option {{qualityMode === item.key ? 'is-active' : ''}}"
+            data-key="{{item.key}}"
+            bindtap="selectQuality"
           >{{item.label}}</button>
         </view>
       </view>
