@@ -19,6 +19,10 @@ const {
   TIMELINE_SHARE_IMAGE,
   TIMELINE_QUERY
 } = require('../../utils/share')
+const {
+  getWindowInfo,
+  supportsDesktopSplit
+} = require('../../utils/desktop-split')
 
 const WEB_VIEW_URL = 'https://mikeywa.site/rive-viewer/'
 
@@ -28,7 +32,27 @@ Page({
     importing: false,
     userFileCount: 0,
     expandedFileId: '',
+    desktopSplitEnabled: false,
+    desktopPreviewFileId: '',
     saveTargetLabel: isDesktopWechat() ? '保存到电脑' : '保存到手机'
+  },
+
+  onLoad(options = {}) {
+    const windowInfo = getWindowInfo()
+    const desktopSplitEnabled = supportsDesktopSplit(windowInfo)
+    const requestedPreviewId = decodeURIComponent(options.preview || '')
+    const desktopPreviewFileId = desktopSplitEnabled
+      && requestedPreviewId
+      && getFileById(requestedPreviewId)
+      ? requestedPreviewId
+      : ''
+    this.setData({ desktopSplitEnabled, desktopPreviewFileId })
+    this.desktopWindowResizeHandler = (result) => {
+      this.updateDesktopSplit(result?.size || getWindowInfo())
+    }
+    if (typeof wx.onWindowResize === 'function') {
+      wx.onWindowResize(this.desktopWindowResizeHandler)
+    }
   },
 
   onReady() {
@@ -43,6 +67,10 @@ Page({
   onUnload() {
     clearTimeout(this.rivePrewarmTimer)
     this.rivePrewarmTimer = 0
+    if (this.desktopWindowResizeHandler && typeof wx.offWindowResize === 'function') {
+      wx.offWindowResize(this.desktopWindowResizeHandler)
+    }
+    this.desktopWindowResizeHandler = null
   },
 
   onShareAppMessage: function () {
@@ -63,7 +91,26 @@ Page({
 
   onShow() {
     enableShareMenu()
+    this.updateDesktopSplit(getWindowInfo())
     this.refreshFiles()
+  },
+
+  updateDesktopSplit(windowInfo) {
+    const desktopSplitEnabled = supportsDesktopSplit(windowInfo)
+    if (desktopSplitEnabled === this.data.desktopSplitEnabled) return
+    const activeFileId = this.data.desktopPreviewFileId
+    if (desktopSplitEnabled || !activeFileId) {
+      this.setData({ desktopSplitEnabled })
+      return
+    }
+    this.setData({
+      desktopSplitEnabled: false,
+      desktopPreviewFileId: ''
+    }, () => {
+      wx.navigateTo({
+        url: `/pages/preview/index?id=${encodeURIComponent(activeFileId)}`
+      })
+    })
   },
 
   startRivePrewarm() {
@@ -80,9 +127,13 @@ Page({
 
   refreshFiles() {
     const files = getAllFiles()
+    const desktopPreviewFileId = this.data.desktopPreviewFileId
+    const activeFileExists = !desktopPreviewFileId
+      || files.some((file) => file.id === desktopPreviewFileId)
     this.setData({
       files,
-      userFileCount: files.filter((file) => !file.builtin).length
+      userFileCount: files.filter((file) => !file.builtin).length,
+      desktopPreviewFileId: activeFileExists ? desktopPreviewFileId : ''
     })
   },
 
@@ -216,6 +267,10 @@ Page({
   openWithCoverTransition(file, index) {
     if (this.transitioningFileId) return
     this.startRivePrewarm()
+    if (this.data.desktopSplitEnabled) {
+      this.openDesktopPreview(file.id)
+      return
+    }
     this.transitioningFileId = file.id
     wx.createSelectorQuery()
       .selectAll('.file-cover')
@@ -259,9 +314,33 @@ Page({
 
   openById(id) {
     this.startRivePrewarm()
+    if (this.data.desktopSplitEnabled) {
+      this.openDesktopPreview(id)
+      return
+    }
     wx.navigateTo({
       url: `/pages/preview/index?id=${encodeURIComponent(id)}`
     })
+  },
+
+  openDesktopPreview(fileId) {
+    if (!fileId) return
+    this.transitioningFileId = ''
+    getApp().globalData.pendingPreviewTransition = null
+    this.setData({
+      expandedFileId: '',
+      desktopPreviewFileId: fileId
+    })
+  },
+
+  closeDesktopPreview() {
+    this.setData({ desktopPreviewFileId: '' })
+  },
+
+  selectDesktopPreviewFile(event) {
+    const fileId = event.detail?.fileId
+    if (!fileId || fileId === this.data.desktopPreviewFileId) return
+    this.setData({ desktopPreviewFileId: fileId })
   },
 
   showAuthorWechat() {
@@ -334,6 +413,9 @@ Page({
         if (!result.confirm) return
         try {
           await removeFile(id)
+          if (id === this.data.desktopPreviewFileId) {
+            this.setData({ desktopPreviewFileId: '' })
+          }
           this.refreshFiles()
           wx.showToast({ title: '已删除', icon: 'success' })
         } catch (error) {

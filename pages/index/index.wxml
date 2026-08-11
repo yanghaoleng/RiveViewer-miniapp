@@ -1,6 +1,9 @@
-<navigation-bar title="Rive 预览台" back="{{false}}" color="#f2f0e8" background="#0b0f14"></navigation-bar>
+<view class="desktop-workspace {{desktopSplitEnabled ? 'is-split' : ''}} {{desktopPreviewFileId ? 'has-preview' : ''}}">
+  <view class="desktop-home-pane">
+    <navigation-bar title="Rive 预览台" back="{{false}}" color="#f2f0e8" background="#0b0f14"></navigation-bar>
+    <view class="desktop-home-content">
 
-<scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
   <view class="page-shell">
     <view
       class="import-dropzone"
@@ -109,4 +112,15 @@
       aria-label="联系作者反馈意见，查看作者微信号"
     >联系作者反馈意见</view>
   </view>
-</scroll-view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view wx:if="{{desktopSplitEnabled && desktopPreviewFileId}}" class="desktop-preview-pane">
+    <preview-panel
+      file-id="{{desktopPreviewFileId}}"
+      bindclose="closeDesktopPreview"
+      bindselectfile="selectDesktopPreviewFile"
+    ></preview-panel>
+  </view>
+</view>

@@ -1,5 +1,5 @@
 <view
-  class="parameter-tag {{selected ? 'is-selected' : ''}} {{active ? 'is-active' : ''}} {{feedback ? 'is-feedback' : ''}}"
+  class="parameter-tag {{compact ? 'is-compact' : ''}} {{selected ? 'is-selected' : ''}} {{active ? 'is-active' : ''}} {{feedback ? 'is-feedback' : ''}}"
   bindtap="select"
   hover-class="is-pressed"
   hover-start-time="0"

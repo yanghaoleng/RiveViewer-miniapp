@@ -20,6 +20,10 @@ Component({
       type: Boolean,
       value: false
     },
+    compact: {
+      type: Boolean,
+      value: false
+    },
     progress: {
       type: Number,
       value: 0

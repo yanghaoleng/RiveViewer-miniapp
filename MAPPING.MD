@@ -74,7 +74,9 @@
 | H5 渲染质量 | Browser quality profile | `quality`、`requestedQuality`、`effectiveQuality`、`frameInterval` |
 | H5 低清缩略图 | Local WebP cover | `saveLibraryCover`、`attachLibraryCovers`、`LocalCoverImage` |
 | H5 右侧预览 | Desktop preview side panel | `.drawer-workspace`、`.drawer-home-pane`、`.drawer-preview-panel`、`@media (min-width: 860px)` |
-| Mac 双页中缝 | Native desktop split separator | 微信 Mac 客户端原生分隔层；非 WXML / WXSS 元素 |
+| Mac 双页中缝 | Custom desktop split workspace | `.desktop-workspace`、`.desktop-home-pane`、`.desktop-preview-pane`、`desktopSplitEnabled`、`desktopPreviewFileId` |
+| 小程序嵌入式预览 | Embedded native preview panel | `components/preview-panel`、`preview-definition.js`、`isEmbeddedPreview` |
+| 桌面分栏阈值 | Desktop split breakpoint | `DESKTOP_SPLIT_MIN_WIDTH = 960`、`supportsDesktopSplit`、`getDesktopSplitUrl` |
 | H5 分栏过渡 | Responsive split transition | `.drawer-workspace`、`.drawer-workspace.is-open`、`grid-template-columns`、`260ms cubic-bezier(.16, 1, .3, 1)` |
 | H5 侧栏关闭 | Preview panel close button | `.drawer-close`、`X`、`Escape`、`setActiveFile(null)` |
 | H5 快捷键帮助 | Keyboard shortcut popover | `ShortcutHelp`、`.shortcut-button`、`.shortcut-popover` |

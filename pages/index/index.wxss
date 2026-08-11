@@ -4,6 +4,59 @@ page {
   flex-direction: column;
 }
 
+.desktop-workspace {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: #0b0f14;
+}
+
+.desktop-home-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.desktop-home-content {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  transform-origin: left top;
+}
+
+.desktop-preview-pane {
+  width: 50%;
+  min-width: 0;
+  height: 100%;
+  flex: none;
+  overflow: hidden;
+  background: #0b0f14;
+}
+
+.desktop-workspace.is-split.has-preview .desktop-home-pane {
+  width: 50%;
+  flex: none;
+}
+
+.desktop-workspace.is-split.has-preview .desktop-home-content {
+  width: 200%;
+  height: 200%;
+  flex: none;
+  transform: scale(.5);
+}
+
+.desktop-workspace.is-split.has-preview .page-scroll {
+  width: 100%;
+  height: 100%;
+  flex: none;
+}
+
 .page-scroll {
   min-height: 0;
   flex: 1;

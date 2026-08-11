@@ -33,6 +33,12 @@ const requiredFiles = [
   'share-timeline.png',
   'pages/index/index.js',
   'pages/preview/index.js',
+  'pages/preview/preview-definition.js',
+  'components/preview-panel/preview-panel.js',
+  'components/preview-panel/preview-panel.json',
+  'components/preview-panel/preview-panel.wxml',
+  'components/preview-panel/preview-panel.wxss',
+  'utils/desktop-split.js',
   'components/navigation-bar/navigation-layout.js',
   'utils/share.js',
   'scripts/verify-rive-interactions.mjs'
@@ -106,7 +112,22 @@ for (const relativePath of visibleFiles) {
 
 const previewMarkup = await fs.readFile(path.join(root, 'pages/preview/index.wxml'), 'utf8')
 const homeMarkup = await fs.readFile(path.join(root, 'pages/index/index.wxml'), 'utf8')
-const previewLogic = await fs.readFile(path.join(root, 'pages/preview/index.js'), 'utf8')
+const previewLogic = [
+  await fs.readFile(path.join(root, 'pages/preview/index.js'), 'utf8'),
+  await fs.readFile(path.join(root, 'pages/preview/preview-definition.js'), 'utf8')
+].join('\n')
+const embeddedPreviewLogic = await fs.readFile(
+  path.join(root, 'components/preview-panel/preview-panel.js'),
+  'utf8'
+)
+const embeddedPreviewMarkup = await fs.readFile(
+  path.join(root, 'components/preview-panel/preview-panel.wxml'),
+  'utf8'
+)
+const embeddedPreviewStyle = await fs.readFile(
+  path.join(root, 'components/preview-panel/preview-panel.wxss'),
+  'utf8'
+)
 const homeLogic = await fs.readFile(path.join(root, 'pages/index/index.js'), 'utf8')
 const appLogic = await fs.readFile(path.join(root, 'app.js'), 'utf8')
 const libraryLogic = await fs.readFile(path.join(root, 'utils/library.js'), 'utf8')
@@ -116,9 +137,14 @@ const nativeVendor = await fs.readFile(path.join(root, 'vendor/rive/canvas_advan
 const vendorScript = await fs.readFile(path.join(root, 'scripts/vendor-rive.mjs'), 'utf8')
 const navigationLogic = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.js'), 'utf8')
 const navigationStyle = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.wxss'), 'utf8')
+const desktopSplitLogic = await fs.readFile(path.join(root, 'utils/desktop-split.js'), 'utf8')
 const { calculateNavigationLayout } = requireModule(
   path.join(root, 'components/navigation-bar/navigation-layout.js')
 )
+const {
+  getDesktopSplitUrl,
+  supportsDesktopSplit
+} = requireModule(path.join(root, 'utils/desktop-split.js'))
 
 const desktopNavigationLayout = calculateNavigationLayout({
   windowInfo: { windowWidth: 414, statusBarHeight: 0, safeArea: { top: 0 } },
@@ -145,6 +171,14 @@ if (
   throw new Error('自定义导航栏的桌面胶囊对齐或异常坐标兜底失效')
 }
 if (
+  !supportsDesktopSplit({ windowWidth: 1200 }, 'mac')
+  || supportsDesktopSplit({ windowWidth: 900 }, 'mac')
+  || supportsDesktopSplit({ windowWidth: 1200 }, 'ios')
+  || getDesktopSplitUrl('a b') !== '/pages/index/index?preview=a%20b'
+) {
+  throw new Error('Mac 同页分栏的宽度阈值、平台边界或回流地址失效')
+}
+if (
   !/wx\.onWindowResize\s*\(/.test(navigationLogic)
   || !/wx\.offWindowResize\s*\(/.test(navigationLogic)
   || !/getCurrentPages\(\)/.test(navigationLogic)
@@ -155,6 +189,21 @@ if (
   || /margin:\s*-11px/.test(navigationStyle)
 ) {
   throw new Error('自定义导航栏缺少电脑端对齐、完整返回热区或单页栈回首页兜底')
+}
+if (
+  !/DESKTOP_SPLIT_MIN_WIDTH\s*=\s*960/.test(desktopSplitLogic)
+  || !/desktopSplitEnabled/.test(homeLogic + homeMarkup)
+  || !/desktopPreviewFileId/.test(homeLogic + homeMarkup)
+  || !/<preview-panel/.test(homeMarkup)
+  || !/isEmbeddedPreview\s*=\s*true/.test(embeddedPreviewLogic)
+  || !/createPreviewSelectorQuery/.test(previewLogic + embeddedPreviewLogic)
+  || !/external-back="\{\{true\}\}"/.test(embeddedPreviewMarkup)
+  || (embeddedPreviewMarkup.match(/compact="\{\{true\}\}"/g) || []).length !== 5
+  || !/:host\s*\{[\s\S]{0,180}background:\s*#0b0f14/.test(embeddedPreviewStyle)
+  || !/getDesktopSplitUrl/.test(previewLogic)
+  || !/wx\.reLaunch\(\{[\s\S]{0,100}url:\s*getDesktopSplitUrl/.test(previewLogic)
+) {
+  throw new Error('Mac 宽屏缺少同页分栏、嵌入式预览或内部返回逻辑')
 }
 async function readJavaScriptTree(relativeDirectory) {
   const absoluteDirectory = path.join(root, relativeDirectory)

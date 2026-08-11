@@ -33,6 +33,7 @@
 - iOS 含音频文件使用约 30fps、像素比上限 `1.5`和状态反馈节流，减少动画、音频和视图更新争抢主线程。
 - 超过 8 MB 的文件自动跳过音频解码并显示“性能保护”，避免声音资源使大文件加载和返回再次卡住。
 - 上一个/下一个文件快速切换；长按可打开完整文件列表。
+- Mac/Windows 与开发者工具在窗口宽度达到 `960px` 时，文件列表和 Rive 预览在同一个小程序页面内左右并排，不再触发微信 Mac 原生双 WebView 白色分隔线。
 - `h5/` 提供独立浏览器版：预览详情不分 Tab，画板、状态机、时间轴、输入、声音、缩放、背景和渲染质量在同一页；入口固定为 `/rive-viewer`。
 
 ## 技术架构
@@ -46,6 +47,8 @@
 | `utils/file-actions.js` | 发送文件与桌面端保存 |
 | `components/parameter-tag` | 画板、状态机、时间轴和输入的统一标签 |
 | `components/navigation-bar` | 首页与预览页的自定义顶部导航；按 Mac/Windows 胶囊位置补偿顶部空间，窗口缩放时重算，单页栈返回首页 |
+| `components/preview-panel` | 复用原生预览内核的嵌入式右侧面板；仅用于桌面宽屏同页分栏 |
+| `utils/desktop-split.js` | 桌面端 `960px` 分栏阈值、平台判断和独立详情页回流首页的路由 |
 | `vendor/rive` | 适配微信运行环境的完整 Rive Canvas 运行时、SIMD 与兼容版 Brotli WASM |
 | `h5/` | 独立浏览器 H5；复用完整 Rive Web WASM，以 IndexedDB 保存用户文件并输出实时 FPS；渲染和点击共用同一 Fit 矩阵 |
 

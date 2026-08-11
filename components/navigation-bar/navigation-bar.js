@@ -60,6 +60,10 @@ Component({
       type: Boolean,
       value: true
     },
+    externalBack: {
+      type: Boolean,
+      value: false
+    },
     loading: {
       type: Boolean,
       value: false
@@ -145,6 +149,10 @@ Component({
     },
     back() {
       const data = this.data
+      if (data.externalBack) {
+        this.triggerEvent('back', { delta: data.delta }, {})
+        return
+      }
       const delta = Math.max(1, Number(data.delta) || 1)
       const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
       if (data.delta && pages.length > delta) {

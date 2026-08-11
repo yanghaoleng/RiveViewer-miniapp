@@ -39,6 +39,19 @@
   font-weight: 600;
 }
 
+.parameter-tag.is-compact {
+  min-height: 24rpx;
+  padding: 0 calc(7.5rpx + 8px);
+  gap: 4.5rpx;
+  font-size: 11rpx;
+  border-width: .5rpx;
+  border-radius: 4.5rpx;
+}
+
+.parameter-tag.is-compact .parameter-tag__detail {
+  font-size: 10rpx;
+}
+
 .parameter-tag__progress {
   height: 100%;
   position: absolute;
