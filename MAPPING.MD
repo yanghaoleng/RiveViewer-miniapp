@@ -78,6 +78,7 @@
 | 小程序嵌入式预览 | Embedded native preview panel | `components/preview-panel`、`preview-definition.js`、`isEmbeddedPreview` |
 | 桌面分栏阈值 | Desktop split logical-pixel breakpoint | `DESKTOP_SPLIT_MIN_WIDTH = 960`、`windowInfo.windowWidth`、`supportsDesktopSplit`、`getDesktopSplitUrl` |
 | Mac 分栏重编译包 | Desktop split DevTools rebuild archive | `dist/RiveViewer-miniapp-1.0.4-mac-split-devtools-rebuild.zip` |
+| REV 编辑器备份文件 | Rive editor backup file | `.rev`；不交给 Runtime，需在 Rive 编辑器中转存为 `.riv` |
 | H5 分栏过渡 | Responsive split transition | `.drawer-workspace`、`.drawer-workspace.is-open`、`grid-template-columns`、`260ms cubic-bezier(.16, 1, .3, 1)` |
 | H5 侧栏关闭 | Preview panel close button | `.drawer-close`、`X`、`Escape`、`setActiveFile(null)` |
 | H5 快捷键帮助 | Keyboard shortcut popover | `ShortcutHelp`、`.shortcut-button`、`.shortcut-popover` |

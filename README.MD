@@ -115,6 +115,8 @@ Mac 同页分栏试验包输出为 `dist/RiveViewer-miniapp-1.0.4-mac-split-devt
 
 网页版与原生小程序文件库相互独立：H5 文件保存在浏览器自己的 IndexedDB 中，不上传服务器，也不会自动读取原生小程序已导入的文件。
 
+预览器只接收 Rive Runtime 导出的 `.riv` 二进制文件。`.rev` 是 Rive 编辑器的备份/工程文件，包含运行时导出会剥离的编辑信息，需先在 Rive 编辑器中导入并重新导出为 `.riv` 后预览。
+
 ### 独立 H5
 
 ```bash
