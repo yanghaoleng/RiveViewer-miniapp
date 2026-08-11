@@ -22,6 +22,7 @@
 | 画布 Loading | Loading overlay | `.canvas-state--loading`、`loadingProgress`、`loadingPhase` |
 | 详情首帧封面 | First-frame cover capture | `scheduleCoverCapture`、`captureCover`、`saveCover` |
 | 画布拖动手柄 | Stage resize handle | `.stage-resizer`、`stageResizeStart/Move/End` |
+| 手柄缩放快捷选择 | Resize-handle fit gesture | `stageResizeMenuActive`、`stageResizeHoverFit`、`getStageResizeHoverFit`、`finishStageResize`、`.stage-resizer__modes` |
 | 双击切换 | Stage view mode toggle | `stageResizerTap`、`toggleStageViewMode`、`stageViewMode` |
 | 重置按钮 | Reset playback action | `.transport__primary`、`resetAnimation` |
 | 播放 / 暂停 | Playback toggle | `.transport__secondary`、`togglePlay` |
@@ -34,7 +35,7 @@
 | 播放进度背景 | Timeline progress fill | `.parameter-tag__progress`、`animationProgress` |
 | 状态机输入 | State machine inputs | `inputs`、`handleInputTag` |
 | 标签点击反馈 | Parameter tag feedback | `parameter-tag`、`is-pressed`、`is-feedback` |
-| 完整 / 铺满 | Fit control | `.compact-switch`、`fit`、`selectFit` |
+| 完整 / 铺满 | Fit control | `.compact-switch`、`fit`、`selectFit`、`applyFit`、`arrows-in-simple.svg`、`arrows-out-simple.svg` |
 | 渲染质量 | Render quality selector | `qualityOptions`、`qualityMode`、`selectQuality`、`setQualityMode` |
 | 播放帧数 | Inline playback FPS | `.file-heading__fps`、`fps`；位于 `timelineTimecode` 右侧 |
 | 播放按钮下方状态小字（已移除） | Removed playback subline | H5 `.playback-status` 与小程序 `.playback-status` 均不再渲染 |

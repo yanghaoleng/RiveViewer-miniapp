@@ -289,6 +289,7 @@ button::after {
   height: 24rpx;
   flex: none;
   position: relative;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -360,14 +361,126 @@ button::after {
   color: #f2c94c;
 }
 
+.stage-resizer__surface {
+  width: 100%;
+  height: 24rpx;
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  color: #687588;
+  background: transparent;
+  border: .5rpx solid transparent;
+  border-radius: 6rpx;
+  transition:
+    height 180ms cubic-bezier(.22, 1, .36, 1),
+    top 180ms cubic-bezier(.22, 1, .36, 1),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.stage-resizer.is-selecting .stage-resizer__surface {
+  height: 44rpx;
+  top: -10rpx;
+  background: #101721;
+  border-color: #253142;
+  box-shadow: 0 5rpx 14rpx rgba(0, 4, 10, .28);
+}
+
 .stage-resizer__grip {
   width: 36rpx;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  color: #687588;
+  transition: color 160ms ease;
+}
+
+.stage-resizer.is-selecting .stage-resizer__grip {
+  color: #f2c94c;
 }
 
 .stage-resizer__grip view {
   height: 3.5rpx;
   background: currentColor;
   border-radius: 499.5rpx;
+}
+
+.stage-resizer__modes {
+  position: absolute;
+  left: 4rpx;
+  right: 4rpx;
+  top: 3.5rpx;
+  bottom: 3.5rpx;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5rpx;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.stage-resizer.is-selecting .stage-resizer__modes {
+  opacity: 1;
+}
+
+.stage-resizer__mode {
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rpx;
+  color: #7f8c9e;
+  font-size: 10.5rpx;
+  font-weight: 620;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0);
+  border-radius: 5rpx;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.stage-resizer__mode--contain {
+  grid-column: 1;
+  align-items: flex-start;
+  padding-left: 8rpx;
+}
+
+.stage-resizer__mode--cover {
+  grid-column: 3;
+  align-items: flex-end;
+  padding-right: 8rpx;
+}
+
+.stage-resizer__mode.is-current {
+  color: #c9b767;
+}
+
+.stage-resizer__mode.is-hovered {
+  color: #f2f0e8;
+  background: #1a2432;
+  box-shadow: inset 0 0 0 .5rpx rgba(242, 201, 76, .24);
+}
+
+.stage-resizer__mode-icon {
+  width: 12.5rpx;
+  height: 12.5rpx;
+  display: block;
+  opacity: .7;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.stage-resizer__mode.is-hovered .stage-resizer__mode-icon {
+  opacity: 1;
+  transform: scale(1.06);
 }
 
 @keyframes resize-guide-in {
@@ -912,6 +1025,11 @@ button::after {
 
   .canvas-card,
   .stage-resizer,
+  .stage-resizer__surface,
+  .stage-resizer__grip,
+  .stage-resizer__modes,
+  .stage-resizer__mode,
+  .stage-resizer__mode-icon,
   .resize-guide,
   .speed-popover,
   .file-popover,

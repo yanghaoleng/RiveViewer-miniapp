@@ -29,6 +29,8 @@ const requiredFiles = [
   'assets/samples/guide.js',
   'assets/samples/question.js',
   'assets/icons/copy-simple.svg',
+  'assets/icons/arrows-in-simple.svg',
+  'assets/icons/arrows-out-simple.svg',
   'share-friend.png',
   'share-timeline.png',
   'pages/index/index.js',
@@ -278,6 +280,27 @@ if (/pageResize(Start|Move|End)/.test(previewMarkup + previewLogic)) {
 }
 if (!/class="stage-resizer[\s\S]*bindtouchstart="stageResizeStart"/.test(previewMarkup)) {
   throw new Error('原生画布缩放手柄缺少拖动绑定')
+}
+if (
+  ![previewMarkup, embeddedPreviewMarkup].every((markup) => (
+    /stageResizeMenuActive \? 'is-selecting'/.test(markup)
+    && /stageResizeHoverFit === 'contain'/.test(markup)
+    && /stageResizeHoverFit === 'cover'/.test(markup)
+    && /stage-resizer__mode--contain/.test(markup)
+    && /stage-resizer__mode--cover/.test(markup)
+    && /bindtouchcancel="stageResizeCancel"/.test(markup)
+    && /arrows-in-simple\.svg/.test(markup)
+    && /arrows-out-simple\.svg/.test(markup)
+  ))
+  || !/getStageResizeHoverFit/.test(previewLogic)
+  || !/updateStageResizeHover/.test(previewLogic)
+  || !/ratio < 1 \/ 3[\s\S]{0,80}'contain'/.test(previewLogic)
+  || !/ratio > 2 \/ 3[\s\S]{0,80}'cover'/.test(previewLogic)
+  || !/applyFit\(selectedFit, true\)/.test(previewLogic)
+  || !/grid-template-columns:\s*repeat\(3/.test(embeddedPreviewStyle)
+  || /is-selecting \.stage-resizer__grip\s*\{[\s\S]{0,100}(?:left|width):/.test(embeddedPreviewStyle)
+) {
+  throw new Error('缩放手柄缺少按住展开、横向悬停或松手切换完整/铺满')
 }
 if (
   !/toggleStageViewMode/.test(previewLogic)

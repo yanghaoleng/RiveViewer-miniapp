@@ -62,21 +62,21 @@
   </view>
 
   <view
-    class="stage-resizer {{stageDragging ? 'is-dragging' : ''}}"
+    class="stage-resizer {{stageDragging ? 'is-dragging' : ''}} {{stageResizeMenuActive ? 'is-selecting' : ''}}"
     data-stage-resizer="true"
     bindtouchstart="stageResizeStart"
     catchtouchmove="stageResizeMove"
     bindtouchend="stageResizeEnd"
-    bindtouchcancel="stageResizeEnd"
+    bindtouchcancel="stageResizeCancel"
     bindtap="stageResizerTap"
     role="slider"
-    aria-label="上下拖动画板高度，双击在自适应和参数全览之间切换"
+    aria-label="上下拖动画板高度，按住后左右滑动选择完整或铺满，双击切换参数全览"
     aria-valuemin="{{stageMinHeight}}"
     aria-valuemax="{{stageMaxHeight}}"
     aria-valuenow="{{stageHeight}}"
   >
     <view
-      wx:if="{{showResizeGuide}}"
+      wx:if="{{showResizeGuide && !stageResizeMenuActive}}"
       class="resize-guide {{resizeGuideLeaving ? 'is-leaving' : ''}}"
       catchtap="stopResizeGuideTouch"
     >
@@ -88,8 +88,20 @@
         aria-label="知道了"
       >✓</view>
     </view>
-    <view class="stage-resizer__grip" data-stage-resizer="true">
-      <view data-stage-resizer="true"></view>
+    <view class="stage-resizer__surface" data-stage-resizer="true">
+      <view class="stage-resizer__grip" data-stage-resizer="true">
+        <view data-stage-resizer="true"></view>
+      </view>
+      <view class="stage-resizer__modes" aria-hidden="{{!stageResizeMenuActive}}">
+        <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}">
+          <image class="stage-resizer__mode-icon" src="/assets/icons/arrows-in-simple.svg"></image>
+          <text>完整</text>
+        </view>
+        <view class="stage-resizer__mode stage-resizer__mode--cover {{fit === 'cover' ? 'is-current' : ''}} {{stageResizeHoverFit === 'cover' ? 'is-hovered' : ''}}">
+          <image class="stage-resizer__mode-icon" src="/assets/icons/arrows-out-simple.svg"></image>
+          <text>铺满</text>
+        </view>
+      </view>
     </view>
   </view>
 
@@ -346,4 +358,3 @@
     <cover-view class="file-popover__arrow" data-file-navigation="true"></cover-view>
   </cover-view>
 </root-portal>
-

@@ -129,6 +129,8 @@ const previewDefinition = {
     stageMinHeight: 320,
     stageMaxHeight: 980,
     stageDragging: false,
+    stageResizeMenuActive: false,
+    stageResizeHoverFit: '',
     stageViewMode: 'auto',
     resizeAdjustmentCount: 0,
     showResizeGuide: false,
@@ -729,6 +731,38 @@ const previewDefinition = {
     this.stageResizeStartHeight = this.data.stageHeight
     this.stageResizeMoved = false
     this.stageResizeFromHandle = true
+    this.stageResizeSelectorRect = null
+    this.setData({
+      stageResizeMenuActive: true,
+      stageResizeHoverFit: ''
+    })
+    this.createPreviewSelectorQuery()
+      .select('.stage-resizer')
+      .boundingClientRect((rect) => {
+        if (this.stageResizeStartY !== undefined && rect?.width) {
+          this.stageResizeSelectorRect = rect
+        }
+      })
+      .exec()
+  },
+
+  getStageResizeHoverFit(clientX) {
+    const rect = this.stageResizeSelectorRect
+    const x = Number(clientX)
+    if (!rect?.width || !Number.isFinite(x)) return ''
+    const ratio = (x - rect.left) / rect.width
+    if (ratio < 0 || ratio > 1) return ''
+    if (ratio < 1 / 3) return 'contain'
+    if (ratio > 2 / 3) return 'cover'
+    return ''
+  },
+
+  updateStageResizeHover(clientX) {
+    const stageResizeHoverFit = this.getStageResizeHoverFit(clientX)
+    if (stageResizeHoverFit !== this.data.stageResizeHoverFit) {
+      this.setData({ stageResizeHoverFit })
+    }
+    return stageResizeHoverFit
   },
 
   stageResizeMove(event) {
@@ -736,6 +770,7 @@ const previewDefinition = {
     if (!touch || this.stageResizeStartY === undefined) return
     const clientY = touch.clientY === undefined ? touch.y : touch.clientY
     const clientX = touch.clientX === undefined ? touch.x : touch.clientX
+    this.updateStageResizeHover(clientX)
     const windowWidth = Math.max(1, this.windowInfo?.windowWidth || 375)
     const deltaRpx = (clientY - this.stageResizeStartY) * 750 / windowWidth
     const deltaXRpx = (clientX - this.stageResizeStartX) * 750 / windowWidth
@@ -764,17 +799,39 @@ const previewDefinition = {
     }
   },
 
-  stageResizeEnd() {
+  finishStageResize(selectedFit = '') {
     if (this.stageResizeStartY === undefined) return
     const resized = this.stageResizeMoved
+    const wasDragging = this.data.stageDragging
     this.stageResizeStartY = undefined
     this.stageResizeStartX = undefined
-    this.ignoreNextStageTap = this.stageResizeFromHandle && this.stageResizeMoved
+    this.ignoreNextStageTap = this.stageResizeFromHandle && (
+      this.stageResizeMoved || Boolean(selectedFit)
+    )
     this.stageResizeFromHandle = false
-    if (this.data.stageDragging) {
-      this.setData({ stageDragging: false }, () => this.syncCanvasSize())
-    }
+    this.stageResizeSelectorRect = null
+    this.setData({
+      stageDragging: false,
+      stageResizeMenuActive: false,
+      stageResizeHoverFit: ''
+    }, () => {
+      if (selectedFit) {
+        this.applyFit(selectedFit, true)
+      } else if (wasDragging) {
+        this.syncCanvasSize()
+      }
+    })
     if (resized) this.recordResizeAdjustment()
+  },
+
+  stageResizeEnd(event) {
+    const touch = event.changedTouches?.[0]
+    const clientX = touch?.clientX === undefined ? touch?.x : touch.clientX
+    this.finishStageResize(this.getStageResizeHoverFit(clientX))
+  },
+
+  stageResizeCancel() {
+    this.finishStageResize('')
   },
 
   recordResizeAdjustment() {
@@ -1179,10 +1236,20 @@ const previewDefinition = {
   },
 
   selectFit(event) {
-    const fit = event.currentTarget.dataset.key
+    this.applyFit(event.currentTarget.dataset.key)
+  },
+
+  applyFit(fit, announce = false) {
+    if (!FIT_OPTIONS.some((item) => item.key === fit)) return
     this.player?.setFit(fit)
     this.stageUserAdjusted = false
-    this.setData({ fit, stageViewMode: 'auto' }, () => {
+    this.setData({
+      fit,
+      stageViewMode: 'auto',
+      ...(announce ? {
+        activeState: fit === 'contain' ? '缩放方式已切换为完整' : '缩放方式已切换为铺满'
+      } : {})
+    }, () => {
       if (!this.activeResourceSize) return
       const stageSize = this.calculateStageSize(
         this.activeResourceSize.width,
