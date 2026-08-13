@@ -24,13 +24,13 @@
 | 画布 Loading | Loading overlay | `.canvas-state--loading`、`loadingProgress`、`loadingPhase` |
 | 详情首帧封面 | First-frame cover capture | `scheduleCoverCapture`、`captureCover`、`saveCover` |
 | 画布拖动手柄 | Stage resize handle | `.stage-resizer`、`stageResizeStart/Move/End/Cancel`、`catchtouchstart/move/end/cancel` |
-| 手柄原位缩放快捷行 | Inline resize-handle fit row | `stageResizeMenuActive`、`stageResizeTapOpen`、`stageResizePressActive`、`selectStageResizeFit`、`stageResizeHoverFit`、`stageResizeLongPress`、`.stage-resizer.is-selecting`、`.stage-resizer.is-tap-open`、`.stage-resizer.is-press-active` |
+| 手柄原位缩放快捷行 | Inline resize-handle fit row | `stageResizeMenuActive`、`stageResizeTapOpen`、`stageResizePressActive`、`stageResizeEnd`、`stageResizeHoverFit`、`stageResizeLongPress`、`.stage-resizer.is-selecting`、`.stage-resizer.is-tap-open`、`.stage-resizer.is-press-active` |
 | 预览按钮按下回弹 | Preview press spring feedback | `hover-class="is-pressed"`、`hover-start-time="0"`、`scale(1.25)`、`cubic-bezier(.34, 1.56, .64, 1)` |
 | 快速菜单空白取消层 | Native menu backdrop dismiss | `.native-menu-backdrop`、`dismissNativeMenus`、`showSpeedMenu`、`showFileMenu` |
 | 文件菜单按住滑选 | File menu press-drag selection | `fileNavigationTouchMove`、`fileMenuOptionRects`、`fileHoverId`、`fileNavigationGestureMovedIntoMenu`、`.file-popover__option.is-hovered` |
 | 预览背景色块 | Canvas tone swatch | `.tone`、`.tone-options`、`canvasTone`、`setCanvasTone` |
 | 手柄单击三秒收起 | Stage fit menu auto dismiss | `stageResizeMenuDismissTimer`、`scheduleStageResizeMenuDismiss`、`clearStageResizeMenuDismiss`、H5 `stageResizeMenuDismissTimerRef` |
-| 手柄双击切换完整/铺满 | Stage fit double-tap toggle | `stageResizerTap`、`toggleStageFit`、`fit`、H5 `handleStageTap` |
+| 手柄双击切换完整/铺满 | Stage fit double-tap toggle | 小程序 `stageResizeEnd`、`STAGE_RESIZE_DOUBLE_TAP_DELAY`、`lastStageTapAt`、`toggleStageFit`、`fit`；H5 `handleStageTap` |
 | 重置按钮 | Reset playback action | `.transport__primary`、`resetAnimation` |
 | 播放 / 暂停 | Playback toggle | `.transport__secondary`、`togglePlay` |
 | 画布下方五个按钮平分 | Equal five-column transport | 小程序 `.transport` 使用 Flex 且五项 `width: 0; flex: 1 1 0`；H5 `.transport` 使用五列 Grid |

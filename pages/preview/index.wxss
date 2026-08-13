@@ -406,6 +406,7 @@ page {
 }
 
 .stage-resizer__mode {
+  pointer-events: auto;
   min-width: 0;
   box-sizing: border-box;
   display: flex;

@@ -72,7 +72,6 @@
     catchtouchend="stageResizeEnd"
     catchtouchcancel="stageResizeCancel"
     catchlongpress="stageResizeLongPress"
-    bindtap="stageResizerTap"
     role="slider"
     aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画板高度，按住后左右滑动选择，双击切换完整或铺满"
     aria-valuemin="{{stageMinHeight}}"
@@ -100,11 +99,11 @@
         <view data-stage-resizer="true"></view>
       </view>
       <view wx:if="{{stageResizeMenuActive}}" class="stage-resizer__modes">
-        <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}" data-fit="contain" catchtap="selectStageResizeFit" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="完整显示">
+        <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}" data-fit="contain" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="完整显示">
           <image class="stage-resizer__mode-icon" src="{{fit === 'contain' ? '/assets/icons/arrows-in-simple-active.svg' : '/assets/icons/arrows-in-simple.svg'}}"></image>
           <text>完整</text>
         </view>
-        <view class="stage-resizer__mode stage-resizer__mode--cover {{fit === 'cover' ? 'is-current' : ''}} {{stageResizeHoverFit === 'cover' ? 'is-hovered' : ''}}" data-fit="cover" catchtap="selectStageResizeFit" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="铺满显示">
+        <view class="stage-resizer__mode stage-resizer__mode--cover {{fit === 'cover' ? 'is-current' : ''}} {{stageResizeHoverFit === 'cover' ? 'is-hovered' : ''}}" data-fit="cover" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="铺满显示">
           <image class="stage-resizer__mode-icon" src="{{fit === 'cover' ? '/assets/icons/arrows-out-simple-active.svg' : '/assets/icons/arrows-out-simple.svg'}}"></image>
           <text>铺满</text>
         </view>

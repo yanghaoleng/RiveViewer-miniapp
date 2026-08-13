@@ -10,7 +10,8 @@
     "inspect:rive": "node scripts/inspect-rive.mjs",
     "benchmark:rive": "node scripts/benchmark-rive.mjs",
     "verify:interactions": "node scripts/verify-rive-interactions.mjs",
-    "check": "node scripts/check-project.mjs"
+    "test:gestures": "node --test tests/preview-resizer.test.mjs",
+    "check": "node scripts/check-project.mjs && npm run test:gestures"
   },
   "dependencies": {
     "@phosphor-icons/core": "^2.1.1",
