@@ -965,10 +965,11 @@ const previewDefinition = {
       this.fileNavigationLongPressed = true
       clearTimeout(this.fileMenuCloseTimer)
       this.openFileMenuAtAnchor()
-    }, 320)
+    }, 150)
   },
 
   openFileMenuAtAnchor() {
+    if (this.data.showSpeedMenu) this.closeSpeedMenu()
     this.createPreviewSelectorQuery()
       .select('.transport__files')
       .boundingClientRect((rect) => {
@@ -1134,10 +1135,11 @@ const previewDefinition = {
       this.speedLongPressTriggered = true
       clearTimeout(this.speedMenuCloseTimer)
       this.openSpeedMenuAtAnchor()
-    }, 320)
+    }, 150)
   },
 
   openSpeedMenuAtAnchor() {
+    if (this.data.showFileMenu) this.closeFileMenu()
     this.createPreviewSelectorQuery()
       .select('.speed-menu-shell')
       .boundingClientRect((rect) => {
@@ -1241,6 +1243,11 @@ const previewDefinition = {
   scheduleSpeedMenuDismiss() {
     clearTimeout(this.speedMenuDismissTimer)
     this.speedMenuDismissTimer = setTimeout(() => this.closeSpeedMenu(), 5000)
+  },
+
+  dismissNativeMenus() {
+    if (this.data.showSpeedMenu) this.closeSpeedMenu()
+    if (this.data.showFileMenu) this.closeFileMenu()
   },
 
   selectFit(event) {

@@ -113,10 +113,6 @@ page {
   border-radius: 10rpx;
 }
 
-.file-heading__save:active {
-  transform: scale(.97);
-}
-
 .file-heading__save image {
   width: 32rpx;
   height: 32rpx;
@@ -411,7 +407,7 @@ page {
   line-height: 1;
   white-space: nowrap;
   background: rgba(255, 255, 255, 0);
-  border-radius: 10rpx;
+  border-radius: 50%;
   transition:
     color 120ms ease,
     background-color 120ms ease;
@@ -419,15 +415,15 @@ page {
 
 .stage-resizer__mode--contain {
   grid-column: 1;
-  justify-content: flex-start;
-  padding-left: 20rpx;
+  justify-content: center;
+  padding: 0 12rpx;
   animation: stage-resizer-contain-in 240ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode--cover {
   grid-column: 3;
-  justify-content: flex-end;
-  padding-right: 20rpx;
+  justify-content: center;
+  padding: 0 12rpx;
   animation: stage-resizer-cover-in 240ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
@@ -446,6 +442,10 @@ page {
   display: block;
   opacity: .7;
   transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.stage-resizer__mode.is-current .stage-resizer__mode-icon {
+  opacity: 1;
 }
 
 @keyframes stage-resizer-contain-in {
@@ -558,12 +558,6 @@ page {
   background: #1c2633;
 }
 
-.transport__primary:active,
-.transport__secondary:active,
-.speed-menu:active {
-  transform: scale(0.97);
-}
-
 .transport__icon {
   width: 28rpx;
   height: 28rpx;
@@ -580,6 +574,14 @@ page {
 .native-menu-overlay {
   position: fixed;
   z-index: 2147483647;
+  pointer-events: auto;
+}
+
+.native-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  background: rgba(0, 0, 0, 0);
   pointer-events: auto;
 }
 
@@ -751,10 +753,6 @@ page {
   height: 28rpx;
 }
 
-.transport__file-button:active {
-  transform: scale(.97);
-}
-
 .transport__file-button.is-disabled {
   background: #0d131b;
 }
@@ -763,7 +761,7 @@ page {
   opacity: .22;
 }
 
-.transport__file-button.is-disabled:active {
+.transport__file-button.is-disabled.is-pressed {
   transform: none;
 }
 
@@ -806,6 +804,44 @@ page {
   font-size: 22rpx;
   white-space: nowrap;
   border-radius: 8rpx;
+}
+
+.file-heading__save,
+.canvas-state__action,
+.resize-guide__dismiss,
+.transport__primary,
+.transport__secondary,
+.speed-menu,
+.transport__file-button,
+.compact-option,
+.tone,
+.parameter-disclosure,
+.speed-popover__option,
+.file-popover__option {
+  transform-origin: center;
+  transition:
+    transform 280ms cubic-bezier(.34, 1.56, .64, 1),
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.file-heading__save.is-pressed,
+.canvas-state__action.is-pressed,
+.resize-guide__dismiss.is-pressed,
+.transport__primary.is-pressed,
+.transport__secondary.is-pressed,
+.speed-menu.is-pressed,
+.transport__file-button.is-pressed,
+.compact-option.is-pressed,
+.tone.is-pressed,
+.parameter-disclosure.is-pressed,
+.speed-popover__option.is-pressed,
+.file-popover__option.is-pressed {
+  position: relative;
+  z-index: 20;
+  transform: scale(1.25);
+  transition-duration: 70ms, 120ms, 120ms;
+  transition-timing-function: cubic-bezier(.2, .9, .3, 1), ease, ease;
 }
 
 .compact-option.is-active {
@@ -921,7 +957,6 @@ page {
   color: #f2f0e8;
   background: rgba(242, 201, 76, .14);
   border-color: rgba(242, 201, 76, .56);
-  transform: scale(.96);
 }
 
 .parameter-disclosure.is-loading,
@@ -1022,6 +1057,18 @@ page {
   .stage-resizer__modes,
   .stage-resizer__mode,
   .stage-resizer__mode-icon,
+  .file-heading__save,
+  .canvas-state__action,
+  .resize-guide__dismiss,
+  .transport__primary,
+  .transport__secondary,
+  .speed-menu,
+  .transport__file-button,
+  .compact-option,
+  .tone,
+  .parameter-disclosure,
+  .speed-popover__option,
+  .file-popover__option,
   .resize-guide,
   .speed-popover,
   .file-popover,

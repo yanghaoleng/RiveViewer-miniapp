@@ -309,8 +309,26 @@ if (
   || !/stage-resizer__modes\s*\{[\s\S]{0,180}top:\s*8rpx;[\s\S]{0,40}bottom:\s*8rpx/.test(embeddedPreviewStyle)
   || !/@keyframes stage-resizer-contain-in[\s\S]{0,180}translateX\(calc\(100% \+ 8rpx\)\)/.test(embeddedPreviewStyle)
   || !/@keyframes stage-resizer-cover-in[\s\S]{0,180}translateX\(calc\(-100% - 8rpx\)\)/.test(embeddedPreviewStyle)
+  || !/stage-resizer__mode--contain[\s\S]{0,100}justify-content:\s*center/.test(embeddedPreviewStyle)
+  || !/stage-resizer__mode\s*\{[\s\S]{0,420}border-radius:\s*50%/.test(embeddedPreviewStyle)
+  || !/arrows-in-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
+  || !/arrows-out-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
 ) {
   throw new Error('缩放手柄缺少按住展开、横向悬停或松手切换完整/铺满')
+}
+
+if (
+  ![previewMarkup, embeddedPreviewMarkup].every((markup) => (
+    /hover-class="is-pressed"[\s\S]{0,100}hover-start-time="0"/.test(markup)
+    && /class="native-menu-backdrop"[\s\S]{0,80}catchtap="dismissNativeMenus"/.test(markup)
+  ))
+  || !/transform:\s*scale\(1\.25\)/.test(embeddedPreviewStyle)
+  || !/cubic-bezier\(\.34, 1\.56, \.64, 1\)/.test(embeddedPreviewStyle)
+  || !/fileNavigationLongPressTimer = setTimeout\([\s\S]{0,180}, 150\)/.test(previewLogic)
+  || !/speedLongPressTimer = setTimeout\([\s\S]{0,180}, 150\)/.test(previewLogic)
+  || !/dismissNativeMenus\(\)/.test(previewLogic)
+) {
+  throw new Error('预览控件缺少即时放大反馈、150ms 快捷菜单或点空白关闭能力')
 }
 if (
   !/toggleStageViewMode/.test(previewLogic)
