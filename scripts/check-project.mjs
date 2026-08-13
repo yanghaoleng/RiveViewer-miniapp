@@ -130,6 +130,12 @@ const embeddedPreviewStyle = await fs.readFile(
   path.join(root, 'components/preview-panel/preview-panel.wxss'),
   'utf8'
 )
+const h5AppSource = await fs.readFile(
+  path.join(root, 'h5/app/rive-viewer/RiveViewerApp.tsx'),
+  'utf8'
+)
+const h5StyleSource = await fs.readFile(path.join(root, 'h5/app/globals.css'), 'utf8')
+const h5LibrarySource = await fs.readFile(path.join(root, 'h5/lib/library.ts'), 'utf8')
 const homeLogic = await fs.readFile(path.join(root, 'pages/index/index.js'), 'utf8')
 const appLogic = await fs.readFile(path.join(root, 'app.js'), 'utf8')
 const libraryLogic = await fs.readFile(path.join(root, 'utils/library.js'), 'utf8')
@@ -374,6 +380,24 @@ if (
   || !/\.tone\s*\{[\s\S]{0,100}width:\s*30rpx;[\s\S]{0,100}height:\s*20rpx/.test(embeddedPreviewStyle)
 ) {
   throw new Error('参数顺序、Loading 圆环或 1.5 倍背景色块未按设计实现')
+}
+
+if (
+  !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(
+    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
+  )
+  || !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(embeddedPreviewStyle)
+  || !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(h5StyleSource)
+  || !/stageResizeTapOpen/.test(h5AppSource)
+  || !/stageResizePressActive/.test(h5AppSource)
+  || !/className="stage-resizer-modes"/.test(h5AppSource)
+  || !/ShareNetwork[\s\S]{0,160}发送文件/.test(h5AppSource)
+  || /不能删除/.test(h5AppSource)
+  || !/getVisibleBuiltinFiles/.test(h5LibrarySource)
+  || !/hideBuiltinFile/.test(h5LibrarySource)
+  || !/\.tone-button\s*\{[\s\S]{0,100}width:\s*45px;[\s\S]{0,80}height:\s*30px/.test(h5StyleSource)
+) {
+  throw new Error('小程序与 H5 的五格播放区、首页菜单、手柄或背景色块未同步')
 }
 
 if (

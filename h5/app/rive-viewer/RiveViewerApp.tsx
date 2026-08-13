@@ -3,10 +3,11 @@
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowsInSimple,
+  ArrowsOutSimple,
   CaretDown,
   ChatCircleDots,
   DownloadSimple,
-  Eye,
   FileArrowUp,
   Gauge,
   Keyboard,
@@ -16,6 +17,7 @@ import {
   SpeakerHigh,
   SpeakerSlash,
   Trash,
+  ShareNetwork,
   ArrowCounterClockwise,
   X,
 } from "@phosphor-icons/react";
@@ -27,11 +29,12 @@ import type {
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BUILTIN_FILES,
   attachLibraryCovers,
   deleteLocalFile,
   formatBytes,
   formatDate,
+  getVisibleBuiltinFiles,
+  hideBuiltinFile,
   listLocalFiles,
   readLibraryFile,
   saveLocalFile,
@@ -94,7 +97,7 @@ function formatTime(seconds: number): string {
 }
 
 export function RiveViewerApp() {
-  const [files, setFiles] = useState<LibraryFile[]>(BUILTIN_FILES);
+  const [files, setFiles] = useState<LibraryFile[]>(getVisibleBuiltinFiles());
   const [expandedFileId, setExpandedFileId] = useState("");
   const [activeFile, setActiveFile] = useState<ActiveFile | null>(null);
   const [metadata, setMetadata] = useState<RiveMetadata>(EMPTY_METADATA);
@@ -117,6 +120,10 @@ export function RiveViewerApp() {
   const [canvasTone, setCanvasTone] = useState("mist");
   const [stageHeight, setStageHeight] = useState(460);
   const [draggingStage, setDraggingStage] = useState(false);
+  const [stageResizeMenuActive, setStageResizeMenuActive] = useState(false);
+  const [stageResizeTapOpen, setStageResizeTapOpen] = useState(false);
+  const [stageResizePressActive, setStageResizePressActive] = useState(false);
+  const [stageResizeHoverFit, setStageResizeHoverFit] = useState<"contain" | "cover" | "">("");
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogProgress, setCatalogProgress] = useState(0);
   const [fps, setFps] = useState(0);
@@ -124,9 +131,11 @@ export function RiveViewerApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<WebRivePlayer | null>(null);
-  const resizeStartRef = useRef({ y: 0, height: 0 });
+  const resizeStartRef = useRef({ x: 0, y: 0, height: 0 });
   const draggingStageRef = useRef(false);
   const stageResizeMovedRef = useRef(false);
+  const stageResizeStartedOpenRef = useRef(false);
+  const stageResizeLongPressTimerRef = useRef<number | null>(null);
   const lastStageTapRef = useRef(0);
   const speedRef = useRef(speed);
   const fitRef = useRef(fit);
@@ -136,7 +145,7 @@ export function RiveViewerApp() {
   const refreshLibrary = useCallback(async () => {
     try {
       const localFiles = await listLocalFiles();
-      const nextFiles = await attachLibraryCovers([...BUILTIN_FILES, ...localFiles]);
+      const nextFiles = await attachLibraryCovers([...getVisibleBuiltinFiles(), ...localFiles]);
       nextFiles.forEach((file) => {
         if (file.cover) capturedCoverIdsRef.current.add(file.id);
       });
@@ -257,6 +266,16 @@ export function RiveViewerApp() {
     coverUrls.forEach((url) => URL.revokeObjectURL(url));
   }, [coverUrls]);
 
+  useEffect(() => {
+    if (!expandedFileId) return;
+    const closeFileMenu = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest(".file-row.is-menu-open")) setExpandedFileId("");
+    };
+    document.addEventListener("pointerdown", closeFileMenu);
+    return () => document.removeEventListener("pointerdown", closeFileMenu);
+  }, [expandedFileId]);
+
   const openFile = useCallback(async (file: LibraryFile) => {
     try {
       setExpandedFileId("");
@@ -301,12 +320,28 @@ export function RiveViewerApp() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, []);
 
+  const shareFile = useCallback(async (file: LibraryFile) => {
+    const data = await readLibraryFile(file);
+    const sharedFile = new File([data], file.name, { type: "application/octet-stream" });
+    const payload = { files: [sharedFile], title: file.name };
+    if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
+      try {
+        await navigator.share(payload);
+        return;
+      } catch (shareError) {
+        if (shareError instanceof DOMException && shareError.name === "AbortError") return;
+      }
+    }
+    await downloadFile(file);
+  }, [downloadFile]);
+
   const removeFile = useCallback(async (file: LibraryFile) => {
-    if (file.builtin) return;
-    await deleteLocalFile(file.id);
+    if (file.builtin) hideBuiltinFile(file.id);
+    else await deleteLocalFile(file.id);
     setExpandedFileId("");
+    if (activeFile?.file.id === file.id) setActiveFile(null);
     await refreshLibrary();
-  }, [refreshLibrary]);
+  }, [activeFile?.file.id, refreshLibrary]);
 
   const togglePlayback = useCallback(() => {
     const player = playerRef.current;
@@ -412,24 +447,79 @@ export function RiveViewerApp() {
     playerRef.current?.pointer("move", x, y, event.pointerId);
   };
 
-  const beginStageResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    resizeStartRef.current = { y: event.clientY, height: stageHeight };
+  const clearStageResizeTimer = () => {
+    if (stageResizeLongPressTimerRef.current !== null) {
+      window.clearTimeout(stageResizeLongPressTimerRef.current);
+      stageResizeLongPressTimerRef.current = null;
+    }
+  };
+
+  const stageFitAtPointer = (clientX: number): "contain" | "cover" | "" => {
+    const bounds = eventTargetStageResizerRef.current?.getBoundingClientRect();
+    if (!bounds?.width) return "";
+    const ratio = (clientX - bounds.left) / bounds.width;
+    if (ratio < 0 || ratio > 1) return "";
+    if (ratio < 1 / 3) return "contain";
+    if (ratio > 2 / 3) return "cover";
+    return "";
+  };
+
+  const eventTargetStageResizerRef = useRef<HTMLDivElement>(null);
+
+  const beginStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest(".stage-resizer-mode")) return;
+    resizeStartRef.current = { x: event.clientX, y: event.clientY, height: stageHeight };
     event.currentTarget.setPointerCapture(event.pointerId);
     draggingStageRef.current = true;
     stageResizeMovedRef.current = false;
-    setDraggingStage(true);
+    stageResizeStartedOpenRef.current = stageResizeTapOpen;
+    setStageResizeMenuActive(true);
+    setStageResizeTapOpen(false);
+    setStageResizePressActive(false);
+    setStageResizeHoverFit("");
+    clearStageResizeTimer();
+    stageResizeLongPressTimerRef.current = window.setTimeout(() => {
+      setStageResizePressActive(true);
+    }, 150);
   };
 
-  const moveStageResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const moveStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!draggingStageRef.current) return;
-    if (Math.abs(event.clientY - resizeStartRef.current.y) > 4) stageResizeMovedRef.current = true;
+    const deltaX = event.clientX - resizeStartRef.current.x;
+    const deltaY = event.clientY - resizeStartRef.current.y;
+    setStageResizeHoverFit(stageFitAtPointer(event.clientX));
+    if (Math.abs(deltaY) > 4 || Math.abs(deltaX) > 4) {
+      stageResizeMovedRef.current = true;
+      setDraggingStage(true);
+      setStageResizePressActive(true);
+    }
     const maximum = Math.max(320, window.innerHeight * 0.66);
-    setStageHeight(clamp(resizeStartRef.current.height + event.clientY - resizeStartRef.current.y, 250, maximum));
+    if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+      setStageHeight(clamp(resizeStartRef.current.height + deltaY, 250, maximum));
+    }
   };
 
-  const endStageResize = () => {
+  const endStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggingStageRef.current) return;
+    clearStageResizeTimer();
+    const selectedFit = stageResizeStartedOpenRef.current ? "" : stageFitAtPointer(event.clientX);
     draggingStageRef.current = false;
     setDraggingStage(false);
+    setStageResizePressActive(false);
+    setStageResizeHoverFit("");
+    if ((stageResizeMovedRef.current || selectedFit) && selectedFit) {
+      selectFit(selectedFit);
+      setStageResizeMenuActive(false);
+      setStageResizeTapOpen(false);
+      return;
+    }
+    if (stageResizeMovedRef.current) {
+      setStageResizeMenuActive(false);
+      setStageResizeTapOpen(false);
+      return;
+    }
+    setStageResizeMenuActive(true);
+    setStageResizeTapOpen(true);
   };
 
   const selectFit = (nextFit: "contain" | "cover") => {
@@ -443,7 +533,7 @@ export function RiveViewerApp() {
     setStageHeight(stageHeight > (compact + expanded) / 2 ? compact : expanded);
   };
 
-  const handleStageTap = (event: ReactMouseEvent<HTMLButtonElement>) => {
+  const handleStageTap = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (stageResizeMovedRef.current) {
       stageResizeMovedRef.current = false;
       lastStageTapRef.current = 0;
@@ -451,12 +541,16 @@ export function RiveViewerApp() {
     }
     if (event.detail === 0) {
       toggleStageHeight();
+      setStageResizeMenuActive(false);
+      setStageResizeTapOpen(false);
       return;
     }
     const now = performance.now();
     if (now - lastStageTapRef.current <= 320) {
       lastStageTapRef.current = 0;
       toggleStageHeight();
+      setStageResizeMenuActive(false);
+      setStageResizeTapOpen(false);
       return;
     }
     lastStageTapRef.current = now;
@@ -517,7 +611,7 @@ export function RiveViewerApp() {
               multiple
               onChange={importFiles}
             />
-            <button className="import-dropzone" onClick={() => fileInputRef.current?.click()}>
+            <button className="import-dropzone press-feedback-large" onClick={() => fileInputRef.current?.click()}>
               <span className="import-mark"><Plus size={24} weight="bold" /></span>
               <span>导入 Rive 文件</span>
             </button>
@@ -534,7 +628,7 @@ export function RiveViewerApp() {
               expandedFileId={expandedFileId}
               activeFileId={activeFile?.file.id}
               onOpen={openFile}
-              onDownload={downloadFile}
+              onShare={shareFile}
               onRemove={removeFile}
               onToggleMenu={(id) => setExpandedFileId(expandedFileId === id ? "" : id)}
             />
@@ -592,24 +686,48 @@ export function RiveViewerApp() {
           )}
         </div>
 
-        <button
-          className={`stage-resizer ${draggingStage ? "is-dragging" : ""}`}
+        <div
+          ref={eventTargetStageResizerRef}
+          className={`stage-resizer ${draggingStage ? "is-dragging" : ""} ${stageResizeMenuActive ? "is-selecting" : ""} ${stageResizeTapOpen ? "is-tap-open" : ""} ${stageResizePressActive ? "is-press-active" : ""}`}
           onPointerDown={beginStageResize}
           onPointerMove={moveStageResize}
           onPointerUp={endStageResize}
           onPointerCancel={endStageResize}
           onClick={handleStageTap}
-          aria-label="拖动画布高度，双击切换高度"
+          role="slider"
+          tabIndex={0}
+          aria-label="单击展开完整或铺满，上下拖动画布高度，按住后左右滑动选择，双击切换高度"
+          aria-valuemin={250}
+          aria-valuemax={Math.round(Math.max(320, typeof window === "undefined" ? 620 : window.innerHeight * 0.66))}
+          aria-valuenow={Math.round(stageHeight)}
         >
-          <span />
-        </button>
+          <span className="stage-resizer-grip" />
+          {stageResizeMenuActive && (
+            <div className="stage-resizer-modes">
+              <button
+                className={`stage-resizer-mode mode-contain ${fit === "contain" ? "is-current" : ""} ${stageResizeHoverFit === "contain" ? "is-hovered" : ""}`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); selectFit("contain"); setStageResizeMenuActive(false); setStageResizeTapOpen(false); }}
+              >
+                <ArrowsInSimple size={18} weight="bold" /><span>完整</span>
+              </button>
+              <button
+                className={`stage-resizer-mode mode-cover ${fit === "cover" ? "is-current" : ""} ${stageResizeHoverFit === "cover" ? "is-hovered" : ""}`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); selectFit("cover"); setStageResizeMenuActive(false); setStageResizeTapOpen(false); }}
+              >
+                <ArrowsOutSimple size={18} weight="bold" /><span>铺满</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="transport">
           <div className="transport-playback">
-            <button className="icon-button" onClick={resetPlayback} aria-label="重播" aria-keyshortcuts="R" title="重播 (R)">
+            <button className="icon-button press-feedback" onClick={resetPlayback} aria-label="重播" aria-keyshortcuts="R" title="重播 (R)">
               <ArrowCounterClockwise size={20} />
             </button>
-            <button className="icon-button" onClick={togglePlayback} aria-label={playing ? "暂停" : "播放"} aria-keyshortcuts="Space" title={`${playing ? "暂停" : "播放"} (空格)`}>
+            <button className="icon-button press-feedback" onClick={togglePlayback} aria-label={playing ? "暂停" : "播放"} aria-keyshortcuts="Space" title={`${playing ? "暂停" : "播放"} (空格)`}>
               {playing ? <Pause size={20} weight="fill" /> : <Play size={20} weight="fill" />}
             </button>
           </div>
@@ -620,10 +738,10 @@ export function RiveViewerApp() {
             </select>
           </label>
           <div className="transport-files">
-            <button disabled={activeIndex <= 0} onClick={() => navigateFile(-1)} aria-label="上一个文件" aria-keyshortcuts="ArrowLeft ArrowUp" title="上一个文件 (← / ↑)">
+            <button className="press-feedback" disabled={activeIndex <= 0} onClick={() => navigateFile(-1)} aria-label="上一个文件" aria-keyshortcuts="ArrowLeft ArrowUp" title="上一个文件 (← / ↑)">
               <ArrowLeft size={18} />
             </button>
-            <button disabled={activeIndex < 0 || activeIndex >= files.length - 1} onClick={() => navigateFile(1)} aria-label="下一个文件" aria-keyshortcuts="ArrowRight ArrowDown" title="下一个文件 (→ / ↓)">
+            <button className="press-feedback" disabled={activeIndex < 0 || activeIndex >= files.length - 1} onClick={() => navigateFile(1)} aria-label="下一个文件" aria-keyshortcuts="ArrowRight ArrowDown" title="下一个文件 (→ / ↓)">
               <ArrowRight size={18} />
             </button>
           </div>
@@ -685,6 +803,18 @@ export function RiveViewerApp() {
             )) : <EmptyTag>无输入</EmptyTag>}
           </ParameterRow>
 
+          <ParameterRow label="预览背景">
+            {CANVAS_TONES.map((tone) => (
+              <button
+                key={tone.key}
+                className={`tone-button press-feedback tone-${tone.key} ${canvasTone === tone.key ? "is-active" : ""}`}
+                aria-label={`${tone.label}背景`}
+                aria-pressed={canvasTone === tone.key}
+                onClick={() => setCanvasTone(tone.key)}
+              />
+            ))}
+          </ParameterRow>
+
           {metadata.hasAudio && (
             <ParameterRow label="声音">
               <Tag
@@ -697,29 +827,18 @@ export function RiveViewerApp() {
             </ParameterRow>
           )}
 
-          <ParameterRow label="缩放方式">
-            <Tag selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>
-            <Tag selected={fit === "cover"} onClick={() => selectFit("cover")}>铺满</Tag>
-          </ParameterRow>
           <ParameterRow label="渲染质量">
             <Tag selected={quality === 1} onClick={() => setQuality(1)}>性能</Tag>
             <Tag selected={quality === 1.5} onClick={() => setQuality(1.5)}>平衡</Tag>
             <Tag selected={quality === 2} onClick={() => setQuality(2)}>高清</Tag>
           </ParameterRow>
-          <ParameterRow label="预览背景">
-            {CANVAS_TONES.map((tone) => (
-              <button
-                key={tone.key}
-                className={`tone-button tone-${tone.key} ${canvasTone === tone.key ? "is-active" : ""}`}
-                aria-label={`${tone.label}背景`}
-                aria-pressed={canvasTone === tone.key}
-                onClick={() => setCanvasTone(tone.key)}
-              />
-            ))}
-          </ParameterRow>
           <ParameterRow label="文件操作">
             <Tag onClick={() => fileInputRef.current?.click()}><FileArrowUp size={16} />继续导入</Tag>
             <Tag onClick={() => downloadFile(activeFile.file)}><DownloadSimple size={16} />下载文件</Tag>
+          </ParameterRow>
+          <ParameterRow label="缩放方式">
+            <Tag selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>
+            <Tag selected={fit === "cover"} onClick={() => selectFit("cover")}>铺满</Tag>
           </ParameterRow>
         </div>
 
@@ -779,7 +898,7 @@ function FeedbackContact() {
   return (
     <div className="feedback-contact">
       <button
-        className="author-contact"
+        className="author-contact press-feedback"
         type="button"
         onClick={copyWechat}
         aria-label="联系作者反馈意见，复制微信号"
@@ -856,7 +975,7 @@ function Tag({
 }) {
   return (
     <button
-      className={`parameter-tag ${selected ? "is-selected" : ""} ${active ? "is-playing" : ""}`}
+      className={`parameter-tag press-feedback ${selected ? "is-selected" : ""} ${active ? "is-playing" : ""}`}
       style={style}
       aria-pressed={selected}
       onClick={onClick}
@@ -877,7 +996,7 @@ function LibraryList({
   activeFileId,
   compact,
   onOpen,
-  onDownload,
+  onShare,
   onRemove,
   onToggleMenu,
 }: {
@@ -887,7 +1006,7 @@ function LibraryList({
   activeFileId?: string;
   compact?: boolean;
   onOpen: (file: LibraryFile) => void;
-  onDownload: (file: LibraryFile) => void;
+  onShare: (file: LibraryFile) => void;
   onRemove: (file: LibraryFile) => void;
   onToggleMenu: (id: string) => void;
 }) {
@@ -895,7 +1014,7 @@ function LibraryList({
     <div className={`file-list ${compact ? "is-compact" : ""}`}>
       {files.map((file) => (
         <article className={`file-row ${activeFileId === file.id ? "is-current" : ""} ${expandedFileId === file.id ? "is-menu-open" : ""}`} key={file.id}>
-          <button className="file-open" onClick={() => onOpen(file)}>
+          <button className="file-open press-feedback-large" onClick={() => onOpen(file)}>
             <span className={`file-cover ${coverUrls.has(file.id) ? "has-image" : ""}`} aria-hidden="true">
               {coverUrls.has(file.id)
                 ? <LocalCoverImage src={coverUrls.get(file.id)!} />
@@ -912,7 +1031,7 @@ function LibraryList({
           </button>
           <div className="file-action">
             <button
-              className={`square-button ${expandedFileId === file.id ? "is-active" : ""}`}
+              className={`square-button press-feedback ${expandedFileId === file.id ? "is-active" : ""}`}
               aria-label={`操作 ${file.name}`}
               onClick={() => onToggleMenu(file.id)}
             >
@@ -921,10 +1040,9 @@ function LibraryList({
           </div>
           {expandedFileId === file.id && (
             <div className="file-menu">
-              <button onClick={() => onOpen(file)}><Eye size={17} />预览文件</button>
-              <button onClick={() => onDownload(file)}><DownloadSimple size={17} />下载文件</button>
-              <button disabled={file.builtin} className="danger" onClick={() => onRemove(file)}>
-                <Trash size={17} />{file.builtin ? "不能删除" : "删除文件"}
+              <button className="press-feedback" onClick={() => onShare(file)}><ShareNetwork size={17} />发送文件</button>
+              <button className="danger press-feedback" onClick={() => onRemove(file)}>
+                <Trash size={17} />删除文件
               </button>
             </div>
           )}

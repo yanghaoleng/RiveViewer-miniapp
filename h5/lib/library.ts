@@ -21,6 +21,7 @@ type StoredCover = {
 const DB_VERSION = 2;
 const STORE_NAME = "files";
 const COVER_STORE_NAME = "covers";
+const HIDDEN_BUILTIN_STORAGE_KEY = "rive-viewer-hidden-builtins-v1";
 
 export const BUILTIN_FILES: LibraryFile[] = [
   {
@@ -40,6 +41,28 @@ export const BUILTIN_FILES: LibraryFile[] = [
     url: "/rive-viewer/samples/question.riv",
   },
 ];
+
+function readHiddenBuiltinIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(HIDDEN_BUILTIN_STORAGE_KEY) || "[]");
+    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function getVisibleBuiltinFiles(): LibraryFile[] {
+  const hiddenIds = readHiddenBuiltinIds();
+  return BUILTIN_FILES.filter((file) => !hiddenIds.has(file.id));
+}
+
+export function hideBuiltinFile(id: string): void {
+  if (typeof window === "undefined") return;
+  const hiddenIds = readHiddenBuiltinIds();
+  hiddenIds.add(id);
+  window.localStorage.setItem(HIDDEN_BUILTIN_STORAGE_KEY, JSON.stringify([...hiddenIds]));
+}
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

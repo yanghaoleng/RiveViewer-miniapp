@@ -58,14 +58,30 @@ test("ships the browser runtime and local-only library", async () => {
 });
 
 test("keeps preview controls on one page and aligns pointer coordinates with rendering", async () => {
-  const [appSource, playerSource] = await Promise.all([
+  const [appSource, playerSource, librarySource, styleSource] = await Promise.all([
     readFile(new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/rive-player.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/library.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.doesNotMatch(appSource, /activeTab|primary-tabs/);
   assert.match(appSource, /label="状态机输入"/);
   assert.match(appSource, /label="缩放方式"/);
+  assert.ok(appSource.indexOf('label="预览背景"') < appSource.indexOf('label="渲染质量"'));
+  assert.ok(appSource.lastIndexOf('label="缩放方式"') > appSource.indexOf('label="文件操作"'));
+  assert.match(appSource, /stageResizeTapOpen/);
+  assert.match(appSource, /stageResizePressActive/);
+  assert.match(appSource, /className="stage-resizer-modes"/);
+  assert.match(appSource, /ShareNetwork[\s\S]{0,120}发送文件/);
+  assert.doesNotMatch(appSource, /不能删除/);
+  assert.match(librarySource, /getVisibleBuiltinFiles/);
+  assert.match(librarySource, /hideBuiltinFile/);
+  assert.match(styleSource, /\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/);
+  assert.match(styleSource, /\.transport-playback\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(2/);
+  assert.match(styleSource, /\.transport-files\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(2/);
+  assert.match(styleSource, /\.tone-button\s*\{[\s\S]{0,100}width:\s*45px;[\s\S]{0,80}height:\s*30px/);
+  assert.match(styleSource, /\.press-feedback:active/);
   assert.match(playerSource, /this\.renderer\.align\(/);
   assert.match(playerSource, /canvasPointToBacking/);
   assert.match(playerSource, /backingPointToArtboard/);

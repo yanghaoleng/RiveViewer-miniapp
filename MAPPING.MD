@@ -31,6 +31,7 @@
 | 双击切换 | Stage view mode toggle | `stageResizerTap`、`toggleStageViewMode`、`stageViewMode` |
 | 重置按钮 | Reset playback action | `.transport__primary`、`resetAnimation` |
 | 播放 / 暂停 | Playback toggle | `.transport__secondary`、`togglePlay` |
+| 画布下方五个按钮平分 | Equal five-column transport | 小程序 `.transport`、H5 `.transport`、`grid-template-columns: repeat(5, minmax(0, 1fr))` |
 | 播放速度 | Speed selector | `.speed-menu`、`.speed-popover`、`speedValue` |
 | 上一个 / 下一个 | File navigation | `.transport__files`、`fileNavigationTouchStart/End`、`openFileById` |
 | 长按文件列表 | File navigation popover | `.file-popover`、`showFileMenu` |
@@ -93,6 +94,8 @@
 | H5 平台标签（已移除） | Removed platform badge | 不再渲染 `.platform-label` 或右上角 `H5` 文案 |
 | H5 标题品牌图标 | Header brand mark | `Brand`、`.brand-mark`、`favicon.webp?v=2` |
 | H5 文件操作箭头 | Hover file action toggle | `.file-action`、`.file-row:hover`、`.file-row:focus-within`、`.is-menu-open` |
+| H5 发送文件 | Web Share with download fallback | `shareFile`、`navigator.share`、`navigator.canShare`、`downloadFile` |
+| H5 删除示例 | Hidden built-in file | `getVisibleBuiltinFiles`、`hideBuiltinFile`、`rive-viewer-hidden-builtins-v1` |
 | H5 页签图标 | Favicon with fallback | `favicon.webp`、`favicon-source.png`、`?v=2`、Figma 节点 `152:723` |
 | H5 公网测试入口 | Temporary production URL | `rive-viewer-miniapp.muhualei.chatgpt.site/rive-viewer` |
 | H5 正式入口 | Custom-domain route | `https://mikeywa.site/rive-viewer/`、`/etc/nginx/snippets/rive-viewer.conf` |
