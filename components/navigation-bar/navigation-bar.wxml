@@ -15,7 +15,11 @@
               role="button"
               aria-label="返回"
             >
-              <view class="weui-navigation-bar__button weui-navigation-bar__btn_goback"></view>
+              <image
+                class="weui-navigation-bar__button weui-navigation-bar__btn_goback"
+                src="/assets/icons/caret-left.svg"
+                mode="aspectFit"
+              ></image>
             </view>
           </view>
         </block>
@@ -29,7 +33,11 @@
               role="button"
               aria-label="首页"
             >
-              <view class="weui-navigation-bar__button weui-navigation-bar__btn_home"></view>
+              <image
+                class="weui-navigation-bar__button weui-navigation-bar__btn_home"
+                src="/assets/icons/house.svg"
+                mode="aspectFit"
+              ></image>
             </view>
           </view>
         </block>
@@ -42,11 +50,13 @@
     <!-- 标题 -->
     <view class='weui-navigation-bar__center'>
       <view wx:if="{{loading}}" class="weui-navigation-bar__loading" aria-role="alert">
-        <view
+        <image
           class="weui-loading"
+          src="/assets/icons/circle-notch.svg"
+          mode="aspectFit"
           aria-role="img"
           aria-label="加载中"
-        ></view>
+        ></image>
       </view>
       <block wx:if="{{title}}">
         <text>{{title}}</text>

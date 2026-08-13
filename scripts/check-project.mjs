@@ -28,9 +28,23 @@ const requiredFiles = [
   'assets/samples/question.riv',
   'assets/samples/guide.js',
   'assets/samples/question.js',
-  'assets/icons/copy-simple.svg',
+  'assets/icons/arrow-left.svg',
+  'assets/icons/arrow-right.svg',
+  'assets/icons/arrows-in-simple-active.svg',
   'assets/icons/arrows-in-simple.svg',
+  'assets/icons/arrows-out-simple-active.svg',
   'assets/icons/arrows-out-simple.svg',
+  'assets/icons/caret-left.svg',
+  'assets/icons/chevron-down.svg',
+  'assets/icons/circle-notch.svg',
+  'assets/icons/copy-simple.svg',
+  'assets/icons/download.svg',
+  'assets/icons/gauge.svg',
+  'assets/icons/house.svg',
+  'assets/icons/player-pause.svg',
+  'assets/icons/player-play.svg',
+  'assets/icons/plus.svg',
+  'assets/icons/restore.svg',
   'share-friend.png',
   'share-timeline.png',
   'pages/index/index.js',
@@ -55,6 +69,18 @@ if (
 
 for (const relativePath of requiredFiles) {
   await fs.access(path.join(root, relativePath))
+}
+
+const miniProgramIconFiles = (await fs.readdir(path.join(root, 'assets/icons')))
+  .filter((fileName) => fileName.endsWith('.svg'))
+for (const fileName of miniProgramIconFiles) {
+  const iconSource = await fs.readFile(path.join(root, 'assets/icons', fileName), 'utf8')
+  if (
+    !/data-icon-family="phosphor"/.test(iconSource)
+    || !/data-icon-weight="bold"/.test(iconSource)
+  ) {
+    throw new Error(`小程序图标必须来自 Phosphor Icons Bold：${fileName}`)
+  }
 }
 
 for (const relativePath of ['app.json', 'project.config.json']) {
@@ -144,6 +170,7 @@ const nativeRuntime = await fs.readFile(path.join(root, 'utils/rive-native.js'),
 const nativeVendor = await fs.readFile(path.join(root, 'vendor/rive/canvas_advanced.js'), 'utf8')
 const vendorScript = await fs.readFile(path.join(root, 'scripts/vendor-rive.mjs'), 'utf8')
 const navigationLogic = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.js'), 'utf8')
+const navigationMarkup = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.wxml'), 'utf8')
 const navigationStyle = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.wxss'), 'utf8')
 const desktopSplitLogic = await fs.readFile(path.join(root, 'utils/desktop-split.js'), 'utf8')
 const { calculateNavigationLayout } = requireModule(
@@ -195,8 +222,22 @@ if (
   || !/\.weui-navigation-bar__left\s*\{[\s\S]{0,260}align-items:\s*center/.test(navigationStyle)
   || !/\.weui-navigation-bar__btn_goback_wrapper\s*\{[\s\S]{0,260}width:\s*44px[\s\S]{0,160}height:\s*44px/.test(navigationStyle)
   || /margin:\s*-11px/.test(navigationStyle)
+  || /data:image\/svg\+xml/.test(navigationStyle)
+  || !/\/assets\/icons\/caret-left\.svg/.test(navigationMarkup)
+  || !/\/assets\/icons\/circle-notch\.svg/.test(navigationMarkup)
 ) {
   throw new Error('自定义导航栏缺少电脑端对齐、完整返回热区或单页栈回首页兜底')
+}
+
+const h5IconElements = h5AppSource.match(
+  /<[A-Z][A-Za-z0-9]*\s+[^>]*\bsize=\{[^}]+\}[^>]*>/g
+) || []
+if (
+  h5IconElements.length < 20
+  || h5IconElements.some((element) => !/\bweight="bold"/.test(element))
+  || /weight="(?:fill|regular|light|thin|duotone)"/.test(h5AppSource)
+) {
+  throw new Error('H5 功能图标必须全部显式使用 Phosphor Icons Bold')
 }
 if (
   !/DESKTOP_SPLIT_MIN_WIDTH\s*=\s*960/.test(desktopSplitLogic)

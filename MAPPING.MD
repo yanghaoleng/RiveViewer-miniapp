@@ -7,6 +7,7 @@
 | 首页导入框 | Import dropzone | `.import-dropzone`、`showImportMenu` |
 | 底部网页版单行 | External viewer footer row | `.web-link-footer`、`padding: 28rpx 20px 0`、`.web-link-footer__label`、`margin-right: 10rpx`、`.web-link-footer__url-wrap`、`.web-link-footer__url`、`.web-link-footer__url-fade`、`WEB_VIEW_URL` |
 | 复制网页版地址 | User-triggered clipboard write | 可见文案 `mikeywa.site/rive-viewer/`、复制值 `WEB_VIEW_URL`、`copyWebViewerUrl`、`wx.setClipboardData`、`已复制网址`、`/assets/icons/copy-simple.svg` |
+| 全站功能图标 | Phosphor Icons Bold system | 小程序 `assets/icons/*.svg`、`scripts/vendor-phosphor-icons.mjs`、`npm run vendor:icons`；H5 `@phosphor-icons/react`、`weight="bold"` |
 | 首页 Rive 预热 | Runtime idle prewarm | `startRivePrewarm`、`prewarmRuntime`、`runtimePromise` |
 | 次级页顶部导航 | Custom preview navigation bar | `components/navigation-bar/navigation-layout.js`、`calculateNavigationLayout`、`topInset`、`edgeWidth`、`wx.getMenuButtonBoundingClientRect`、`wx.onWindowResize` |
 | 电脑端返回修复 | Desktop navigation and route fallback | `.weui-navigation-bar__left` 垂直居中、返回热区 `44×44px`、`getCurrentPages`、`wx.navigateBack`、单页栈 `wx.reLaunch` 首页 |

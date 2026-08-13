@@ -586,7 +586,7 @@ export function RiveViewerApp() {
             <Brand label="Rive 预览" />
             <div className="topbar-actions preview-actions">
               <button className="topbar-download" onClick={() => downloadFile(activeFile.file)}>
-                <DownloadSimple size={18} />下载
+                <DownloadSimple size={18} weight="bold" />下载
               </button>
               <ShortcutHelp />
             </div>
@@ -669,7 +669,7 @@ export function RiveViewerApp() {
             onClick={() => downloadFile(activeFile.file)}
             aria-label="下载当前文件"
           >
-            <DownloadSimple size={18} />
+            <DownloadSimple size={18} weight="bold" />
           </button>
         </div>
 
@@ -744,10 +744,10 @@ export function RiveViewerApp() {
         <div className="transport">
           <div className="transport-playback">
             <button className="icon-button press-feedback" onClick={resetPlayback} aria-label="重播" aria-keyshortcuts="R" title="重播 (R)">
-              <ArrowCounterClockwise size={20} />
+              <ArrowCounterClockwise size={20} weight="bold" />
             </button>
             <button className="icon-button press-feedback" onClick={togglePlayback} aria-label={playing ? "暂停" : "播放"} aria-keyshortcuts="Space" title={`${playing ? "暂停" : "播放"} (空格)`}>
-              {playing ? <Pause size={20} weight="fill" /> : <Play size={20} weight="fill" />}
+              {playing ? <Pause size={20} weight="bold" /> : <Play size={20} weight="bold" />}
             </button>
           </div>
           <label className="speed-select">
@@ -758,10 +758,10 @@ export function RiveViewerApp() {
           </label>
           <div className="transport-files">
             <button className="press-feedback" disabled={activeIndex <= 0} onClick={() => navigateFile(-1)} aria-label="上一个文件" aria-keyshortcuts="ArrowLeft ArrowUp" title="上一个文件 (← / ↑)">
-              <ArrowLeft size={18} />
+              <ArrowLeft size={18} weight="bold" />
             </button>
             <button className="press-feedback" disabled={activeIndex < 0 || activeIndex >= files.length - 1} onClick={() => navigateFile(1)} aria-label="下一个文件" aria-keyshortcuts="ArrowRight ArrowDown" title="下一个文件 (→ / ↓)">
-              <ArrowRight size={18} />
+              <ArrowRight size={18} weight="bold" />
             </button>
           </div>
         </div>
@@ -840,7 +840,7 @@ export function RiveViewerApp() {
                 selected={metadata.audioEnabled}
                 onClick={() => playerRef.current?.setAudioEnabled(!metadata.audioEnabled)}
               >
-                {metadata.audioEnabled ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} />}
+                {metadata.audioEnabled ? <SpeakerHigh size={16} weight="bold" /> : <SpeakerSlash size={16} weight="bold" />}
                 {metadata.audioEnabled ? "开启" : "静音"}
               </Tag>
             </ParameterRow>
@@ -918,7 +918,7 @@ function FeedbackContact() {
         onClick={copyWechat}
         aria-label="联系作者反馈意见，复制微信号"
       >
-        <ChatCircleDots size={16} />
+        <ChatCircleDots size={16} weight="bold" />
         <span>联系作者反馈意见</span>
       </button>
       {notice && <div className="feedback-notice" role="status" aria-live="polite">{notice}</div>}
@@ -1100,9 +1100,9 @@ function LibraryList({
           </div>
           {expandedFileId === file.id && (
             <div className="file-menu">
-              <button className="press-feedback" onClick={() => onShare(file)}><ShareNetwork size={17} />发送文件</button>
+              <button className="press-feedback" onClick={() => onShare(file)}><ShareNetwork size={17} weight="bold" />发送文件</button>
               <button className="danger press-feedback" onClick={() => onRemove(file)}>
-                <Trash size={17} />删除文件
+                <Trash size={17} weight="bold" />删除文件
               </button>
             </div>
           )}

@@ -79,6 +79,10 @@ test("keeps preview controls on one page and aligns pointer coordinates with ren
   assert.match(styleSource, /\.file-row:hover,[\s\S]{0,120}\.file-row\.is-menu-open\s*\{[\s\S]{0,100}background:/);
   assert.match(appSource, /<MiniProgramEntry \/>/);
   assert.match(appSource, /mini-program-code\.webp/);
+  const iconElements = appSource.match(/<[A-Z][A-Za-z0-9]*\s+[^>]*\bsize=\{[^}]+\}[^>]*>/g) ?? [];
+  assert.ok(iconElements.length >= 20);
+  assert.ok(iconElements.every((element) => /\bweight="bold"/.test(element)));
+  assert.doesNotMatch(appSource, /weight="(?:fill|regular|light|thin|duotone)"/);
   assert.match(styleSource, /\.mini-program-entry:hover \.mini-program-popover,[\s\S]{0,180}opacity:\s*1/);
   assert.match(appSource, /stageResizeTapOpen/);
   assert.match(appSource, /stageResizePressActive/);
