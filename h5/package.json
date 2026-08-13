@@ -1,6 +1,6 @@
 {
   "name": "rive-viewer-h5",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "private": true,
   "engines": {
     "node": ">=22.13.0"

@@ -276,6 +276,21 @@ const previewDefinition = {
     this.stageResizeFromHandle = false
     this.stageResizeTapWasOpen = false
     this.stageResizeSelectorRect = null
+    if (
+      this.data.stageDragging
+      || this.data.stageResizeMenuActive
+      || this.data.stageResizeTapOpen
+      || this.data.stageResizePressActive
+      || this.data.stageResizeHoverFit
+    ) {
+      this.setData({
+        stageDragging: false,
+        stageResizeMenuActive: false,
+        stageResizeTapOpen: false,
+        stageResizePressActive: false,
+        stageResizeHoverFit: ''
+      })
+    }
     this.player?.dispose()
     this.player = null
   },
@@ -869,7 +884,8 @@ const previewDefinition = {
       stageResizeMenuActive: false,
       stageResizeTapOpen: false,
       stageResizePressActive: false,
-      stageResizeHoverFit: ''
+      stageResizeHoverFit: '',
+      ...(selectedFit ? { fit: selectedFit } : {})
     }, () => {
       if (selectedFit) {
         this.applyFit(selectedFit, true)
@@ -927,7 +943,7 @@ const previewDefinition = {
     }, STAGE_RESIZE_MENU_DISMISS_DELAY)
   },
 
-  closeStageResizeTapMenu(callback) {
+  closeStageResizeTapMenu(callback, visualFit = '') {
     this.clearStageResizeMenuDismiss()
     this.lastStageTapAt = 0
     this.stageResizeStartY = undefined
@@ -942,7 +958,8 @@ const previewDefinition = {
       stageResizeMenuActive: false,
       stageResizeTapOpen: false,
       stageResizePressActive: false,
-      stageResizeHoverFit: ''
+      stageResizeHoverFit: '',
+      ...(visualFit ? { fit: visualFit } : {})
     }, callback)
   },
 
@@ -975,7 +992,8 @@ const previewDefinition = {
         && elapsed >= 0
         && elapsed <= STAGE_RESIZE_DOUBLE_TAP_DELAY
       ) {
-        this.closeStageResizeTapMenu(() => this.toggleStageFit())
+        const nextFit = this.data.fit === 'contain' ? 'cover' : 'contain'
+        this.closeStageResizeTapMenu(() => this.applyFit(nextFit, true), nextFit)
         return
       }
       this.lastStageTapAt = now

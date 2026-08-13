@@ -298,7 +298,7 @@ button::after {
   touch-action: none;
   user-select: none;
   transition:
-    height 220ms cubic-bezier(.22, 1, .36, 1),
+    height 420ms cubic-bezier(.22, 1.22, .36, 1),
     color 160ms ease;
 }
 
@@ -396,7 +396,7 @@ button::after {
   transform: translate(-50%, -50%);
   color: #687588;
   transition:
-    width 240ms cubic-bezier(.22, 1, .36, 1),
+    width 420ms cubic-bezier(.22, 1.22, .36, 1),
     color 160ms ease;
 }
 
@@ -413,9 +413,14 @@ button::after {
 }
 
 .stage-resizer__grip view {
-  height: 3.5rpx;
+  height: 4rpx;
   background: currentColor;
   border-radius: 499.5rpx;
+  transition: height 360ms cubic-bezier(.22, 1.22, .36, 1);
+}
+
+.stage-resizer.is-selecting .stage-resizer__grip view {
+  height: 2.5rpx;
 }
 
 .stage-resizer__modes {
@@ -432,7 +437,7 @@ button::after {
 }
 
 .stage-resizer__mode {
-  pointer-events: auto;
+  pointer-events: none;
   min-width: 0;
   box-sizing: border-box;
   display: flex;
@@ -447,23 +452,32 @@ button::after {
   white-space: nowrap;
   background: rgba(255, 255, 255, 0);
   border-radius: 5rpx;
+  opacity: 0;
   transition:
     color 120ms ease,
-    background-color 120ms ease;
+    background-color 120ms ease,
+    transform 420ms cubic-bezier(.22, 1.22, .36, 1),
+    opacity 300ms ease;
 }
 
 .stage-resizer__mode--contain {
   grid-column: 1;
   justify-content: center;
   padding: 0 6rpx;
-  animation: stage-resizer-contain-in 240ms cubic-bezier(.22, 1, .36, 1) both;
+  transform: translateX(calc(100% + 8rpx)) scale(.94);
 }
 
 .stage-resizer__mode--cover {
   grid-column: 3;
   justify-content: center;
   padding: 0 6rpx;
-  animation: stage-resizer-cover-in 240ms cubic-bezier(.22, 1, .36, 1) both;
+  transform: translateX(calc(-100% - 8rpx)) scale(.94);
+}
+
+.stage-resizer.is-selecting .stage-resizer__mode {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
 }
 
 .stage-resizer__mode.is-current {
@@ -471,46 +485,45 @@ button::after {
 }
 
 .stage-resizer__mode.is-hovered {
-  color: #f2f0e8;
-  background: #202c3b;
+  color: #f2c94c;
+  background: rgba(242, 201, 76, .14);
+}
+
+.stage-resizer__mode-icon-wrap {
+  width: 17rpx;
+  height: 17rpx;
+  position: relative;
+  flex: 0 0 17rpx;
 }
 
 .stage-resizer__mode-icon {
-  width: 17rpx;
-  height: 17rpx;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
   display: block;
-  opacity: .7;
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-.stage-resizer__mode.is-current .stage-resizer__mode-icon {
+.stage-resizer__mode-icon--default {
+  opacity: .7;
+}
+
+.stage-resizer__mode-icon--active {
+  opacity: 0;
+}
+
+.stage-resizer__mode.is-current .stage-resizer__mode-icon--default,
+.stage-resizer__mode.is-hovered .stage-resizer__mode-icon--default {
+  opacity: 0;
+}
+
+.stage-resizer__mode.is-current .stage-resizer__mode-icon--active,
+.stage-resizer__mode.is-hovered .stage-resizer__mode-icon--active {
   opacity: 1;
-}
-
-@keyframes stage-resizer-contain-in {
-  from {
-    opacity: 0;
-    transform: translateX(calc(100% + 8rpx));
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes stage-resizer-cover-in {
-  from {
-    opacity: 0;
-    transform: translateX(calc(-100% - 8rpx));
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 .stage-resizer__mode.is-hovered .stage-resizer__mode-icon {
-  opacity: 1;
   transform: scale(1.06);
 }
 
@@ -1076,6 +1089,7 @@ button::after {
   .stage-resizer,
   .stage-resizer__surface,
   .stage-resizer__grip,
+  .stage-resizer__grip view,
   .stage-resizer__modes,
   .stage-resizer__mode,
   .stage-resizer__mode-icon,

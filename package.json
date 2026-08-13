@@ -1,6 +1,6 @@
 {
   "name": "riveviewer-miniapp",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "description": "微信小程序 Rive 文件本地预览工具",

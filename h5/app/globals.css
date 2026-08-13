@@ -15,6 +15,7 @@
   --radius-card: 16px;
   --radius-control: 10px;
   --shadow: 0 18px 48px rgb(0 4 10 / 0.34);
+  --spring-gentle: cubic-bezier(.22, 1.22, .36, 1);
   --z-header: 1000;
   --z-popover: 1100;
   color-scheme: dark;
@@ -882,7 +883,7 @@ button:disabled {
   background: transparent;
   touch-action: none;
   user-select: none;
-  transition: height 220ms cubic-bezier(.22, 1, .36, 1);
+  transition: height 420ms var(--spring-gentle);
 }
 
 .stage-resizer.is-selecting {
@@ -891,18 +892,22 @@ button:disabled {
 
 .stage-resizer-grip {
   width: 42px;
-  height: 4px;
+  height: 5px;
   position: relative;
   z-index: 2;
   grid-column: 2;
   justify-self: center;
   background: var(--quiet);
   border-radius: 99px;
-  transition: width 240ms cubic-bezier(.22, 1, .36, 1), background-color 160ms ease;
+  transition:
+    width 420ms var(--spring-gentle),
+    height 360ms var(--spring-gentle),
+    background-color 160ms ease;
 }
 
 .stage-resizer.is-selecting .stage-resizer-grip {
   width: calc(100% - 16px);
+  height: 3px;
 }
 
 .stage-resizer.is-press-active .stage-resizer-grip,
@@ -935,12 +940,12 @@ button:disabled {
   background: transparent;
   border-radius: var(--radius-control);
   opacity: 0;
-  pointer-events: auto;
+  pointer-events: none;
   transition:
     color 120ms ease,
     background-color 120ms ease,
-    transform 220ms cubic-bezier(.22, 1, .36, 1),
-    opacity 140ms ease;
+    transform 420ms var(--spring-gentle),
+    opacity 300ms ease;
 }
 
 .stage-resizer-mode.mode-contain {
@@ -956,6 +961,7 @@ button:disabled {
 .stage-resizer.is-selecting .stage-resizer-mode {
   opacity: 1;
   transform: translateX(0);
+  pointer-events: auto;
 }
 
 .stage-resizer-mode.is-current {
@@ -965,7 +971,7 @@ button:disabled {
 .stage-resizer-mode:hover,
 .stage-resizer-mode.is-hovered {
   color: var(--accent);
-  background: rgb(255 255 255 / .055);
+  background: rgb(242 201 76 / .14);
 }
 
 .transport {
@@ -1111,14 +1117,23 @@ button:disabled {
 
 .parameter-tag.is-playing {
   color: #f2f0e8;
-  background:
-    linear-gradient(90deg, rgb(242 201 76 / .32) var(--timeline-progress), var(--control) var(--timeline-progress));
+  background: var(--control);
   border-color: #735f26;
 }
 
 .parameter-tag.timeline-tag {
   padding-right: 25px;
   padding-left: 25px;
+}
+
+.timeline-progress {
+  height: 100%;
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 0;
+  background: rgb(242 201 76 / .32);
+  pointer-events: none;
+  transition: width 100ms linear;
 }
 
 .disclosure-tag i {

@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
+import { after } from "node:test";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { createServer } from "vite";
 import { backingPointToArtboard, canvasPointToBacking } from "../lib/canvas-space.ts";
+
+const vite = await createServer({
+  configFile: false,
+  root: fileURLToPath(new URL("..", import.meta.url)),
+  appType: "custom",
+  server: { middlewareMode: true },
+  optimizeDeps: { noDiscovery: true },
+});
+const playerModule = await vite.ssrLoadModule("/lib/rive-player.ts");
+const { WebRivePlayer, getTimelinePosition } = playerModule;
+
+after(async () => vite.close());
 
 test("maps CSS pointer coordinates into the high-DPI backing canvas", () => {
   assert.deepEqual(
@@ -21,4 +36,57 @@ test("ignores a non-invertible alignment matrix", () => {
     backingPointToArtboard({ xx: 0, xy: 0, yx: 0, yy: 0, tx: 0, ty: 0 }, 10, 10),
     null,
   );
+});
+
+test("maps Rive Loop and PingPong playback onto visible timeline progress", () => {
+  assert.deepEqual(getTimelinePosition(1.25, 1, 1), { time: 0.25, progress: 0.25 });
+  assert.deepEqual(getTimelinePosition(1.25, 1, 2), { time: 0.75, progress: 0.75 });
+  assert.deepEqual(getTimelinePosition(2.25, 1, 2), { time: 0.25, progress: 0.25 });
+  assert.deepEqual(getTimelinePosition(0.95, 1, 0, true), { time: 1, progress: 1 });
+});
+
+test("publishes an unthrottled 100 percent update when the final sequence animation completes", () => {
+  const progressEvents: Array<{ name: string; time: number; duration: number; progress: number }> = [];
+  const player = new WebRivePlayer({} as HTMLCanvasElement, {
+    onMetadata() {},
+    onPlayback() {},
+    onProgress(progress: { name: string; time: number; duration: number; progress: number }) {
+      progressEvents.push(progress);
+    },
+    onPerformance() {},
+  }) as unknown as {
+    animation: { didLoop: boolean };
+    animationDuration: number;
+    animationElapsed: number;
+    animationLoopValue: number;
+    activeAnimationName: string;
+    sequenceIndex: number;
+    sequenceNames: string[];
+    sequenceElapsed: number;
+    sequenceHasOut: boolean;
+    playing: boolean;
+    lastProgressAt: number;
+    advanceSequence(delta: number): boolean;
+  };
+
+  player.animation = { didLoop: true };
+  player.animationDuration = 1;
+  player.animationElapsed = 0.95;
+  player.animationLoopValue = 0;
+  player.activeAnimationName = "out";
+  player.sequenceIndex = 0;
+  player.sequenceNames = ["out"];
+  player.sequenceElapsed = 0.95;
+  player.sequenceHasOut = true;
+  player.playing = true;
+  player.lastProgressAt = Number.MAX_SAFE_INTEGER;
+
+  assert.equal(player.advanceSequence(0.05), true);
+  assert.equal(player.playing, false);
+  assert.deepEqual(progressEvents.at(-1), {
+    name: "out",
+    time: 1,
+    duration: 1,
+    progress: 1,
+  });
 });

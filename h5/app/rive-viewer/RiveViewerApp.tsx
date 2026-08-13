@@ -22,7 +22,6 @@ import {
   X,
 } from "@phosphor-icons/react";
 import type {
-  CSSProperties,
   ChangeEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
@@ -600,9 +599,7 @@ export function RiveViewerApp() {
         aspectRatio: `${metadata.width} / ${metadata.height}`,
       }
     : { width: "100%", height: `${stageHeight}px` };
-  const timelineStyle = {
-    "--timeline-progress": `${Math.round(timeline.progress * 100)}%`,
-  } as CSSProperties;
+  const timelineProgress = `${clamp(timeline.progress, 0, 1) * 100}%`;
 
   return (
     <main className={`app-shell ${activeFile ? "preview-shell" : ""}`}>
@@ -758,10 +755,10 @@ export function RiveViewerApp() {
           aria-valuenow={Math.round(stageHeight)}
         >
           <span className="stage-resizer-grip" />
-          {stageResizeMenuActive && (
-            <div className="stage-resizer-modes">
+          <div className="stage-resizer-modes" aria-hidden={!stageResizeMenuActive}>
               <button
                 className={`stage-resizer-mode mode-contain ${fit === "contain" ? "is-current" : ""} ${stageResizeHoverFit === "contain" ? "is-hovered" : ""}`}
+                tabIndex={stageResizeMenuActive ? 0 : -1}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => { event.stopPropagation(); selectFit("contain"); closeStageResizeTapMenu(); }}
               >
@@ -769,13 +766,13 @@ export function RiveViewerApp() {
               </button>
               <button
                 className={`stage-resizer-mode mode-cover ${fit === "cover" ? "is-current" : ""} ${stageResizeHoverFit === "cover" ? "is-hovered" : ""}`}
+                tabIndex={stageResizeMenuActive ? 0 : -1}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => { event.stopPropagation(); selectFit("cover"); closeStageResizeTapMenu(); }}
               >
                 <ArrowsOutSimple size={18} weight="bold" /><span>铺满</span>
               </button>
-            </div>
-          )}
+          </div>
         </div>
 
         <div className="transport">
@@ -829,7 +826,7 @@ export function RiveViewerApp() {
                 className="timeline-tag"
                 selected={metadata.activeAnimation === name}
                 active={metadata.activeAnimation === name}
-                style={metadata.activeAnimation === name ? timelineStyle : undefined}
+                progress={metadata.activeAnimation === name ? timelineProgress : undefined}
                 onClick={() => playerRef.current?.selectAnimation(name)}
               >{name}</Tag>
             )) : <EmptyTag>无时间轴</EmptyTag>}
@@ -1063,24 +1060,26 @@ function Tag({
   className = "",
   selected,
   active,
+  progress,
   children,
-  style,
   onClick,
 }: {
   className?: string;
   selected?: boolean;
   active?: boolean;
+  progress?: string;
   children: React.ReactNode;
-  style?: CSSProperties;
   onClick: () => void;
 }) {
   return (
     <button
       className={`parameter-tag press-feedback ${className} ${selected ? "is-selected" : ""} ${active ? "is-playing" : ""}`}
-      style={style}
       aria-pressed={selected}
       onClick={onClick}
     >
+      {progress !== undefined && (
+        <i className="timeline-progress" style={{ width: progress }} aria-hidden="true" />
+      )}
       <span>{children}</span>
     </button>
   );

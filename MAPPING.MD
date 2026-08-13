@@ -1,6 +1,6 @@
 # 元素映射
 
-当前发布版本为 `1.0.4`；下表补充统一渲染档位、性能状态、H5 缩略图和双栏布局。
+当前发布版本为 `1.0.7`；下表补充统一渲染档位、性能状态、H5 缩略图、双栏布局与 Gentle 手柄反馈。
 
 | 俗称 | 学名 | 代码名称 |
 | --- | --- | --- |
@@ -25,6 +25,8 @@
 | 详情首帧封面 | First-frame cover capture | `scheduleCoverCapture`、`captureCover`、`saveCover` |
 | 画布拖动手柄 | Stage resize handle | `.stage-resizer`、`stageResizeStart/Move/End/Cancel`、`catchtouchstart/move/end/cancel` |
 | 手柄原位缩放快捷行 | Inline resize-handle fit row | `stageResizeMenuActive`、`stageResizeTapOpen`、`stageResizePressActive`、`stageResizeEnd`、`stageResizeHoverFit`、`stageResizeLongPress`、`.stage-resizer.is-selecting`、`.stage-resizer.is-tap-open`、`.stage-resizer.is-press-active` |
+| 手柄 Gentle 展开/收起 | Gentle handle spring | `.stage-resizer__modes`、`.stage-resizer__grip view`、`420ms cubic-bezier(.22, 1.22, .36, 1)`、H5 `--spring-gentle`；默认粗、展开细，节点常驻以保留反向退场 |
+| 手柄黄色悬停反馈 | Yellow fit hover feedback | `.stage-resizer__mode.is-hovered`、`.stage-resizer__mode-icon-wrap`、`.stage-resizer__mode-icon--active`、`stageResizeHoverFit`、`rgba(242, 201, 76, .14)` |
 | 预览按钮按下回弹 | Preview press spring feedback | `hover-class="is-pressed"`、`hover-start-time="0"`、`scale(1.25)`、`cubic-bezier(.34, 1.56, .64, 1)` |
 | 快速菜单空白取消层 | Native menu backdrop dismiss | `.native-menu-backdrop`、`dismissNativeMenus`、`showSpeedMenu`、`showFileMenu` |
 | 文件菜单按住滑选 | File menu press-drag selection | `fileNavigationTouchMove`、`fileMenuOptionRects`、`fileHoverId`、`fileNavigationGestureMovedIntoMenu`、`.file-popover__option.is-hovered` |
@@ -41,7 +43,7 @@
 | 画板标签 | Artboard choice tag | `artboardNames`、`selectArtboardTag` |
 | 状态机标签 | State machine choice tag | `stateMachineNames`、`selectStateMachineTag` |
 | 时间轴 | Animation timeline tags | `.timeline-actions`、`.timeline-tag`、`animationNames`、`playAnimation`；H5 左右 `25px` 内边距 |
-| 播放进度背景 | Timeline progress fill | `.parameter-tag__progress`、`animationProgress` |
+| 播放进度背景 | Timeline progress fill | 小程序 `.parameter-tag__progress`、`animationProgress`；H5 `.timeline-progress`、`getAnimationDuration`、`getTimelinePosition`、`animationDuration`、`animationElapsed`、`animationLoopValue`、`publishProgress` |
 | 状态机输入 | State machine inputs | `inputs`、`handleInputTag` |
 | 标签点击反馈 | Parameter tag feedback | `parameter-tag`、`is-pressed`、`is-feedback` |
 | 完整 / 铺满 | Fit control | `.compact-switch`、`fit`、`selectFit`、`applyFit`、`arrows-in-simple.svg`、`arrows-out-simple.svg` |
@@ -72,7 +74,7 @@
 | 剪贴板范围检查 | Clipboard privacy guard | `scripts/check-project.mjs`；禁止 `wx.getClipboardData`，仅允许首页用户点击后调用一次 `wx.setClipboardData` |
 | 剪贴板用途说明 | Clipboard privacy purpose | “用于用户主动复制网页版预览地址；仅向剪切板写入固定网址，不读取剪切板已有内容” |
 | 小程序主包体积 | Main package size budget | 当前约 `1.68 MiB`；开发者工具代码质量建议 `< 1.5 M`；微信官方单包限制 `2M`；`vendor/rive/*.wasm.br` 为主要占用 |
-| 发布版本号 | Release version | `1.0.4`、`package.json.version`、`package-lock.json.version`、开发者工具上传版本 |
+| 发布版本号 | Release version | `1.0.7`、`package.json.version`、`package-lock.json.version`、开发者工具上传版本 |
 | 独立 H5 | Standalone web viewer | `h5/`、`/rive-viewer`、`RiveViewerApp` |
 | H5 本地文件库 | Browser local library | `IndexedDB`、`listLocalFiles`、`saveLocalFile` |
 | H5 浏览器运行时 | Browser Rive runtime | `WebRivePlayer`、`rive-player.ts`、`/rive-viewer/rive.wasm` |

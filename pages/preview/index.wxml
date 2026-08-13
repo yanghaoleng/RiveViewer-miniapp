@@ -98,13 +98,19 @@
       <view class="stage-resizer__grip" data-stage-resizer="true">
         <view data-stage-resizer="true"></view>
       </view>
-      <view wx:if="{{stageResizeMenuActive}}" class="stage-resizer__modes">
+      <view class="stage-resizer__modes" aria-hidden="{{!stageResizeMenuActive}}">
         <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}" data-fit="contain" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="完整显示">
-          <image class="stage-resizer__mode-icon" src="{{fit === 'contain' ? '/assets/icons/arrows-in-simple-active.svg' : '/assets/icons/arrows-in-simple.svg'}}"></image>
+          <view class="stage-resizer__mode-icon-wrap">
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--default" src="/assets/icons/arrows-in-simple.svg"></image>
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--active" src="/assets/icons/arrows-in-simple-active.svg"></image>
+          </view>
           <text>完整</text>
         </view>
         <view class="stage-resizer__mode stage-resizer__mode--cover {{fit === 'cover' ? 'is-current' : ''}} {{stageResizeHoverFit === 'cover' ? 'is-hovered' : ''}}" data-fit="cover" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="铺满显示">
-          <image class="stage-resizer__mode-icon" src="{{fit === 'cover' ? '/assets/icons/arrows-out-simple-active.svg' : '/assets/icons/arrows-out-simple.svg'}}"></image>
+          <view class="stage-resizer__mode-icon-wrap">
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--default" src="/assets/icons/arrows-out-simple.svg"></image>
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--active" src="/assets/icons/arrows-out-simple-active.svg"></image>
+          </view>
           <text>铺满</text>
         </view>
       </view>

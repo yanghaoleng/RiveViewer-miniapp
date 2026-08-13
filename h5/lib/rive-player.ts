@@ -73,6 +73,80 @@ function yieldToBrowser(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
+type AnimationTimingSource = {
+  duration?: number;
+  fps?: number;
+  enableWorkArea?: boolean;
+  workStart?: number;
+  workEnd?: number;
+  loopValue?: number;
+};
+
+const RIVE_LOOP = 1;
+const RIVE_PING_PONG = 2;
+
+function getAnimationDuration(
+  definition: unknown,
+  instance: LinearAnimationInstance,
+): number {
+  const timing = definition as AnimationTimingSource;
+  const duration = Number(timing?.duration) || 0;
+  const fps = Number(timing?.fps) || 0;
+  const workStart = Number(timing?.workStart);
+  const workEnd = Number(timing?.workEnd);
+  if (
+    timing?.enableWorkArea
+    && fps > 0
+    && Number.isFinite(workStart)
+    && Number.isFinite(workEnd)
+    && workEnd > workStart
+  ) {
+    return (workEnd - workStart) / fps;
+  }
+  if (duration > 0) return fps > 0 ? duration / fps : duration;
+
+  const instanceDuration = Number(instance.duration) || 0;
+  if (instanceDuration > 0) return instanceDuration;
+  const instanceFps = Number(instance.fps) || 0;
+  const instanceStart = Number(instance.workStart);
+  const instanceEnd = Number(instance.workEnd);
+  return instanceFps > 0 && instanceEnd > instanceStart
+    ? (instanceEnd - instanceStart) / instanceFps
+    : 0;
+}
+
+function getAnimationLoopValue(
+  definition: unknown,
+  instance: LinearAnimationInstance,
+): number {
+  const definitionLoop = Number((definition as AnimationTimingSource)?.loopValue);
+  if (Number.isFinite(definitionLoop)) return definitionLoop;
+  const instanceLoop = Number(instance.loopValue);
+  return Number.isFinite(instanceLoop) ? instanceLoop : 0;
+}
+
+export function getTimelinePosition(
+  elapsed: number,
+  duration: number,
+  loopValue: number,
+  completed = false,
+): Pick<TimelineProgress, "time" | "progress"> {
+  const safeElapsed = Math.max(0, Number(elapsed) || 0);
+  const safeDuration = Math.max(0, Number(duration) || 0);
+  if (completed) return { time: safeDuration, progress: 1 };
+  if (!safeDuration) return { time: safeElapsed, progress: 0 };
+
+  let time = Math.min(safeElapsed, safeDuration);
+  if (loopValue === RIVE_LOOP) {
+    time = safeElapsed % safeDuration;
+  } else if (loopValue === RIVE_PING_PONG) {
+    const cycleDuration = safeDuration * 2;
+    const cycleTime = safeElapsed % cycleDuration;
+    time = cycleTime <= safeDuration ? cycleTime : cycleDuration - cycleTime;
+  }
+  return { time, progress: Math.min(1, Math.max(0, time / safeDuration)) };
+}
+
 export class WebRivePlayer {
   private canvas: HTMLCanvasElement;
   private callbacks: PlayerCallbacks;
@@ -96,6 +170,9 @@ export class WebRivePlayer {
   private sequenceIndex = -1;
   private sequenceElapsed = 0;
   private sequenceHasOut = false;
+  private animationDuration = 0;
+  private animationElapsed = 0;
+  private animationLoopValue = 0;
   private fit: "contain" | "cover" = "contain";
   private playing = true;
   private audioEnabled = true;
@@ -279,6 +356,9 @@ export class WebRivePlayer {
     if (!this.artboard) return;
     const definition = this.artboard.animationByName(name);
     this.animation = new this.runtime.LinearAnimationInstance(definition, this.artboard);
+    this.animationDuration = getAnimationDuration(definition, this.animation);
+    this.animationElapsed = 0;
+    this.animationLoopValue = getAnimationLoopValue(definition, this.animation);
     this.activeAnimationName = name;
     this.activeStateMachineName = "";
     this.sequenceElapsed = 0;
@@ -292,29 +372,34 @@ export class WebRivePlayer {
     this.playing = true;
     this.lastTimestamp = 0;
     this.updateViewMatrix();
+    this.publishProgress();
     this.callbacks.onPlayback(true, `播放 ${name}`);
     this.emitMetadata(true);
     this.requestFrame();
   }
 
-  private advanceSequence(delta: number): void {
-    if (!this.animation || this.sequenceIndex < 0) return;
+  private advanceSequence(delta: number): boolean {
+    if (!this.animation || this.sequenceIndex < 0) return false;
     this.sequenceElapsed += delta;
-    if (this.sequenceElapsed + 0.001 < this.animation.duration) return;
+    const completed = Boolean(this.animation.didLoop)
+      || (this.animationDuration > 0 && this.sequenceElapsed + 0.001 >= this.animationDuration);
+    if (!completed) return false;
     const currentName = this.sequenceNames[this.sequenceIndex] || "";
     const isIdle = currentName.trim().toLowerCase() === "idle";
     if (isIdle && !this.sequenceHasOut) {
       this.sequenceElapsed = 0;
-      return;
+      return false;
     }
     const nextIndex = this.sequenceIndex + 1;
     if (nextIndex < this.sequenceNames.length) {
       this.sequenceIndex = nextIndex;
       this.activateAnimationInstance(this.sequenceNames[nextIndex], true);
-      return;
+      return false;
     }
     this.playing = false;
+    this.publishProgress(true);
     this.callbacks.onPlayback(false, `${currentName} 播放完成`);
+    return true;
   }
 
   private requestFrame(): void {
@@ -337,6 +422,7 @@ export class WebRivePlayer {
     const rawDelta = this.lastTimestamp ? (timestamp - this.lastTimestamp) / 1000 : 0;
     this.lastTimestamp = timestamp;
     const delta = Math.min(0.064, Math.max(0, rawDelta)) * this.speed;
+    let sequenceCompleted = false;
     if (this.playing) {
       if (this.stateMachine) {
         this.stateMachine.advance(delta);
@@ -344,12 +430,13 @@ export class WebRivePlayer {
       } else if (this.animation) {
         this.animation.advance(delta);
         this.animation.apply(1);
+        this.animationElapsed += delta;
         this.artboard.advance(delta);
-        this.advanceSequence(delta);
+        sequenceCompleted = this.advanceSequence(delta);
       }
     }
     this.draw();
-    this.emitProgress(timestamp);
+    if (!sequenceCompleted) this.emitProgress(timestamp);
     this.emitPerformance(timestamp);
     this.emitMetadata(false);
     if (this.playing) this.requestFrame();
@@ -372,13 +459,23 @@ export class WebRivePlayer {
   private emitProgress(timestamp: number): void {
     if (!this.animation || timestamp - this.lastProgressAt < 100) return;
     this.lastProgressAt = timestamp;
-    const duration = Math.max(0, this.animation.duration || 0);
-    const time = Math.min(duration, Math.max(0, this.sequenceElapsed || this.animation.time || 0));
+    this.publishProgress();
+  }
+
+  private publishProgress(completed = false): void {
+    if (!this.animation) return;
+    const duration = this.animationDuration;
+    const { time, progress } = getTimelinePosition(
+      this.animationElapsed,
+      duration,
+      this.animationLoopValue,
+      completed,
+    );
     this.callbacks.onProgress({
       name: this.activeAnimationName,
       time,
       duration,
-      progress: duration ? Math.min(1, time / duration) : 0,
+      progress,
     });
   }
 
@@ -530,7 +627,8 @@ export class WebRivePlayer {
     if (
       this.animation
       && this.sequenceIndex >= 0
-      && this.sequenceElapsed + 0.001 >= Math.max(0, this.animation.duration || 0)
+      && this.animationDuration > 0
+      && this.sequenceElapsed + 0.001 >= this.animationDuration
     ) {
       this.playDefaultSequence();
       return;
@@ -635,6 +733,9 @@ export class WebRivePlayer {
     this.boundViewModels.forEach((instance) => instance.unref?.());
     this.stateMachine = null;
     this.animation = null;
+    this.animationDuration = 0;
+    this.animationElapsed = 0;
+    this.animationLoopValue = 0;
     this.artboard = null;
     this.viewMatrix = null;
     this.inputRefs = [];
