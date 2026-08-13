@@ -1266,7 +1266,7 @@ const previewDefinition = {
   openSpeedMenuAtAnchor() {
     if (this.data.showFileMenu) this.closeFileMenu()
     this.createPreviewSelectorQuery()
-      .select('.speed-menu-shell')
+      .select('.speed-menu')
       .boundingClientRect((rect) => {
         const windowHeight = Math.max(1, this.windowInfo?.windowHeight || 667)
         const left = rect ? rect.left + rect.width / 2 : '50%'

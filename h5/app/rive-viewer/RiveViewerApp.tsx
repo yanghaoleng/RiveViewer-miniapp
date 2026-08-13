@@ -789,8 +789,9 @@ export function RiveViewerApp() {
             {metadata.animations.length ? metadata.animations.map((name) => (
               <Tag
                 key={name}
+                className="timeline-tag"
                 selected={metadata.activeAnimation === name}
-                active={playing && metadata.activeAnimation === name}
+                active={metadata.activeAnimation === name}
                 style={metadata.activeAnimation === name ? timelineStyle : undefined}
                 onClick={() => playerRef.current?.selectAnimation(name)}
               >{name}</Tag>
@@ -1021,12 +1022,14 @@ function ParameterRow({ label, children }: { label: string; children: React.Reac
 }
 
 function Tag({
+  className = "",
   selected,
   active,
   children,
   style,
   onClick,
 }: {
+  className?: string;
   selected?: boolean;
   active?: boolean;
   children: React.ReactNode;
@@ -1035,7 +1038,7 @@ function Tag({
 }) {
   return (
     <button
-      className={`parameter-tag press-feedback ${selected ? "is-selected" : ""} ${active ? "is-playing" : ""}`}
+      className={`parameter-tag press-feedback ${className} ${selected ? "is-selected" : ""} ${active ? "is-playing" : ""}`}
       style={style}
       aria-pressed={selected}
       onClick={onClick}

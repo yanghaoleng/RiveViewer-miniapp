@@ -33,7 +33,10 @@ for (const [targetName, sourceName, color] of icons) {
   const targetPath = path.join(targetRoot, targetName)
   const source = await fs.readFile(sourcePath, 'utf8')
   const output = source
-    .replace('fill="currentColor"', `fill="${color}" data-icon-family="phosphor" data-icon-name="${sourceName}" data-icon-weight="bold"`)
+    .replace(
+      'fill="currentColor"',
+      `fill="${color}" stroke="${color}" stroke-width="8" stroke-linejoin="round" data-icon-family="phosphor" data-icon-name="${sourceName}" data-icon-weight="bold" data-icon-optical-stroke="8"`
+    )
     .trim()
   await fs.writeFile(targetPath, `${output}\n`)
 }

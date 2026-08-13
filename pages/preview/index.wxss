@@ -513,7 +513,8 @@ page {
   min-height: 84rpx;
   margin-top: 0;
   padding: 10rpx;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
   gap: 8rpx;
   background: #121923;
@@ -523,8 +524,7 @@ page {
 
 .transport__primary,
 .transport__secondary {
-  width: 0;
-  flex: 1 1 0;
+  width: 100%;
   min-width: 0;
   max-width: none;
   height: 60rpx;
@@ -548,17 +548,8 @@ page {
 }
 
 .transport__icon {
-  width: 28rpx;
-  height: 28rpx;
-}
-
-.speed-menu-shell {
-  width: 0;
-  min-width: 0;
-  flex: 1 1 0;
-  height: 60rpx;
-  position: relative;
-  z-index: 12;
+  width: 36rpx;
+  height: 36rpx;
 }
 
 .native-menu-overlay {
@@ -582,6 +573,8 @@ page {
   height: 60rpx;
   margin: 0;
   padding: 0;
+  position: relative;
+  z-index: 12;
   overflow: hidden;
   display: flex;
   gap: 8rpx;
@@ -723,14 +716,13 @@ page {
 }
 
 .transport__file-button {
-  width: 0;
+  width: 100%;
   min-width: 0;
   max-width: none;
   height: 60rpx;
   margin: 0;
   padding: 0;
   display: flex;
-  flex: 1 1 0;
   align-items: center;
   justify-content: center;
   color: #d8dde5;
@@ -739,14 +731,14 @@ page {
 }
 
 .speed-menu__icon {
-  width: 27rpx;
-  height: 27rpx;
+  width: 34rpx;
+  height: 34rpx;
   color: #f2c94c;
 }
 
 .transport__file-icon {
-  width: 28rpx;
-  height: 28rpx;
+  width: 36rpx;
+  height: 36rpx;
 }
 
 .transport__file-button.is-disabled {

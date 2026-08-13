@@ -1089,9 +1089,15 @@ button:disabled {
 }
 
 .parameter-tag.is-playing {
+  color: #f2f0e8;
   background:
-    linear-gradient(90deg, var(--accent) var(--timeline-progress), var(--control) var(--timeline-progress));
+    linear-gradient(90deg, rgb(242 201 76 / .32) var(--timeline-progress), var(--control) var(--timeline-progress));
   border-color: #735f26;
+}
+
+.parameter-tag.timeline-tag {
+  padding-right: 25px;
+  padding-left: 25px;
 }
 
 .disclosure-tag i {

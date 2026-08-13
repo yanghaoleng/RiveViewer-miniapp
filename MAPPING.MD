@@ -32,14 +32,14 @@
 | 双击切换 | Stage view mode toggle | `stageResizerTap`、`toggleStageViewMode`、`stageViewMode` |
 | 重置按钮 | Reset playback action | `.transport__primary`、`resetAnimation` |
 | 播放 / 暂停 | Playback toggle | `.transport__secondary`、`togglePlay` |
-| 画布下方五个按钮平分 | Equal five-column transport | 小程序 `.transport` 的五个直接子项统一 `width: 0; flex: 1 1 0`；H5 `.transport` 使用五列 Grid |
-| 小程序五格一级布局 | Flat Mini Program transport | `.transport__primary`、`.transport__secondary`、`.speed-menu-shell`、两个 `.transport__file-button`；不再使用 `.transport__left/.transport__files` 包裹 |
+| 画布下方五个按钮平分 | Equal five-column transport | 小程序 `.transport` 使用 `repeat(5, minmax(0, 1fr))`；H5 `.transport` 使用五列 Grid |
+| 小程序五格一级布局 | Flat Mini Program transport | `.transport__primary`、`.transport__secondary`、`.speed-menu`、两个 `.transport__file-button`；倍速不使用 `.speed-menu-shell` 包裹 |
 | 播放速度 | Speed selector | `.speed-menu`、`.speed-popover`、`speedValue` |
 | 上一个 / 下一个 | File navigation | 两个 `.transport__file-button`、`fileNavigationTouchStart/End`、`openFileById`；长按菜单锚点为 `.transport` |
 | 长按文件列表 | File navigation popover | `.file-popover`、`showFileMenu` |
 | 画板标签 | Artboard choice tag | `artboardNames`、`selectArtboardTag` |
 | 状态机标签 | State machine choice tag | `stateMachineNames`、`selectStateMachineTag` |
-| 时间轴 | Animation timeline tags | `.timeline-actions`、`animationNames`、`playAnimation` |
+| 时间轴 | Animation timeline tags | `.timeline-actions`、`.timeline-tag`、`animationNames`、`playAnimation`；H5 左右 `25px` 内边距 |
 | 播放进度背景 | Timeline progress fill | `.parameter-tag__progress`、`animationProgress` |
 | 状态机输入 | State machine inputs | `inputs`、`handleInputTag` |
 | 标签点击反馈 | Parameter tag feedback | `parameter-tag`、`is-pressed`、`is-feedback` |

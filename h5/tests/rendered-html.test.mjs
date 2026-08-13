@@ -94,6 +94,9 @@ test("keeps preview controls on one page and aligns pointer coordinates with ren
   assert.match(styleSource, /\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/);
   assert.match(styleSource, /\.transport-playback\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(2/);
   assert.match(styleSource, /\.transport-files\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(2/);
+  assert.match(appSource, /className="timeline-tag"/);
+  assert.match(styleSource, /\.parameter-tag\.timeline-tag\s*\{[\s\S]{0,100}padding-right:\s*25px;[\s\S]{0,60}padding-left:\s*25px/);
+  assert.match(styleSource, /\.parameter-tag\.is-playing\s*\{[\s\S]{0,80}color:\s*#f2f0e8;[\s\S]{0,180}var\(--timeline-progress\)/);
   assert.match(styleSource, /\.tone-button\s*\{[\s\S]{0,100}width:\s*45px;[\s\S]{0,80}height:\s*30px/);
   assert.match(styleSource, /\.press-feedback:active/);
   assert.match(playerSource, /this\.renderer\.align\(/);

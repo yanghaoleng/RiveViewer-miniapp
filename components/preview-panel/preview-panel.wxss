@@ -539,7 +539,8 @@ button::after {
   min-height: 42rpx;
   margin-top: 0;
   padding: 5rpx;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
   gap: 4rpx;
   background: #121923;
@@ -549,8 +550,7 @@ button::after {
 
 .transport__primary,
 .transport__secondary {
-  width: 0;
-  flex: 1 1 0;
+  width: 100%;
   min-width: 0;
   max-width: none;
   height: 30rpx;
@@ -574,17 +574,8 @@ button::after {
 }
 
 .transport__icon {
-  width: 14rpx;
-  height: 14rpx;
-}
-
-.speed-menu-shell {
-  width: 0;
-  min-width: 0;
-  flex: 1 1 0;
-  height: 30rpx;
-  position: relative;
-  z-index: 12;
+  width: 18rpx;
+  height: 18rpx;
 }
 
 .native-menu-overlay {
@@ -608,6 +599,8 @@ button::after {
   height: 30rpx;
   margin: 0;
   padding: 0;
+  position: relative;
+  z-index: 12;
   overflow: hidden;
   display: flex;
   gap: 4rpx;
@@ -749,14 +742,13 @@ button::after {
 }
 
 .transport__file-button {
-  width: 0;
+  width: 100%;
   min-width: 0;
   max-width: none;
   height: 30rpx;
   margin: 0;
   padding: 0;
   display: flex;
-  flex: 1 1 0;
   align-items: center;
   justify-content: center;
   color: #d8dde5;
@@ -765,14 +757,14 @@ button::after {
 }
 
 .speed-menu__icon {
-  width: 13.5rpx;
-  height: 13.5rpx;
+  width: 17rpx;
+  height: 17rpx;
   color: #f2c94c;
 }
 
 .transport__file-icon {
-  width: 14rpx;
-  height: 14rpx;
+  width: 18rpx;
+  height: 18rpx;
 }
 
 .transport__file-button.is-disabled {

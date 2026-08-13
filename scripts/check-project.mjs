@@ -78,8 +78,9 @@ for (const fileName of miniProgramIconFiles) {
   if (
     !/data-icon-family="phosphor"/.test(iconSource)
     || !/data-icon-weight="bold"/.test(iconSource)
+    || !/data-icon-optical-stroke="8"/.test(iconSource)
   ) {
-    throw new Error(`小程序图标必须来自 Phosphor Icons Bold：${fileName}`)
+    throw new Error(`小程序图标必须来自 Phosphor Icons Bold 并保留小尺寸光学校正：${fileName}`)
   }
 }
 
@@ -156,6 +157,7 @@ const embeddedPreviewStyle = await fs.readFile(
   path.join(root, 'components/preview-panel/preview-panel.wxss'),
   'utf8'
 )
+const previewStyle = await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
 const h5AppSource = await fs.readFile(
   path.join(root, 'h5/app/rive-viewer/RiveViewerApp.tsx'),
   'utf8'
@@ -424,27 +426,21 @@ if (
 }
 
 if (
-  !/\.transport\s*\{[\s\S]{0,180}display:\s*flex;/.test(
-    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
-  )
-  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,60}flex:\s*1 1 0;/.test(
-    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
-  )
-  || !/\.speed-menu-shell\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,80}flex:\s*1 1 0;/.test(
-    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
-  )
-  || !/\.transport__file-button\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,100}flex:\s*1 1 0;/.test(
-    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
-  )
-  || !/\.transport\s*\{[\s\S]{0,180}display:\s*flex;/.test(embeddedPreviewStyle)
-  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,60}flex:\s*1 1 0;/.test(embeddedPreviewStyle)
-  || !/\.speed-menu-shell\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,80}flex:\s*1 1 0;/.test(embeddedPreviewStyle)
-  || !/\.transport__file-button\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,100}flex:\s*1 1 0;/.test(embeddedPreviewStyle)
+  !/\.transport\s*\{[\s\S]{0,180}display:\s*grid;[\s\S]{0,100}grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/.test(previewStyle)
+  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*100%;/.test(previewStyle)
+  || !/\.speed-menu\s*\{[\s\S]{0,80}width:\s*100%;/.test(previewStyle)
+  || !/\.transport__file-button\s*\{[\s\S]{0,80}width:\s*100%;/.test(previewStyle)
+  || !/\.transport\s*\{[\s\S]{0,180}display:\s*grid;[\s\S]{0,100}grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/.test(embeddedPreviewStyle)
+  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*100%;/.test(embeddedPreviewStyle)
+  || !/\.speed-menu\s*\{[\s\S]{0,80}width:\s*100%;/.test(embeddedPreviewStyle)
+  || !/\.transport__file-button\s*\{[\s\S]{0,80}width:\s*100%;/.test(embeddedPreviewStyle)
   || !/\.select\(["']\.transport["']\)/.test(previewLogic)
+  || !/\.select\(["']\.speed-menu["']\)/.test(previewLogic)
   || ![previewMarkup, embeddedPreviewMarkup].every((markup) => (
     !/transport__left|transport__playback|transport__files/.test(markup)
     && (markup.match(/class="transport__(?:primary|secondary|file-button)/g) || []).length === 4
-    && (markup.match(/class="speed-menu-shell/g) || []).length === 1
+    && (markup.match(/class="speed-menu"/g) || []).length === 1
+    && !/speed-menu-shell/.test(markup)
   ))
   || !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(h5StyleSource)
   || !/stageResizeTapOpen/.test(h5AppSource)
@@ -458,6 +454,9 @@ if (
   || /label="文件操作"|继续导入|下载文件/.test(h5AppSource)
   || !/className="topbar-download"/.test(h5AppSource)
   || !/className="file-heading-download press-feedback"/.test(h5AppSource)
+  || !/className="timeline-tag"/.test(h5AppSource)
+  || !/\.parameter-tag\.timeline-tag\s*\{[\s\S]{0,100}padding-right:\s*25px;[\s\S]{0,60}padding-left:\s*25px;/.test(h5StyleSource)
+  || !/\.parameter-tag\.is-playing\s*\{[\s\S]{0,80}color:\s*#f2f0e8;[\s\S]{0,180}var\(--timeline-progress\)/.test(h5StyleSource)
   || !/fit === "contain" && hasStageAspect/.test(h5AppSource)
   || !/\.canvas-card\.is-proportional\s*\{[\s\S]{0,120}height:\s*auto;[\s\S]{0,80}min-height:\s*0/.test(h5StyleSource)
   || !/\.file-row:hover,[\s\S]{0,120}\.file-row\.is-menu-open\s*\{[\s\S]{0,100}background:/.test(h5StyleSource)

@@ -129,23 +129,21 @@
         src="{{isPlaying ? '/assets/icons/player-pause.svg' : '/assets/icons/player-play.svg'}}"
       ></image>
     </button>
-    <view class="speed-menu-shell" data-speed-control="true">
-      <button
-        class="speed-menu"
-        data-speed-control="true"
-        bindtouchstart="speedTouchStart"
-        bindtouchmove="speedTouchMove"
-        bindtouchend="speedTouchEnd"
-        bindtouchcancel="speedTouchCancel"
-        hover-class="is-pressed"
-        hover-start-time="0"
-        hover-stay-time="70"
-        aria-label="当前播放速度 {{speedLabel}}，轻点切换，按住选择"
-      >
-        <image class="speed-menu__icon" data-speed-control="true" src="/assets/icons/gauge.svg"></image>
-        <text class="speed-menu__value" data-speed-control="true">{{speedLabel}}</text>
-      </button>
-    </view>
+    <button
+      class="speed-menu"
+      data-speed-control="true"
+      bindtouchstart="speedTouchStart"
+      bindtouchmove="speedTouchMove"
+      bindtouchend="speedTouchEnd"
+      bindtouchcancel="speedTouchCancel"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      aria-label="当前播放速度 {{speedLabel}}，轻点切换，按住选择"
+    >
+      <image class="speed-menu__icon" data-speed-control="true" src="/assets/icons/gauge.svg"></image>
+      <text class="speed-menu__value" data-speed-control="true">{{speedLabel}}</text>
+    </button>
     <button
       wx:if="{{showFileNavigation}}"
       class="transport__file-button {{!hasPreviousFile ? 'is-disabled' : ''}}"
