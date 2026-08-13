@@ -25,6 +25,8 @@
 | 手柄原位缩放快捷行 | Inline resize-handle fit row | `stageResizeMenuActive`、`stageResizeHoverFit`、`stageResizeLongPress`、`getStageResizeHoverFit`、`finishStageResize`、`.stage-resizer.is-selecting`、`.stage-resizer__modes`、`stage-resizer-contain-in`、`stage-resizer-cover-in` |
 | 预览按钮按下回弹 | Preview press spring feedback | `hover-class="is-pressed"`、`hover-start-time="0"`、`scale(1.25)`、`cubic-bezier(.34, 1.56, .64, 1)` |
 | 快速菜单空白取消层 | Native menu backdrop dismiss | `.native-menu-backdrop`、`dismissNativeMenus`、`showSpeedMenu`、`showFileMenu` |
+| 文件菜单按住滑选 | File menu press-drag selection | `fileNavigationTouchMove`、`fileMenuOptionRects`、`fileHoverId`、`fileNavigationGestureMovedIntoMenu`、`.file-popover__option.is-hovered` |
+| 预览背景色块 | Canvas tone swatch | `.tone`、`.tone-options`、`canvasTone`、`setCanvasTone` |
 | 双击切换 | Stage view mode toggle | `stageResizerTap`、`toggleStageViewMode`、`stageViewMode` |
 | 重置按钮 | Reset playback action | `.transport__primary`、`resetAnimation` |
 | 播放 / 暂停 | Playback toggle | `.transport__secondary`、`togglePlay` |

@@ -212,6 +212,10 @@ button::after {
 .loading-ring {
   width: 58rpx;
   height: 58rpx;
+  min-width: 58rpx;
+  min-height: 58rpx;
+  flex: none;
+  aspect-ratio: 1 / 1;
   position: relative;
   display: flex;
   align-items: center;
@@ -224,6 +228,7 @@ button::after {
   border: 3.5rpx solid #263140;
   border-top-color: #f2c94c;
   border-right-color: rgba(242, 201, 76, .48);
+  box-sizing: border-box;
   border-radius: 50%;
   animation: loading-spin .9s linear infinite;
 }
@@ -433,7 +438,7 @@ button::after {
   line-height: 1;
   white-space: nowrap;
   background: rgba(255, 255, 255, 0);
-  border-radius: 50%;
+  border-radius: 5rpx;
   transition:
     color 120ms ease,
     background-color 120ms ease;
@@ -726,6 +731,11 @@ button::after {
   background: #f2c94c;
 }
 
+.file-popover__option.is-hovered {
+  color: #17130a;
+  background: #f2c94c;
+}
+
 .file-popover__name {
   min-width: 0;
   overflow: hidden;
@@ -887,14 +897,13 @@ button::after {
 }
 
 .tone {
-  width: 20rpx;
-  min-width: 20rpx;
+  width: 30rpx;
+  min-width: 30rpx;
   height: 20rpx;
   min-height: 20rpx;
   flex: none;
-  aspect-ratio: 1 / 1;
   border: 2rpx solid #121923;
-  border-radius: 50%;
+  border-radius: 499.5rpx;
   box-shadow: 0 0 0 0.5rpx #3a4656;
 }
 
@@ -930,6 +939,10 @@ button::after {
   justify-content: space-between;
   gap: 8rpx;
   border-bottom: 0.5rpx solid #202a37;
+}
+
+.parameter-row--last {
+  border-bottom: 0;
 }
 
 .parameter-row__label {

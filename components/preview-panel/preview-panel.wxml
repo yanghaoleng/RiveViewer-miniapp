@@ -160,6 +160,7 @@
         data-file-navigation="true"
         data-offset="-1"
         bindtouchstart="fileNavigationTouchStart"
+        bindtouchmove="fileNavigationTouchMove"
         bindtouchend="fileNavigationTouchEnd"
         bindtouchcancel="fileNavigationTouchCancel"
         hover-class="is-pressed"
@@ -175,6 +176,7 @@
         data-file-navigation="true"
         data-offset="1"
         bindtouchstart="fileNavigationTouchStart"
+        bindtouchmove="fileNavigationTouchMove"
         bindtouchend="fileNavigationTouchEnd"
         bindtouchcancel="fileNavigationTouchCancel"
         hover-class="is-pressed"
@@ -284,6 +286,17 @@
         </view>
       </view>
 
+      <view class="parameter-row">
+        <text class="parameter-row__label">预览背景</text>
+        <view class="tone-options">
+          <view class="tone tone--mist {{canvasTone === 'mist' ? 'is-active' : ''}}" data-tone="mist" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="浅灰背景"></view>
+          <view class="tone tone--paper {{canvasTone === 'paper' ? 'is-active' : ''}}" data-tone="paper" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="米白背景"></view>
+          <view class="tone tone--white {{canvasTone === 'white' ? 'is-active' : ''}}" data-tone="white" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="纯白背景"></view>
+          <view class="tone tone--yellow {{canvasTone === 'yellow' ? 'is-active' : ''}}" data-tone="yellow" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="黄色背景"></view>
+          <view class="tone tone--ink {{canvasTone === 'ink' ? 'is-active' : ''}}" data-tone="ink" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="深色背景"></view>
+        </view>
+      </view>
+
       <view wx:if="{{hasAudio}}" class="parameter-row">
         <text class="parameter-row__label">声音</text>
         <view class="parameter-actions">
@@ -295,22 +308,6 @@
             arialabel="{{audioSupported ? (audioEnabled ? '声音已开启，点击静音' : '声音已静音，点击开启') : (audioBlockedReason || '当前设备不支持声音')}}"
             bind:select="toggleAudio"
           ></parameter-tag>
-        </view>
-      </view>
-
-      <view class="parameter-row">
-        <text class="parameter-row__label">缩放方式</text>
-        <view class="compact-switch">
-          <button
-            wx:for="{{fitOptions}}"
-            wx:key="key"
-            class="compact-option {{fit === item.key ? 'is-active' : ''}}"
-            data-key="{{item.key}}"
-            bindtap="selectFit"
-            hover-class="is-pressed"
-            hover-start-time="0"
-            hover-stay-time="70"
-          >{{item.label}}</button>
         </view>
       </view>
 
@@ -330,14 +327,19 @@
         </view>
       </view>
 
-      <view class="parameter-row">
-        <text class="parameter-row__label">预览背景</text>
-        <view class="tone-options">
-          <view class="tone tone--mist {{canvasTone === 'mist' ? 'is-active' : ''}}" data-tone="mist" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="浅灰背景"></view>
-          <view class="tone tone--paper {{canvasTone === 'paper' ? 'is-active' : ''}}" data-tone="paper" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="米白背景"></view>
-          <view class="tone tone--white {{canvasTone === 'white' ? 'is-active' : ''}}" data-tone="white" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="纯白背景"></view>
-          <view class="tone tone--yellow {{canvasTone === 'yellow' ? 'is-active' : ''}}" data-tone="yellow" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="黄色背景"></view>
-          <view class="tone tone--ink {{canvasTone === 'ink' ? 'is-active' : ''}}" data-tone="ink" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="深色背景"></view>
+      <view class="parameter-row parameter-row--last">
+        <text class="parameter-row__label">缩放方式</text>
+        <view class="compact-switch">
+          <button
+            wx:for="{{fitOptions}}"
+            wx:key="key"
+            class="compact-option {{fit === item.key ? 'is-active' : ''}}"
+            data-key="{{item.key}}"
+            bindtap="selectFit"
+            hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="70"
+          >{{item.label}}</button>
         </view>
       </view>
     </view>
@@ -382,11 +384,11 @@
     <cover-view
       wx:for="{{fileMenuOptions}}"
       wx:key="id"
-      class="file-popover__option {{item.current ? 'is-current' : ''}}"
+      class="file-popover__option {{item.current ? 'is-current' : ''}} {{fileHoverId === item.id ? 'is-hovered' : ''}}"
       data-file-navigation="true"
       data-id="{{item.id}}"
       bindtap="selectFileFromMenu"
-      hover-class="is-pressed"
+      hover-class="is-hovered is-pressed"
       hover-start-time="0"
       hover-stay-time="70"
       role="button"

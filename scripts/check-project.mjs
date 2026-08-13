@@ -292,8 +292,8 @@ if (
     && /catchlongpress="stageResizeLongPress"/.test(markup)
     && /wx:if="\{\{stageResizeMenuActive\}\}" class="stage-resizer__modes"/.test(markup)
     && /catchtouchcancel="stageResizeCancel"/.test(markup)
-    && /arrows-in-simple\.svg/.test(markup)
-    && /arrows-out-simple\.svg/.test(markup)
+    && /arrows-in-simple(?:-active)?\.svg/.test(markup)
+    && /arrows-out-simple(?:-active)?\.svg/.test(markup)
   ))
   || !/getStageResizeHoverFit/.test(previewLogic)
   || !/updateStageResizeHover/.test(previewLogic)
@@ -310,11 +310,44 @@ if (
   || !/@keyframes stage-resizer-contain-in[\s\S]{0,180}translateX\(calc\(100% \+ 8rpx\)\)/.test(embeddedPreviewStyle)
   || !/@keyframes stage-resizer-cover-in[\s\S]{0,180}translateX\(calc\(-100% - 8rpx\)\)/.test(embeddedPreviewStyle)
   || !/stage-resizer__mode--contain[\s\S]{0,100}justify-content:\s*center/.test(embeddedPreviewStyle)
-  || !/stage-resizer__mode\s*\{[\s\S]{0,420}border-radius:\s*50%/.test(embeddedPreviewStyle)
+  || !/stage-resizer__mode\s*\{[\s\S]{0,420}border-radius:\s*5rpx/.test(embeddedPreviewStyle)
   || !/arrows-in-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
   || !/arrows-out-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
 ) {
   throw new Error('缩放手柄缺少按住展开、横向悬停或松手切换完整/铺满')
+}
+
+if (
+  ![previewMarkup, embeddedPreviewMarkup].every((markup) => (
+    /bindtouchmove="fileNavigationTouchMove"/.test(markup)
+    && /fileHoverId === item\.id \? 'is-hovered'/.test(markup)
+    && /hover-class="is-hovered is-pressed"/.test(markup)
+  ))
+  || !/measureFileMenu\(\)/.test(previewLogic)
+  || !/selectAll\('\.file-popover__option'\)/.test(previewLogic)
+  || !/fileNavigationTouchMove\(event\)/.test(previewLogic)
+  || !/fileNavigationGestureMovedIntoMenu/.test(previewLogic)
+  || !/closeFileMenu\(\(\) => this\.openFileById\(hoveredFileId\)\)/.test(previewLogic)
+) {
+  throw new Error('文件快捷菜单缺少按住滑选、高亮或松手直接打开能力')
+}
+
+if (
+  ![previewMarkup, embeddedPreviewMarkup].every((markup) => {
+    const inputIndex = markup.indexOf('状态机输入')
+    const toneIndex = markup.indexOf('预览背景')
+    const qualityIndex = markup.indexOf('渲染质量')
+    const fitIndex = markup.indexOf('缩放方式')
+    return inputIndex >= 0
+      && toneIndex > inputIndex
+      && qualityIndex > toneIndex
+      && fitIndex > qualityIndex
+      && /parameter-row parameter-row--last[\s\S]{0,100}缩放方式/.test(markup)
+  })
+  || !/loading-ring__spinner\s*\{[\s\S]{0,260}border-radius:\s*50%/.test(embeddedPreviewStyle)
+  || !/\.tone\s*\{[\s\S]{0,100}width:\s*30rpx;[\s\S]{0,100}height:\s*20rpx/.test(embeddedPreviewStyle)
+) {
+  throw new Error('参数顺序、Loading 圆环或 1.5 倍背景色块未按设计实现')
 }
 
 if (

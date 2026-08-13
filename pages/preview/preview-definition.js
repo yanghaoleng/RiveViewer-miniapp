@@ -146,7 +146,8 @@ const previewDefinition = {
     fileMenuOptions: [],
     showFileMenu: false,
     fileMenuLeaving: false,
-    fileMenuStyle: ''
+    fileMenuStyle: '',
+    fileHoverId: ''
   },
 
   createPreviewSelectorQuery() {
@@ -960,6 +961,7 @@ const previewDefinition = {
     clearTimeout(this.fileMenuDismissTimer)
     this.fileNavigationGestureActive = true
     this.fileNavigationLongPressed = false
+    this.fileNavigationGestureMovedIntoMenu = false
     this.fileNavigationOffset = Number(event.currentTarget.dataset.offset)
     this.fileNavigationLongPressTimer = setTimeout(() => {
       this.fileNavigationLongPressed = true
@@ -980,22 +982,63 @@ const previewDefinition = {
         this.setData({
           showFileMenu: true,
           fileMenuLeaving: false,
-          fileMenuStyle: `right:${right}px;bottom:${bottom}px;`
-        })
+          fileMenuStyle: `right:${right}px;bottom:${bottom}px;`,
+          fileHoverId: this.data.file?.id || ''
+        }, () => this.measureFileMenu())
       })
       .exec()
+  },
+
+  measureFileMenu() {
+    this.createPreviewSelectorQuery()
+      .selectAll('.file-popover__option')
+      .boundingClientRect((rects) => {
+        this.fileMenuOptionRects = Array.isArray(rects) ? rects : []
+      })
+      .exec()
+  },
+
+  fileNavigationTouchMove(event) {
+    if (!this.fileNavigationLongPressed || !this.fileMenuOptionRects?.length) return
+    const touch = event.touches?.[0]
+    if (!touch) return
+    const clientX = touch.clientX === undefined ? touch.x : touch.clientX
+    const clientY = touch.clientY === undefined ? touch.y : touch.clientY
+    const index = this.fileMenuOptionRects.findIndex((rect) => (
+      clientX >= rect.left - 18
+      && clientX <= rect.right + 18
+      && clientY >= rect.top
+      && clientY <= rect.bottom
+    ))
+    if (index < 0) return
+    const option = this.data.fileMenuOptions[index]
+    this.fileNavigationGestureMovedIntoMenu = true
+    if (option && option.id !== this.data.fileHoverId) {
+      this.setData({ fileHoverId: option.id })
+    }
   },
 
   fileNavigationTouchEnd() {
     clearTimeout(this.fileNavigationLongPressTimer)
     const longPressed = this.fileNavigationLongPressed
+    const shouldOpenHover = longPressed && this.fileNavigationGestureMovedIntoMenu
+    const hoveredFileId = this.data.fileHoverId
     const offset = this.fileNavigationOffset
     this.fileNavigationGestureActive = false
     this.fileNavigationLongPressed = false
+    this.fileNavigationGestureMovedIntoMenu = false
     this.fileNavigationOffset = 0
     if (!longPressed) {
       const target = this.libraryFiles?.[this.fileIndex + offset]
       this.openFileById(target?.id)
+      return
+    }
+    if (shouldOpenHover) {
+      if (hoveredFileId === this.data.file.id) {
+        this.closeFileMenu()
+        return
+      }
+      this.closeFileMenu(() => this.openFileById(hoveredFileId))
       return
     }
     this.scheduleFileMenuDismiss()
@@ -1005,6 +1048,7 @@ const previewDefinition = {
     clearTimeout(this.fileNavigationLongPressTimer)
     this.fileNavigationGestureActive = false
     this.fileNavigationLongPressed = false
+    this.fileNavigationGestureMovedIntoMenu = false
     this.fileNavigationOffset = 0
     if (this.data.showFileMenu) this.scheduleFileMenuDismiss()
   },
@@ -1030,7 +1074,8 @@ const previewDefinition = {
     this.fileMenuCloseTimer = setTimeout(() => {
       this.setData({
         showFileMenu: false,
-        fileMenuLeaving: false
+        fileMenuLeaving: false,
+        fileHoverId: ''
       }, () => onClosed?.())
     }, 150)
   },

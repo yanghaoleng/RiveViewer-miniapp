@@ -186,6 +186,10 @@ page {
 .loading-ring {
   width: 116rpx;
   height: 116rpx;
+  min-width: 116rpx;
+  min-height: 116rpx;
+  flex: none;
+  aspect-ratio: 1 / 1;
   position: relative;
   display: flex;
   align-items: center;
@@ -198,6 +202,7 @@ page {
   border: 7rpx solid #263140;
   border-top-color: #f2c94c;
   border-right-color: rgba(242, 201, 76, .48);
+  box-sizing: border-box;
   border-radius: 50%;
   animation: loading-spin .9s linear infinite;
 }
@@ -407,7 +412,7 @@ page {
   line-height: 1;
   white-space: nowrap;
   background: rgba(255, 255, 255, 0);
-  border-radius: 50%;
+  border-radius: 10rpx;
   transition:
     color 120ms ease,
     background-color 120ms ease;
@@ -700,6 +705,11 @@ page {
   background: #f2c94c;
 }
 
+.file-popover__option.is-hovered {
+  color: #17130a;
+  background: #f2c94c;
+}
+
 .file-popover__name {
   min-width: 0;
   overflow: hidden;
@@ -861,14 +871,13 @@ page {
 }
 
 .tone {
-  width: 40rpx;
-  min-width: 40rpx;
+  width: 60rpx;
+  min-width: 60rpx;
   height: 40rpx;
   min-height: 40rpx;
   flex: none;
-  aspect-ratio: 1 / 1;
   border: 4rpx solid #121923;
-  border-radius: 50%;
+  border-radius: 999rpx;
   box-shadow: 0 0 0 1rpx #3a4656;
 }
 
@@ -904,6 +913,10 @@ page {
   justify-content: space-between;
   gap: 16rpx;
   border-bottom: 1rpx solid #202a37;
+}
+
+.parameter-row--last {
+  border-bottom: 0;
 }
 
 .parameter-row__label {
