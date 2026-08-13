@@ -383,10 +383,28 @@ if (
 }
 
 if (
-  !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(
+  !/\.transport\s*\{[\s\S]{0,180}display:\s*flex;/.test(
     await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
   )
-  || !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(embeddedPreviewStyle)
+  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,60}flex:\s*1 1 0;/.test(
+    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
+  )
+  || !/\.speed-menu-shell\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,80}flex:\s*1 1 0;/.test(
+    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
+  )
+  || !/\.transport__file-button\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,100}flex:\s*1 1 0;/.test(
+    await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
+  )
+  || !/\.transport\s*\{[\s\S]{0,180}display:\s*flex;/.test(embeddedPreviewStyle)
+  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,60}flex:\s*1 1 0;/.test(embeddedPreviewStyle)
+  || !/\.speed-menu-shell\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,80}flex:\s*1 1 0;/.test(embeddedPreviewStyle)
+  || !/\.transport__file-button\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,100}flex:\s*1 1 0;/.test(embeddedPreviewStyle)
+  || !/\.select\(["']\.transport["']\)/.test(previewLogic)
+  || ![previewMarkup, embeddedPreviewMarkup].every((markup) => (
+    !/transport__left|transport__playback|transport__files/.test(markup)
+    && (markup.match(/class="transport__(?:primary|secondary|file-button)/g) || []).length === 4
+    && (markup.match(/class="speed-menu-shell/g) || []).length === 1
+  ))
   || !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(h5StyleSource)
   || !/stageResizeTapOpen/.test(h5AppSource)
   || !/stageResizePressActive/.test(h5AppSource)
@@ -396,6 +414,15 @@ if (
   || !/getVisibleBuiltinFiles/.test(h5LibrarySource)
   || !/hideBuiltinFile/.test(h5LibrarySource)
   || !/\.tone-button\s*\{[\s\S]{0,100}width:\s*45px;[\s\S]{0,80}height:\s*30px/.test(h5StyleSource)
+  || /label="文件操作"|继续导入|下载文件/.test(h5AppSource)
+  || !/className="topbar-download"/.test(h5AppSource)
+  || !/className="file-heading-download press-feedback"/.test(h5AppSource)
+  || !/fit === "contain" && hasStageAspect/.test(h5AppSource)
+  || !/\.canvas-card\.is-proportional\s*\{[\s\S]{0,120}height:\s*auto;[\s\S]{0,80}min-height:\s*0/.test(h5StyleSource)
+  || !/\.file-row:hover,[\s\S]{0,120}\.file-row\.is-menu-open\s*\{[\s\S]{0,100}background:/.test(h5StyleSource)
+  || !/<MiniProgramEntry \/>/.test(h5AppSource)
+  || !/mini-program-code\.webp/.test(h5AppSource)
+  || !/\.mini-program-entry:hover \.mini-program-popover,[\s\S]{0,180}opacity:\s*1/.test(h5StyleSource)
 ) {
   throw new Error('小程序与 H5 的五格播放区、首页菜单、手柄或背景色块未同步')
 }

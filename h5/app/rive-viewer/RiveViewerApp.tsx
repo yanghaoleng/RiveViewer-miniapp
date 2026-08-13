@@ -7,8 +7,8 @@ import {
   ArrowsOutSimple,
   CaretDown,
   ChatCircleDots,
+  DeviceMobile,
   DownloadSimple,
-  FileArrowUp,
   Gauge,
   Keyboard,
   Pause,
@@ -557,7 +557,14 @@ export function RiveViewerApp() {
   };
 
   const remainingArtboards = Math.max(0, metadata.artboardCount - metadata.artboardNames.length);
-  const stageStyle = { height: `${stageHeight}px` };
+  const hasStageAspect = metadata.width > 0 && metadata.height > 0;
+  const stageAspect = hasStageAspect ? metadata.width / metadata.height : 1;
+  const stageStyle = fit === "contain" && hasStageAspect
+    ? {
+        width: `min(100%, ${Math.round(stageHeight * stageAspect)}px)`,
+        aspectRatio: `${metadata.width} / ${metadata.height}`,
+      }
+    : { width: "100%", height: `${stageHeight}px` };
   const timelineStyle = {
     "--timeline-progress": `${Math.round(timeline.progress * 100)}%`,
   } as CSSProperties;
@@ -632,6 +639,7 @@ export function RiveViewerApp() {
               onRemove={removeFile}
               onToggleMenu={(id) => setExpandedFileId(expandedFileId === id ? "" : id)}
             />
+            <MiniProgramEntry />
             <FeedbackContact />
           </section>
         </div>
@@ -656,9 +664,20 @@ export function RiveViewerApp() {
               <span className="file-fps">{fps || "--"} FPS</span>
             </div>
           </div>
+          <button
+            className="file-heading-download press-feedback"
+            onClick={() => downloadFile(activeFile.file)}
+            aria-label="下载当前文件"
+          >
+            <DownloadSimple size={18} />
+          </button>
         </div>
 
-        <div ref={stageRef} className={`canvas-card tone-${canvasTone}`} style={stageStyle}>
+        <div
+          ref={stageRef}
+          className={`canvas-card tone-${canvasTone} ${fit === "contain" && hasStageAspect ? "is-proportional" : ""}`}
+          style={stageStyle}
+        >
           <canvas
             ref={canvasRef}
             aria-label="Rive 交互画布"
@@ -832,10 +851,6 @@ export function RiveViewerApp() {
             <Tag selected={quality === 1.5} onClick={() => setQuality(1.5)}>平衡</Tag>
             <Tag selected={quality === 2} onClick={() => setQuality(2)}>高清</Tag>
           </ParameterRow>
-          <ParameterRow label="文件操作">
-            <Tag onClick={() => fileInputRef.current?.click()}><FileArrowUp size={16} />继续导入</Tag>
-            <Tag onClick={() => downloadFile(activeFile.file)}><DownloadSimple size={16} />下载文件</Tag>
-          </ParameterRow>
           <ParameterRow label="缩放方式">
             <Tag selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>
             <Tag selected={fit === "cover"} onClick={() => selectFit("cover")}>铺满</Tag>
@@ -907,6 +922,51 @@ function FeedbackContact() {
         <span>联系作者反馈意见</span>
       </button>
       {notice && <div className="feedback-notice" role="status" aria-live="polite">{notice}</div>}
+    </div>
+  );
+}
+
+function MiniProgramEntry() {
+  const [open, setOpen] = useState(false);
+  const entryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (entryRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+      entryRef.current?.querySelector("button")?.blur();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+
+  return (
+    <div
+      ref={entryRef}
+      className={`mini-program-entry ${open ? "is-open" : ""}`}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        setOpen(false);
+        (event.currentTarget.querySelector("button") as HTMLButtonElement | null)?.blur();
+      }}
+    >
+      <button
+        className="mini-program-trigger press-feedback"
+        aria-expanded={open}
+        aria-controls="mini-program-card"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <DeviceMobile size={17} weight="bold" />
+        <span>使用小程序版</span>
+      </button>
+      <div id="mini-program-card" className="mini-program-popover" role="group" aria-label="Rive 预览台小程序码">
+        <strong>Rive 预览台</strong>
+        <span>微信扫码打开小程序</span>
+        {/* 小程序码由杨总提供，转为本地 WebP 后随静态站点发布。 */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/rive-viewer/mini-program-code.webp" alt="Rive 预览台小程序码" />
+      </div>
     </div>
   );
 }

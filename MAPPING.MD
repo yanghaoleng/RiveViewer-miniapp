@@ -31,9 +31,10 @@
 | 双击切换 | Stage view mode toggle | `stageResizerTap`、`toggleStageViewMode`、`stageViewMode` |
 | 重置按钮 | Reset playback action | `.transport__primary`、`resetAnimation` |
 | 播放 / 暂停 | Playback toggle | `.transport__secondary`、`togglePlay` |
-| 画布下方五个按钮平分 | Equal five-column transport | 小程序 `.transport`、H5 `.transport`、`grid-template-columns: repeat(5, minmax(0, 1fr))` |
+| 画布下方五个按钮平分 | Equal five-column transport | 小程序 `.transport` 的五个直接子项统一 `width: 0; flex: 1 1 0`；H5 `.transport` 使用五列 Grid |
+| 小程序五格一级布局 | Flat Mini Program transport | `.transport__primary`、`.transport__secondary`、`.speed-menu-shell`、两个 `.transport__file-button`；不再使用 `.transport__left/.transport__files` 包裹 |
 | 播放速度 | Speed selector | `.speed-menu`、`.speed-popover`、`speedValue` |
-| 上一个 / 下一个 | File navigation | `.transport__files`、`fileNavigationTouchStart/End`、`openFileById` |
+| 上一个 / 下一个 | File navigation | 两个 `.transport__file-button`、`fileNavigationTouchStart/End`、`openFileById`；长按菜单锚点为 `.transport` |
 | 长按文件列表 | File navigation popover | `.file-popover`、`showFileMenu` |
 | 画板标签 | Artboard choice tag | `artboardNames`、`selectArtboardTag` |
 | 状态机标签 | State machine choice tag | `stateMachineNames`、`selectStateMachineTag` |
@@ -94,6 +95,10 @@
 | H5 平台标签（已移除） | Removed platform badge | 不再渲染 `.platform-label` 或右上角 `H5` 文案 |
 | H5 标题品牌图标 | Header brand mark | `Brand`、`.brand-mark`、`favicon.webp?v=2` |
 | H5 文件操作箭头 | Hover file action toggle | `.file-action`、`.file-row:hover`、`.file-row:focus-within`、`.is-menu-open` |
+| H5 完整模式比例画布 | Proportional contain canvas | `hasStageAspect`、`stageAspect`、`stageStyle`、`.canvas-card.is-proportional` |
+| H5 整行悬停背景 | Full-row file hover fill | `.file-row:hover`、`.file-row:focus-within`、`.file-row.is-menu-open` |
+| H5 右上角下载 | Preview top-right download | 手机 `.topbar-download`、宽屏 `.file-heading-download`、`downloadFile`；参数区不再渲染“文件操作” |
+| H5 小程序版入口 | Mini Program access entry | `MiniProgramEntry`、`.mini-program-entry`、`.mini-program-popover`、`mini-program-code.webp` |
 | H5 发送文件 | Web Share with download fallback | `shareFile`、`navigator.share`、`navigator.canShare`、`downloadFile` |
 | H5 删除示例 | Hidden built-in file | `getVisibleBuiltinFiles`、`hideBuiltinFile`、`rive-viewer-hidden-builtins-v1` |
 | H5 页签图标 | Favicon with fallback | `favicon.webp`、`favicon-source.png`、`?v=2`、Figma 节点 `152:723` |

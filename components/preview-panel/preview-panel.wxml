@@ -113,26 +113,22 @@
   </view>
 
   <view class="transport">
-    <view class="transport__left">
-      <view class="transport__playback">
-        <button class="transport__primary" bindtap="resetAnimation" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" aria-label="重播">
-          <image class="transport__icon" src="/assets/icons/restore.svg"></image>
-        </button>
-        <button
-          class="transport__secondary"
-          bindtap="togglePlay"
-          hover-class="is-pressed"
-          hover-start-time="0"
-          hover-stay-time="70"
-          aria-label="{{isPlaying ? '暂停' : '播放'}}"
-        >
-          <image
-            class="transport__icon"
-            src="{{isPlaying ? '/assets/icons/player-pause.svg' : '/assets/icons/player-play.svg'}}"
-          ></image>
-        </button>
-      </view>
-    </view>
+    <button class="transport__primary" bindtap="resetAnimation" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" aria-label="重播">
+      <image class="transport__icon" src="/assets/icons/restore.svg"></image>
+    </button>
+    <button
+      class="transport__secondary"
+      bindtap="togglePlay"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      aria-label="{{isPlaying ? '暂停' : '播放'}}"
+    >
+      <image
+        class="transport__icon"
+        src="{{isPlaying ? '/assets/icons/player-pause.svg' : '/assets/icons/player-play.svg'}}"
+      ></image>
+    </button>
     <view class="speed-menu-shell" data-speed-control="true">
       <button
         class="speed-menu"
@@ -150,44 +146,40 @@
         <text class="speed-menu__value" data-speed-control="true">{{speedLabel}}</text>
       </button>
     </view>
-    <view
+    <button
       wx:if="{{showFileNavigation}}"
-      class="transport__files"
+      class="transport__file-button {{!hasPreviousFile ? 'is-disabled' : ''}}"
       data-file-navigation="true"
+      data-offset="-1"
+      bindtouchstart="fileNavigationTouchStart"
+      bindtouchmove="fileNavigationTouchMove"
+      bindtouchend="fileNavigationTouchEnd"
+      bindtouchcancel="fileNavigationTouchCancel"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      aria-disabled="{{!hasPreviousFile}}"
+      aria-label="上一个文件，按住查看文件列表"
     >
-      <button
-        class="transport__file-button {{!hasPreviousFile ? 'is-disabled' : ''}}"
-        data-file-navigation="true"
-        data-offset="-1"
-        bindtouchstart="fileNavigationTouchStart"
-        bindtouchmove="fileNavigationTouchMove"
-        bindtouchend="fileNavigationTouchEnd"
-        bindtouchcancel="fileNavigationTouchCancel"
-        hover-class="is-pressed"
-        hover-start-time="0"
-        hover-stay-time="70"
-        aria-disabled="{{!hasPreviousFile}}"
-        aria-label="上一个文件，按住查看文件列表"
-      >
-        <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-left.svg"></image>
-      </button>
-      <button
-        class="transport__file-button {{!hasNextFile ? 'is-disabled' : ''}}"
-        data-file-navigation="true"
-        data-offset="1"
-        bindtouchstart="fileNavigationTouchStart"
-        bindtouchmove="fileNavigationTouchMove"
-        bindtouchend="fileNavigationTouchEnd"
-        bindtouchcancel="fileNavigationTouchCancel"
-        hover-class="is-pressed"
-        hover-start-time="0"
-        hover-stay-time="70"
-        aria-disabled="{{!hasNextFile}}"
-        aria-label="下一个文件，按住查看文件列表"
-      >
-        <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-right.svg"></image>
-      </button>
-    </view>
+      <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-left.svg"></image>
+    </button>
+    <button
+      wx:if="{{showFileNavigation}}"
+      class="transport__file-button {{!hasNextFile ? 'is-disabled' : ''}}"
+      data-file-navigation="true"
+      data-offset="1"
+      bindtouchstart="fileNavigationTouchStart"
+      bindtouchmove="fileNavigationTouchMove"
+      bindtouchend="fileNavigationTouchEnd"
+      bindtouchcancel="fileNavigationTouchCancel"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      aria-disabled="{{!hasNextFile}}"
+      aria-label="下一个文件，按住查看文件列表"
+    >
+      <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-right.svg"></image>
+    </button>
   </view>
 
   <scroll-view

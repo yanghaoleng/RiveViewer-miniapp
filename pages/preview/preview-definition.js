@@ -1053,7 +1053,7 @@ const previewDefinition = {
   openFileMenuAtAnchor() {
     if (this.data.showSpeedMenu) this.closeSpeedMenu()
     this.createPreviewSelectorQuery()
-      .select('.transport__files')
+      .select('.transport')
       .boundingClientRect((rect) => {
         const windowWidth = Math.max(1, this.windowInfo?.windowWidth || 375)
         const windowHeight = Math.max(1, this.windowInfo?.windowHeight || 667)

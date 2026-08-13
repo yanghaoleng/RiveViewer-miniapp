@@ -539,8 +539,7 @@ button::after {
   min-height: 42rpx;
   margin-top: 0;
   padding: 5rpx;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   align-items: center;
   gap: 4rpx;
   background: #121923;
@@ -548,43 +547,14 @@ button::after {
   border-radius: 8rpx;
 }
 
-.transport__left,
-.transport__files {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4rpx;
-}
-
-.transport__left {
-  grid-column: 1 / span 2;
-  justify-content: flex-start;
-}
-
-.transport__playback {
-  width: 100%;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: center;
-  gap: 4rpx;
-}
-
-.transport__files {
-  grid-column: 4 / span 2;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  position: relative;
-  z-index: 12;
-  justify-content: flex-end;
-}
-
 .transport__primary,
 .transport__secondary {
-  width: 100%;
+  width: 0;
+  flex: 1 1 0;
   min-width: 0;
   max-width: none;
   height: 30rpx;
+  margin: 0;
   padding: 0;
   overflow: hidden;
   display: flex;
@@ -609,9 +579,10 @@ button::after {
 }
 
 .speed-menu-shell {
-  width: 100%;
+  width: 0;
+  min-width: 0;
+  flex: 1 1 0;
   height: 30rpx;
-  grid-column: 2;
   position: relative;
   z-index: 12;
 }
@@ -635,6 +606,7 @@ button::after {
   min-width: 0;
   max-width: none;
   height: 30rpx;
+  margin: 0;
   padding: 0;
   overflow: hidden;
   display: flex;
@@ -777,14 +749,14 @@ button::after {
 }
 
 .transport__file-button {
-  width: 100%;
+  width: 0;
   min-width: 0;
   max-width: none;
   height: 30rpx;
   margin: 0;
   padding: 0;
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   align-items: center;
   justify-content: center;
   color: #d8dde5;

@@ -42,16 +42,18 @@ test("root redirects to the stable viewer path", async () => {
 });
 
 test("ships the browser runtime and local-only library", async () => {
-  const [wasm, guide, question, librarySource] = await Promise.all([
+  const [wasm, guide, question, miniProgramCode, librarySource] = await Promise.all([
     readFile(new URL("../public/rive-viewer/rive.wasm", import.meta.url)),
     readFile(new URL("../public/rive-viewer/samples/guide.riv", import.meta.url)),
     readFile(new URL("../public/rive-viewer/samples/question.riv", import.meta.url)),
+    readFile(new URL("../public/rive-viewer/mini-program-code.webp", import.meta.url)),
     readFile(new URL("../lib/library.ts", import.meta.url), "utf8"),
   ]);
 
   assert.ok(wasm.byteLength > 1_000_000);
   assert.equal(guide.subarray(0, 4).toString("ascii"), "RIVE");
   assert.equal(question.subarray(0, 4).toString("ascii"), "RIVE");
+  assert.ok(miniProgramCode.byteLength < 50_000);
   assert.match(librarySource, /indexedDB/);
   assert.doesNotMatch(librarySource, /fetch\(["'`]https?:|fetch\(["'`]\/api|XMLHttpRequest|FormData/);
   await access(new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url));
@@ -69,7 +71,15 @@ test("keeps preview controls on one page and aligns pointer coordinates with ren
   assert.match(appSource, /label="状态机输入"/);
   assert.match(appSource, /label="缩放方式"/);
   assert.ok(appSource.indexOf('label="预览背景"') < appSource.indexOf('label="渲染质量"'));
-  assert.ok(appSource.lastIndexOf('label="缩放方式"') > appSource.indexOf('label="文件操作"'));
+  assert.doesNotMatch(appSource, /label="文件操作"|继续导入|下载文件/);
+  assert.match(appSource, /className="topbar-download"/);
+  assert.match(appSource, /className="file-heading-download press-feedback"/);
+  assert.match(appSource, /fit === "contain" && hasStageAspect/);
+  assert.match(styleSource, /\.canvas-card\.is-proportional\s*\{[\s\S]{0,120}height:\s*auto;[\s\S]{0,80}min-height:\s*0/);
+  assert.match(styleSource, /\.file-row:hover,[\s\S]{0,120}\.file-row\.is-menu-open\s*\{[\s\S]{0,100}background:/);
+  assert.match(appSource, /<MiniProgramEntry \/>/);
+  assert.match(appSource, /mini-program-code\.webp/);
+  assert.match(styleSource, /\.mini-program-entry:hover \.mini-program-popover,[\s\S]{0,180}opacity:\s*1/);
   assert.match(appSource, /stageResizeTapOpen/);
   assert.match(appSource, /stageResizePressActive/);
   assert.match(appSource, /className="stage-resizer-modes"/);
