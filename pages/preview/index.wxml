@@ -64,10 +64,11 @@
   <view
     class="stage-resizer {{stageDragging ? 'is-dragging' : ''}} {{stageResizeMenuActive ? 'is-selecting' : ''}}"
     data-stage-resizer="true"
-    bindtouchstart="stageResizeStart"
+    catchtouchstart="stageResizeStart"
     catchtouchmove="stageResizeMove"
-    bindtouchend="stageResizeEnd"
-    bindtouchcancel="stageResizeCancel"
+    catchtouchend="stageResizeEnd"
+    catchtouchcancel="stageResizeCancel"
+    catchlongpress="stageResizeLongPress"
     bindtap="stageResizerTap"
     role="slider"
     aria-label="上下拖动画板高度，按住后左右滑动选择完整或铺满，双击切换参数全览"
@@ -92,7 +93,7 @@
       <view class="stage-resizer__grip" data-stage-resizer="true">
         <view data-stage-resizer="true"></view>
       </view>
-      <view class="stage-resizer__modes" aria-hidden="{{!stageResizeMenuActive}}">
+      <view wx:if="{{stageResizeMenuActive}}" class="stage-resizer__modes">
         <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}">
           <image class="stage-resizer__mode-icon" src="/assets/icons/arrows-in-simple.svg"></image>
           <text>完整</text>

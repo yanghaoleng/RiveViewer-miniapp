@@ -278,7 +278,7 @@ if (
 if (/pageResize(Start|Move|End)/.test(previewMarkup + previewLogic)) {
   throw new Error('画布缩放仍绑定在页面手势上')
 }
-if (!/class="stage-resizer[\s\S]*bindtouchstart="stageResizeStart"/.test(previewMarkup)) {
+if (!/class="stage-resizer[\s\S]*catchtouchstart="stageResizeStart"/.test(previewMarkup)) {
   throw new Error('原生画布缩放手柄缺少拖动绑定')
 }
 if (
@@ -288,12 +288,16 @@ if (
     && /stageResizeHoverFit === 'cover'/.test(markup)
     && /stage-resizer__mode--contain/.test(markup)
     && /stage-resizer__mode--cover/.test(markup)
-    && /bindtouchcancel="stageResizeCancel"/.test(markup)
+    && /catchtouchstart="stageResizeStart"/.test(markup)
+    && /catchlongpress="stageResizeLongPress"/.test(markup)
+    && /wx:if="\{\{stageResizeMenuActive\}\}" class="stage-resizer__modes"/.test(markup)
+    && /catchtouchcancel="stageResizeCancel"/.test(markup)
     && /arrows-in-simple\.svg/.test(markup)
     && /arrows-out-simple\.svg/.test(markup)
   ))
   || !/getStageResizeHoverFit/.test(previewLogic)
   || !/updateStageResizeHover/.test(previewLogic)
+  || !/stageResizeLongPress/.test(previewLogic)
   || !/ratio < 1 \/ 3[\s\S]{0,80}'contain'/.test(previewLogic)
   || !/ratio > 2 \/ 3[\s\S]{0,80}'cover'/.test(previewLogic)
   || !/applyFit\(selectedFit, true\)/.test(previewLogic)

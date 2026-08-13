@@ -724,7 +724,7 @@ const previewDefinition = {
   },
 
   stageResizeStart(event) {
-    const touch = event.touches?.[0]
+    const touch = event.touches?.[0] || event.changedTouches?.[0]
     if (!touch) return
     this.stageResizeStartY = touch.clientY === undefined ? touch.y : touch.clientY
     this.stageResizeStartX = touch.clientX === undefined ? touch.x : touch.clientX
@@ -744,6 +744,14 @@ const previewDefinition = {
         }
       })
       .exec()
+  },
+
+  stageResizeLongPress() {
+    if (this.stageResizeStartY === undefined || this.data.stageResizeMenuActive) return
+    this.setData({
+      stageResizeMenuActive: true,
+      stageResizeHoverFit: ''
+    })
   },
 
   getStageResizeHoverFit(clientX) {

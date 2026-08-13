@@ -341,7 +341,7 @@ page {
   position: absolute;
   left: 0;
   top: 0;
-  overflow: hidden;
+  overflow: visible;
   color: #687588;
   background: transparent;
   border: 1rpx solid transparent;
@@ -355,8 +355,8 @@ page {
 }
 
 .stage-resizer.is-selecting .stage-resizer__surface {
-  height: 88rpx;
-  top: -20rpx;
+  height: 104rpx;
+  top: -28rpx;
   background: #101721;
   border-color: #253142;
   box-shadow: 0 10rpx 28rpx rgba(0, 4, 10, .28);
@@ -385,20 +385,16 @@ page {
 
 .stage-resizer__modes {
   position: absolute;
-  left: 8rpx;
-  right: 8rpx;
-  top: 7rpx;
-  bottom: 7rpx;
+  left: 12rpx;
+  right: 12rpx;
+  top: 8rpx;
+  bottom: 8rpx;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10rpx;
-  opacity: 0;
+  gap: 12rpx;
   pointer-events: none;
-  transition: opacity 120ms ease;
-}
-
-.stage-resizer.is-selecting .stage-resizer__modes {
-  opacity: 1;
+  animation: stage-resizer-modes-in 160ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode {
@@ -409,9 +405,9 @@ page {
   align-items: center;
   justify-content: center;
   gap: 3rpx;
-  color: #7f8c9e;
-  font-size: 21rpx;
-  font-weight: 620;
+  color: #c3ccd8;
+  font-size: 26rpx;
+  font-weight: 660;
   line-height: 1;
   white-space: nowrap;
   background: rgba(255, 255, 255, 0);
@@ -425,31 +421,42 @@ page {
 .stage-resizer__mode--contain {
   grid-column: 1;
   align-items: flex-start;
-  padding-left: 16rpx;
+  padding-left: 20rpx;
 }
 
 .stage-resizer__mode--cover {
   grid-column: 3;
   align-items: flex-end;
-  padding-right: 16rpx;
+  padding-right: 20rpx;
 }
 
 .stage-resizer__mode.is-current {
-  color: #c9b767;
+  color: #f2c94c;
 }
 
 .stage-resizer__mode.is-hovered {
   color: #f2f0e8;
-  background: #1a2432;
-  box-shadow: inset 0 0 0 1rpx rgba(242, 201, 76, .24);
+  background: #202c3b;
+  box-shadow: inset 0 0 0 1rpx rgba(242, 201, 76, .42);
 }
 
 .stage-resizer__mode-icon {
-  width: 25rpx;
-  height: 25rpx;
+  width: 34rpx;
+  height: 34rpx;
   display: block;
   opacity: .7;
   transition: opacity 120ms ease, transform 120ms ease;
+}
+
+@keyframes stage-resizer-modes-in {
+  from {
+    opacity: 0;
+    transform: scale(.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .stage-resizer__mode.is-hovered .stage-resizer__mode-icon {
