@@ -203,11 +203,23 @@ button:disabled {
   padding: 28px max(18px, env(safe-area-inset-right)) calc(56px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
 }
 
-.feedback-contact {
+.library-footer-actions {
   min-height: 52px;
-  margin: 24px auto 0;
-  display: grid;
-  justify-items: center;
+  margin: 14px auto 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.feedback-contact {
+  min-height: 40px;
+  margin: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .author-contact {
@@ -219,6 +231,8 @@ button:disabled {
   gap: 6px;
   color: var(--quiet);
   font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
   background: transparent;
   border-radius: 8px;
   transition: color 160ms ease, background-color 160ms ease;
@@ -231,11 +245,16 @@ button:disabled {
 }
 
 .feedback-notice {
-  padding-top: 2px;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  z-index: 11;
   color: var(--accent);
   font-size: 11px;
   line-height: 1.4;
   text-align: center;
+  white-space: nowrap;
+  transform: translateX(-50%);
 }
 
 .import-dropzone {
@@ -517,7 +536,8 @@ button:disabled {
 }
 
 .mini-program-entry {
-  margin-top: 14px;
+  min-height: 40px;
+  margin: 0;
   position: relative;
   z-index: 10;
   display: flex;
@@ -530,10 +550,11 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
+  white-space: nowrap;
   background: transparent;
   border-radius: var(--radius-control);
   transition: color 140ms ease, background-color 140ms ease, transform 280ms cubic-bezier(.34, 1.56, .64, 1);

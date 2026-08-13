@@ -369,8 +369,12 @@ if (
   || !/updateStageResizeHover/.test(previewLogic)
   || !/stageResizeLongPress/.test(previewLogic)
   || !/openStageResizeTapMenu\(\)[\s\S]{0,500}stageResizeTapOpen:\s*true/.test(previewLogic)
+  || !/STAGE_RESIZE_MENU_DISMISS_DELAY\s*=\s*3000/.test(previewLogic)
+  || !/stageResizeMenuDismissTimer\s*=\s*setTimeout/.test(previewLogic)
+  || !/clearTimeout\(this\.stageResizeMenuDismissTimer\)/.test(previewLogic)
   || !/stageResizeEnd\(event\)[\s\S]{0,500}openStageResizeTapMenu\(\)/.test(previewLogic)
   || !/selectStageResizeFit\(event\)[\s\S]{0,500}applyFit\(selectedFit, true\)/.test(previewLogic)
+  || !/toggleStageFit\(\)[\s\S]{0,160}this\.data\.fit === 'contain'[\s\S]{0,100}this\.applyFit\(nextFit, true\)/.test(previewLogic)
   || !/ratio < 1 \/ 3[\s\S]{0,80}'contain'/.test(previewLogic)
   || !/ratio > 2 \/ 3[\s\S]{0,80}'cover'/.test(previewLogic)
   || !/applyFit\(selectedFit, true\)/.test(previewLogic)
@@ -426,20 +430,23 @@ if (
 }
 
 if (
-  !/\.transport\s*\{[\s\S]{0,180}display:\s*grid;[\s\S]{0,100}grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/.test(previewStyle)
-  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*100%;/.test(previewStyle)
-  || !/\.speed-menu\s*\{[\s\S]{0,80}width:\s*100%;/.test(previewStyle)
-  || !/\.transport__file-button\s*\{[\s\S]{0,80}width:\s*100%;/.test(previewStyle)
-  || !/\.transport\s*\{[\s\S]{0,180}display:\s*grid;[\s\S]{0,100}grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/.test(embeddedPreviewStyle)
-  || !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*100%;/.test(embeddedPreviewStyle)
-  || !/\.speed-menu\s*\{[\s\S]{0,80}width:\s*100%;/.test(embeddedPreviewStyle)
-  || !/\.transport__file-button\s*\{[\s\S]{0,80}width:\s*100%;/.test(embeddedPreviewStyle)
+  ![previewStyle, embeddedPreviewStyle].every((style) => (
+    /\.transport\s*\{[\s\S]{0,180}display:\s*flex;/.test(style)
+    && /\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*0;[\s\S]{0,100}flex:\s*1 1 0;/.test(style)
+    && /\.speed-menu\s*\{[\s\S]{0,80}width:\s*0;[\s\S]{0,100}flex:\s*1 1 0;/.test(style)
+    && /\.transport__file-button\s*\{[\s\S]{0,80}width:\s*0;[\s\S]{0,100}flex:\s*1 1 0;/.test(style)
+    && !/\.transport__primary,\s*\.transport__secondary\s*\{[\s\S]{0,120}width:\s*100%;/.test(style)
+  ))
   || !/\.select\(["']\.transport["']\)/.test(previewLogic)
   || !/\.select\(["']\.speed-menu["']\)/.test(previewLogic)
   || ![previewMarkup, embeddedPreviewMarkup].every((markup) => (
     !/transport__left|transport__playback|transport__files/.test(markup)
     && (markup.match(/class="transport__(?:primary|secondary|file-button)/g) || []).length === 4
-    && (markup.match(/class="speed-menu"/g) || []).length === 1
+    && (markup.match(/class="speed-menu\b/g) || []).length === 1
+    && (markup.match(/role="button"/g) || []).length >= 5
+    && !/<button[^>]+class="(?:transport__|speed-menu)/.test(markup)
+    && /transport__slot--replay/.test(markup)
+    && /transport__slot--next/.test(markup)
     && !/speed-menu-shell/.test(markup)
   ))
   || !/\.transport\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(5/.test(h5StyleSource)
@@ -481,11 +488,11 @@ if (
   throw new Error('预览控件缺少即时放大反馈、150ms 快捷菜单或点空白关闭能力')
 }
 if (
-  !/toggleStageViewMode/.test(previewLogic)
-  || !/stageViewMode:\s*'auto'/.test(previewLogic)
-  || !/双击切换/.test(previewMarkup)
+  !/toggleStageFit/.test(previewLogic)
+  || !/双击切换完整或铺满/.test(previewMarkup)
+  || !/三秒后收起/.test(previewMarkup)
 ) {
-  throw new Error('画板手柄缺少自适应与参数全览双击切换')
+  throw new Error('画板手柄缺少单击三秒收起或双击完整/铺满切换')
 }
 if (!/count:\s*100/.test(homeLogic) || !/importSelectedFiles/.test(homeLogic)) {
   throw new Error('微信聊天文件多选导入未启用')

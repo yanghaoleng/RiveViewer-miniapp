@@ -7,7 +7,6 @@ import {
   ArrowsOutSimple,
   CaretDown,
   ChatCircleDots,
-  DeviceMobile,
   DownloadSimple,
   Gauge,
   Keyboard,
@@ -19,6 +18,7 @@ import {
   Trash,
   ShareNetwork,
   ArrowCounterClockwise,
+  WechatLogo,
   X,
 } from "@phosphor-icons/react";
 import type {
@@ -136,6 +136,7 @@ export function RiveViewerApp() {
   const stageResizeMovedRef = useRef(false);
   const stageResizeStartedOpenRef = useRef(false);
   const stageResizeLongPressTimerRef = useRef<number | null>(null);
+  const stageResizeMenuDismissTimerRef = useRef<number | null>(null);
   const lastStageTapRef = useRef(0);
   const speedRef = useRef(speed);
   const fitRef = useRef(fit);
@@ -234,6 +235,14 @@ export function RiveViewerApp() {
 
     return () => {
       cancelled = true;
+      if (stageResizeLongPressTimerRef.current !== null) {
+        window.clearTimeout(stageResizeLongPressTimerRef.current);
+        stageResizeLongPressTimerRef.current = null;
+      }
+      if (stageResizeMenuDismissTimerRef.current !== null) {
+        window.clearTimeout(stageResizeMenuDismissTimerRef.current);
+        stageResizeMenuDismissTimerRef.current = null;
+      }
       observer.disconnect();
       player.dispose();
       if (playerRef.current === player) playerRef.current = null;
@@ -454,6 +463,35 @@ export function RiveViewerApp() {
     }
   };
 
+  const clearStageResizeMenuDismiss = () => {
+    if (stageResizeMenuDismissTimerRef.current !== null) {
+      window.clearTimeout(stageResizeMenuDismissTimerRef.current);
+      stageResizeMenuDismissTimerRef.current = null;
+    }
+  };
+
+  const closeStageResizeTapMenu = () => {
+    clearStageResizeMenuDismiss();
+    lastStageTapRef.current = 0;
+    setStageResizeMenuActive(false);
+    setStageResizeTapOpen(false);
+    setStageResizePressActive(false);
+    setStageResizeHoverFit("");
+  };
+
+  const scheduleStageResizeMenuDismiss = () => {
+    clearStageResizeMenuDismiss();
+    stageResizeMenuDismissTimerRef.current = window.setTimeout(() => {
+      stageResizeMenuDismissTimerRef.current = null;
+      if (draggingStageRef.current) return;
+      lastStageTapRef.current = 0;
+      setStageResizeMenuActive(false);
+      setStageResizeTapOpen(false);
+      setStageResizePressActive(false);
+      setStageResizeHoverFit("");
+    }, 3000);
+  };
+
   const stageFitAtPointer = (clientX: number): "contain" | "cover" | "" => {
     const bounds = eventTargetStageResizerRef.current?.getBoundingClientRect();
     if (!bounds?.width) return "";
@@ -478,6 +516,7 @@ export function RiveViewerApp() {
     setStageResizePressActive(false);
     setStageResizeHoverFit("");
     clearStageResizeTimer();
+    clearStageResizeMenuDismiss();
     stageResizeLongPressTimerRef.current = window.setTimeout(() => {
       setStageResizePressActive(true);
     }, 150);
@@ -509,28 +548,26 @@ export function RiveViewerApp() {
     setStageResizeHoverFit("");
     if ((stageResizeMovedRef.current || selectedFit) && selectedFit) {
       selectFit(selectedFit);
-      setStageResizeMenuActive(false);
-      setStageResizeTapOpen(false);
+      closeStageResizeTapMenu();
       return;
     }
     if (stageResizeMovedRef.current) {
-      setStageResizeMenuActive(false);
-      setStageResizeTapOpen(false);
+      closeStageResizeTapMenu();
       return;
     }
     setStageResizeMenuActive(true);
     setStageResizeTapOpen(true);
+    scheduleStageResizeMenuDismiss();
   };
 
   const selectFit = (nextFit: "contain" | "cover") => {
+    clearStageResizeMenuDismiss();
     setFit(nextFit);
     playerRef.current?.setFit(nextFit);
   };
 
-  const toggleStageHeight = () => {
-    const compact = Math.max(270, window.innerHeight * 0.35);
-    const expanded = Math.max(400, window.innerHeight * 0.58);
-    setStageHeight(stageHeight > (compact + expanded) / 2 ? compact : expanded);
+  const toggleStageFit = () => {
+    selectFit(fitRef.current === "contain" ? "cover" : "contain");
   };
 
   const handleStageTap = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -540,17 +577,15 @@ export function RiveViewerApp() {
       return;
     }
     if (event.detail === 0) {
-      toggleStageHeight();
-      setStageResizeMenuActive(false);
-      setStageResizeTapOpen(false);
+      setStageResizeMenuActive(true);
+      setStageResizeTapOpen(true);
+      scheduleStageResizeMenuDismiss();
       return;
     }
     const now = performance.now();
-    if (now - lastStageTapRef.current <= 320) {
-      lastStageTapRef.current = 0;
-      toggleStageHeight();
-      setStageResizeMenuActive(false);
-      setStageResizeTapOpen(false);
+    if (lastStageTapRef.current > 0 && now - lastStageTapRef.current <= 320) {
+      closeStageResizeTapMenu();
+      toggleStageFit();
       return;
     }
     lastStageTapRef.current = now;
@@ -639,8 +674,10 @@ export function RiveViewerApp() {
               onRemove={removeFile}
               onToggleMenu={(id) => setExpandedFileId(expandedFileId === id ? "" : id)}
             />
-            <MiniProgramEntry />
-            <FeedbackContact />
+            <div className="library-footer-actions">
+              <MiniProgramEntry />
+              <FeedbackContact />
+            </div>
           </section>
         </div>
 
@@ -715,7 +752,7 @@ export function RiveViewerApp() {
           onClick={handleStageTap}
           role="slider"
           tabIndex={0}
-          aria-label="单击展开完整或铺满，上下拖动画布高度，按住后左右滑动选择，双击切换高度"
+          aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画布高度，按住后左右滑动选择，双击切换完整或铺满"
           aria-valuemin={250}
           aria-valuemax={Math.round(Math.max(320, typeof window === "undefined" ? 620 : window.innerHeight * 0.66))}
           aria-valuenow={Math.round(stageHeight)}
@@ -726,14 +763,14 @@ export function RiveViewerApp() {
               <button
                 className={`stage-resizer-mode mode-contain ${fit === "contain" ? "is-current" : ""} ${stageResizeHoverFit === "contain" ? "is-hovered" : ""}`}
                 onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => { event.stopPropagation(); selectFit("contain"); setStageResizeMenuActive(false); setStageResizeTapOpen(false); }}
+                onClick={(event) => { event.stopPropagation(); selectFit("contain"); closeStageResizeTapMenu(); }}
               >
                 <ArrowsInSimple size={18} weight="bold" /><span>完整</span>
               </button>
               <button
                 className={`stage-resizer-mode mode-cover ${fit === "cover" ? "is-current" : ""} ${stageResizeHoverFit === "cover" ? "is-hovered" : ""}`}
                 onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => { event.stopPropagation(); selectFit("cover"); setStageResizeMenuActive(false); setStageResizeTapOpen(false); }}
+                onClick={(event) => { event.stopPropagation(); selectFit("cover"); closeStageResizeTapMenu(); }}
               >
                 <ArrowsOutSimple size={18} weight="bold" /><span>铺满</span>
               </button>
@@ -956,10 +993,11 @@ function MiniProgramEntry() {
         className="mini-program-trigger press-feedback"
         aria-expanded={open}
         aria-controls="mini-program-card"
+        aria-label="查看 Rive 预览台小程序码"
         onClick={() => setOpen((current) => !current)}
       >
-        <DeviceMobile size={17} weight="bold" />
-        <span>使用小程序版</span>
+        <WechatLogo size={16} weight="bold" />
+        <span>小程序</span>
       </button>
       <div id="mini-program-card" className="mini-program-popover" role="group" aria-label="Rive 预览台小程序码">
         <strong>Rive 预览台</strong>

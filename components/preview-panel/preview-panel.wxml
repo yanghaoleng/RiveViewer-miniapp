@@ -74,7 +74,7 @@
     catchlongpress="stageResizeLongPress"
     bindtap="stageResizerTap"
     role="slider"
-    aria-label="单击展开完整或铺满，上下拖动画板高度，按住后左右滑动选择，双击切换参数全览"
+    aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画板高度，按住后左右滑动选择，双击切换完整或铺满"
     aria-valuemin="{{stageMinHeight}}"
     aria-valuemax="{{stageMaxHeight}}"
     aria-valuenow="{{stageHeight}}"
@@ -113,24 +113,25 @@
   </view>
 
   <view class="transport">
-    <button class="transport__primary" bindtap="resetAnimation" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" aria-label="重播">
+    <view class="transport__primary transport__slot--replay" bindtap="resetAnimation" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="重播">
       <image class="transport__icon" src="/assets/icons/restore.svg"></image>
-    </button>
-    <button
-      class="transport__secondary"
+    </view>
+    <view
+      class="transport__secondary transport__slot--play"
       bindtap="togglePlay"
       hover-class="is-pressed"
       hover-start-time="0"
       hover-stay-time="70"
+      role="button"
       aria-label="{{isPlaying ? '暂停' : '播放'}}"
     >
       <image
         class="transport__icon"
         src="{{isPlaying ? '/assets/icons/player-pause.svg' : '/assets/icons/player-play.svg'}}"
       ></image>
-    </button>
-    <button
-      class="speed-menu"
+    </view>
+    <view
+      class="speed-menu transport__slot--speed"
       data-speed-control="true"
       bindtouchstart="speedTouchStart"
       bindtouchmove="speedTouchMove"
@@ -139,14 +140,15 @@
       hover-class="is-pressed"
       hover-start-time="0"
       hover-stay-time="70"
+      role="button"
       aria-label="当前播放速度 {{speedLabel}}，轻点切换，按住选择"
     >
       <image class="speed-menu__icon" data-speed-control="true" src="/assets/icons/gauge.svg"></image>
       <text class="speed-menu__value" data-speed-control="true">{{speedLabel}}</text>
-    </button>
-    <button
+    </view>
+    <view
       wx:if="{{showFileNavigation}}"
-      class="transport__file-button {{!hasPreviousFile ? 'is-disabled' : ''}}"
+      class="transport__file-button transport__slot--previous {{!hasPreviousFile ? 'is-disabled' : ''}}"
       data-file-navigation="true"
       data-offset="-1"
       bindtouchstart="fileNavigationTouchStart"
@@ -156,14 +158,15 @@
       hover-class="is-pressed"
       hover-start-time="0"
       hover-stay-time="70"
+      role="button"
       aria-disabled="{{!hasPreviousFile}}"
       aria-label="上一个文件，按住查看文件列表"
     >
       <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-left.svg"></image>
-    </button>
-    <button
+    </view>
+    <view
       wx:if="{{showFileNavigation}}"
-      class="transport__file-button {{!hasNextFile ? 'is-disabled' : ''}}"
+      class="transport__file-button transport__slot--next {{!hasNextFile ? 'is-disabled' : ''}}"
       data-file-navigation="true"
       data-offset="1"
       bindtouchstart="fileNavigationTouchStart"
@@ -173,11 +176,12 @@
       hover-class="is-pressed"
       hover-start-time="0"
       hover-stay-time="70"
+      role="button"
       aria-disabled="{{!hasNextFile}}"
       aria-label="下一个文件，按住查看文件列表"
     >
       <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-right.svg"></image>
-    </button>
+    </view>
   </view>
 
   <scroll-view

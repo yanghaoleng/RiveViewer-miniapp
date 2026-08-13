@@ -44,6 +44,7 @@ const QUALITY_OPTIONS = [
   { key: 'balanced', label: '平衡' },
   { key: 'high', label: '高清' }
 ]
+const STAGE_RESIZE_MENU_DISMISS_DELAY = 3000
 
 function formatTimelineTime(seconds) {
   const value = Math.max(0, Number(seconds) || 0)
@@ -246,6 +247,7 @@ const previewDefinition = {
     clearTimeout(this.canvasResizeTimer)
     clearTimeout(this.coverCaptureTimer)
     clearTimeout(this.resizeGuideTimer)
+    clearTimeout(this.stageResizeMenuDismissTimer)
     clearTimeout(this.speedLongPressTimer)
     clearTimeout(this.speedMenuDismissTimer)
     clearTimeout(this.speedMenuCloseTimer)
@@ -729,6 +731,7 @@ const previewDefinition = {
   stageResizeStart(event) {
     const touch = event.touches?.[0] || event.changedTouches?.[0]
     if (!touch) return
+    this.clearStageResizeMenuDismiss()
     this.stageResizeStartY = touch.clientY === undefined ? touch.y : touch.clientY
     this.stageResizeStartX = touch.clientX === undefined ? touch.x : touch.clientX
     this.stageResizeStartHeight = this.data.stageHeight
@@ -758,6 +761,7 @@ const previewDefinition = {
 
   stageResizeLongPress() {
     if (this.stageResizeStartY === undefined || this.data.stageResizePressActive) return
+    this.clearStageResizeMenuDismiss()
     this.setData({
       stageResizeMenuActive: true,
       stageResizeTapOpen: false,
@@ -827,6 +831,7 @@ const previewDefinition = {
 
   finishStageResize(selectedFit = '') {
     if (this.stageResizeStartY === undefined) return
+    this.clearStageResizeMenuDismiss()
     const resized = this.stageResizeMoved
     const wasDragging = this.data.stageDragging
     this.stageResizeStartY = undefined
@@ -854,6 +859,7 @@ const previewDefinition = {
   },
 
   openStageResizeTapMenu() {
+    this.clearStageResizeMenuDismiss()
     this.stageResizeStartY = undefined
     this.stageResizeStartX = undefined
     this.stageResizeFromHandle = false
@@ -866,7 +872,47 @@ const previewDefinition = {
       stageResizeTapOpen: true,
       stageResizePressActive: false,
       stageResizeHoverFit: ''
-    }, () => this.measureStageResizeSelector())
+    }, () => {
+      this.measureStageResizeSelector()
+      this.scheduleStageResizeMenuDismiss()
+    })
+  },
+
+  clearStageResizeMenuDismiss() {
+    clearTimeout(this.stageResizeMenuDismissTimer)
+    this.stageResizeMenuDismissTimer = 0
+  },
+
+  scheduleStageResizeMenuDismiss() {
+    this.clearStageResizeMenuDismiss()
+    this.stageResizeMenuDismissTimer = setTimeout(() => {
+      this.stageResizeMenuDismissTimer = 0
+      if (
+        !this.data.stageResizeTapOpen
+        || this.data.stageDragging
+        || this.data.stageResizePressActive
+      ) return
+      this.lastStageTapAt = 0
+      this.ignoreNextStageTap = false
+      this.setData({
+        stageResizeMenuActive: false,
+        stageResizeTapOpen: false,
+        stageResizePressActive: false,
+        stageResizeHoverFit: ''
+      })
+    }, STAGE_RESIZE_MENU_DISMISS_DELAY)
+  },
+
+  closeStageResizeTapMenu(callback) {
+    this.clearStageResizeMenuDismiss()
+    this.lastStageTapAt = 0
+    this.ignoreNextStageTap = false
+    this.setData({
+      stageResizeMenuActive: false,
+      stageResizeTapOpen: false,
+      stageResizePressActive: false,
+      stageResizeHoverFit: ''
+    }, callback)
   },
 
   stageResizeEnd(event) {
@@ -916,28 +962,14 @@ const previewDefinition = {
     if (this.ignoreNextStageTap) {
       this.ignoreNextStageTap = false
       if (this.lastStageTapAt && now - this.lastStageTapAt <= 320) {
-        this.lastStageTapAt = 0
-        this.setData({
-          stageResizeMenuActive: false,
-          stageResizeTapOpen: false,
-          stageResizePressActive: false,
-          stageResizeHoverFit: ''
-        })
-        this.toggleStageViewMode()
+        this.closeStageResizeTapMenu(() => this.toggleStageFit())
       } else {
         this.lastStageTapAt = now
       }
       return
     }
     if (this.lastStageTapAt && now - this.lastStageTapAt <= 320) {
-      this.lastStageTapAt = 0
-      this.setData({
-        stageResizeMenuActive: false,
-        stageResizeTapOpen: false,
-        stageResizePressActive: false,
-        stageResizeHoverFit: ''
-      })
-      this.toggleStageViewMode()
+      this.closeStageResizeTapMenu(() => this.toggleStageFit())
       return
     }
     this.lastStageTapAt = now
@@ -946,12 +978,16 @@ const previewDefinition = {
       stageResizeTapOpen: true,
       stageResizePressActive: false,
       stageResizeHoverFit: ''
-    }, () => this.measureStageResizeSelector())
+    }, () => {
+      this.measureStageResizeSelector()
+      this.scheduleStageResizeMenuDismiss()
+    })
   },
 
   selectStageResizeFit(event) {
     const selectedFit = event.currentTarget.dataset.fit
     if (!['contain', 'cover'].includes(selectedFit)) return
+    this.clearStageResizeMenuDismiss()
     this.lastStageTapAt = 0
     this.ignoreNextStageTap = false
     this.setData({
@@ -969,6 +1005,11 @@ const previewDefinition = {
   toggleStageViewMode() {
     const nextMode = this.data.stageViewMode === 'auto' ? 'compact' : 'auto'
     this.setStageViewMode(nextMode)
+  },
+
+  toggleStageFit() {
+    const nextFit = this.data.fit === 'contain' ? 'cover' : 'contain'
+    this.applyFit(nextFit, true)
   },
 
   calculateCompactStageSize(width, height) {

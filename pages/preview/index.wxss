@@ -513,8 +513,7 @@ page {
   min-height: 84rpx;
   margin-top: 0;
   padding: 10rpx;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   align-items: center;
   gap: 8rpx;
   background: #121923;
@@ -524,9 +523,9 @@ page {
 
 .transport__primary,
 .transport__secondary {
-  width: 100%;
+  width: 0;
   min-width: 0;
-  max-width: none;
+  flex: 1 1 0;
   height: 60rpx;
   margin: 0;
   padding: 0;
@@ -567,14 +566,13 @@ page {
 }
 
 .speed-menu {
-  width: 100%;
+  width: 0;
   min-width: 0;
-  max-width: none;
+  flex: 1 1 0;
   height: 60rpx;
   margin: 0;
   padding: 0;
   position: relative;
-  z-index: 12;
   overflow: hidden;
   display: flex;
   gap: 8rpx;
@@ -716,9 +714,9 @@ page {
 }
 
 .transport__file-button {
-  width: 100%;
+  width: 0;
   min-width: 0;
-  max-width: none;
+  flex: 1 1 0;
   height: 60rpx;
   margin: 0;
   padding: 0;
@@ -729,6 +727,12 @@ page {
   background: #1c2633;
   border-radius: 10rpx;
 }
+
+.transport__slot--replay { order: 1; }
+.transport__slot--play { order: 2; }
+.transport__slot--speed { order: 3; }
+.transport__slot--previous { order: 4; }
+.transport__slot--next { order: 5; }
 
 .speed-menu__icon {
   width: 34rpx;
