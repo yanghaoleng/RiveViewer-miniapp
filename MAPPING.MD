@@ -22,7 +22,7 @@
 | 画布 Loading | Loading overlay | `.canvas-state--loading`、`loadingProgress`、`loadingPhase` |
 | 详情首帧封面 | First-frame cover capture | `scheduleCoverCapture`、`captureCover`、`saveCover` |
 | 画布拖动手柄 | Stage resize handle | `.stage-resizer`、`stageResizeStart/Move/End/Cancel`、`catchtouchstart/move/end/cancel` |
-| 手柄缩放快捷选择 | Resize-handle fit gesture | `stageResizeMenuActive`、`stageResizeHoverFit`、`stageResizeLongPress`、`getStageResizeHoverFit`、`finishStageResize`、`.stage-resizer__modes` |
+| 手柄原位缩放快捷行 | Inline resize-handle fit row | `stageResizeMenuActive`、`stageResizeHoverFit`、`stageResizeLongPress`、`getStageResizeHoverFit`、`finishStageResize`、`.stage-resizer__modes`、`.stage-resizer__mode` |
 | 双击切换 | Stage view mode toggle | `stageResizerTap`、`toggleStageViewMode`、`stageViewMode` |
 | 重置按钮 | Reset playback action | `.transport__primary`、`resetAnimation` |
 | 播放 / 暂停 | Playback toggle | `.transport__secondary`、`togglePlay` |

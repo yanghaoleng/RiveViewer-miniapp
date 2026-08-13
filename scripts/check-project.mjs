@@ -302,7 +302,9 @@ if (
   || !/ratio > 2 \/ 3[\s\S]{0,80}'cover'/.test(previewLogic)
   || !/applyFit\(selectedFit, true\)/.test(previewLogic)
   || !/grid-template-columns:\s*repeat\(3/.test(embeddedPreviewStyle)
-  || /is-selecting \.stage-resizer__grip\s*\{[\s\S]{0,100}(?:left|width):/.test(embeddedPreviewStyle)
+  || !/is-selecting \.stage-resizer__grip\s*\{[\s\S]{0,100}width:\s*calc\(33\.333% - 16rpx\)/.test(embeddedPreviewStyle)
+  || !/stage-resizer__mode\s*\{[\s\S]{0,220}flex-direction:\s*row/.test(embeddedPreviewStyle)
+  || /stage-resizer__mode\.is-hovered\s*\{[\s\S]{0,120}(?:box-shadow|border)/.test(embeddedPreviewStyle)
 ) {
   throw new Error('缩放手柄缺少按住展开、横向悬停或松手切换完整/铺满')
 }

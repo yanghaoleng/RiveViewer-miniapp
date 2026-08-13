@@ -373,19 +373,11 @@ button::after {
   border: .5rpx solid transparent;
   border-radius: 6rpx;
   transition:
-    height 180ms cubic-bezier(.22, 1, .36, 1),
-    top 180ms cubic-bezier(.22, 1, .36, 1),
-    background-color 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease;
+    background-color 160ms ease;
 }
 
 .stage-resizer.is-selecting .stage-resizer__surface {
-  height: 52rpx;
-  top: -14rpx;
-  background: #101721;
-  border-color: #253142;
-  box-shadow: 0 5rpx 14rpx rgba(0, 4, 10, .28);
+  background: transparent;
 }
 
 .stage-resizer__grip {
@@ -400,6 +392,7 @@ button::after {
 }
 
 .stage-resizer.is-selecting .stage-resizer__grip {
+  width: calc(33.333% - 16rpx);
   color: #f2c94c;
 }
 
@@ -413,12 +406,12 @@ button::after {
   position: absolute;
   left: 6rpx;
   right: 6rpx;
-  top: 4rpx;
-  bottom: 4rpx;
+  top: 1rpx;
+  bottom: 1rpx;
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6rpx;
+  gap: 8rpx;
   pointer-events: none;
   animation: stage-resizer-modes-in 160ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -427,10 +420,10 @@ button::after {
   min-width: 0;
   box-sizing: border-box;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 1.5rpx;
+  gap: 4rpx;
   color: #c3ccd8;
   font-size: 13rpx;
   font-weight: 660;
@@ -440,19 +433,18 @@ button::after {
   border-radius: 5rpx;
   transition:
     color 120ms ease,
-    background-color 120ms ease,
-    box-shadow 120ms ease;
+    background-color 120ms ease;
 }
 
 .stage-resizer__mode--contain {
   grid-column: 1;
-  align-items: flex-start;
+  justify-content: flex-start;
   padding-left: 10rpx;
 }
 
 .stage-resizer__mode--cover {
   grid-column: 3;
-  align-items: flex-end;
+  justify-content: flex-end;
   padding-right: 10rpx;
 }
 
@@ -463,7 +455,6 @@ button::after {
 .stage-resizer__mode.is-hovered {
   color: #f2f0e8;
   background: #202c3b;
-  box-shadow: inset 0 0 0 .5rpx rgba(242, 201, 76, .42);
 }
 
 .stage-resizer__mode-icon {
@@ -477,11 +468,9 @@ button::after {
 @keyframes stage-resizer-modes-in {
   from {
     opacity: 0;
-    transform: scale(.96);
   }
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
