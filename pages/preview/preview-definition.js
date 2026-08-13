@@ -130,6 +130,8 @@ const previewDefinition = {
     stageMaxHeight: 980,
     stageDragging: false,
     stageResizeMenuActive: false,
+    stageResizeTapOpen: false,
+    stageResizePressActive: false,
     stageResizeHoverFit: '',
     stageViewMode: 'auto',
     resizeAdjustmentCount: 0,
@@ -732,15 +734,22 @@ const previewDefinition = {
     this.stageResizeStartHeight = this.data.stageHeight
     this.stageResizeMoved = false
     this.stageResizeFromHandle = true
+    this.stageResizeTapWasOpen = this.data.stageResizeTapOpen
     this.stageResizeSelectorRect = null
     this.setData({
       stageResizeMenuActive: true,
+      stageResizeTapOpen: false,
+      stageResizePressActive: false,
       stageResizeHoverFit: ''
     })
+    this.measureStageResizeSelector()
+  },
+
+  measureStageResizeSelector() {
     this.createPreviewSelectorQuery()
       .select('.stage-resizer')
       .boundingClientRect((rect) => {
-        if (this.stageResizeStartY !== undefined && rect?.width) {
+        if ((this.stageResizeStartY !== undefined || this.data.stageResizeTapOpen) && rect?.width) {
           this.stageResizeSelectorRect = rect
         }
       })
@@ -748,9 +757,11 @@ const previewDefinition = {
   },
 
   stageResizeLongPress() {
-    if (this.stageResizeStartY === undefined || this.data.stageResizeMenuActive) return
+    if (this.stageResizeStartY === undefined || this.data.stageResizePressActive) return
     this.setData({
       stageResizeMenuActive: true,
+      stageResizeTapOpen: false,
+      stageResizePressActive: true,
       stageResizeHoverFit: ''
     })
   },
@@ -783,6 +794,12 @@ const previewDefinition = {
     const windowWidth = Math.max(1, this.windowInfo?.windowWidth || 375)
     const deltaRpx = (clientY - this.stageResizeStartY) * 750 / windowWidth
     const deltaXRpx = (clientX - this.stageResizeStartX) * 750 / windowWidth
+    if (Math.abs(deltaRpx) > 6 || Math.abs(deltaXRpx) > 6) {
+      this.stageResizeTapWasOpen = false
+      if (!this.data.stageResizePressActive) {
+        this.setData({ stageResizePressActive: true })
+      }
+    }
     if (!this.stageResizeMoved) {
       if (Math.abs(deltaRpx) <= 6 || Math.abs(deltaRpx) < Math.abs(deltaXRpx)) return
       this.stageResizeMoved = true
@@ -818,10 +835,13 @@ const previewDefinition = {
       this.stageResizeMoved || Boolean(selectedFit)
     )
     this.stageResizeFromHandle = false
+    this.stageResizeTapWasOpen = false
     this.stageResizeSelectorRect = null
     this.setData({
       stageDragging: false,
       stageResizeMenuActive: false,
+      stageResizeTapOpen: false,
+      stageResizePressActive: false,
       stageResizeHoverFit: ''
     }, () => {
       if (selectedFit) {
@@ -833,10 +853,33 @@ const previewDefinition = {
     if (resized) this.recordResizeAdjustment()
   },
 
+  openStageResizeTapMenu() {
+    this.stageResizeStartY = undefined
+    this.stageResizeStartX = undefined
+    this.stageResizeFromHandle = false
+    this.stageResizeTapWasOpen = false
+    this.stageResizeSelectorRect = null
+    this.ignoreNextStageTap = true
+    this.setData({
+      stageDragging: false,
+      stageResizeMenuActive: true,
+      stageResizeTapOpen: true,
+      stageResizePressActive: false,
+      stageResizeHoverFit: ''
+    }, () => this.measureStageResizeSelector())
+  },
+
   stageResizeEnd(event) {
     const touch = event.changedTouches?.[0]
     const clientX = touch?.clientX === undefined ? touch?.x : touch.clientX
-    this.finishStageResize(this.getStageResizeHoverFit(clientX))
+    const selectedFit = this.stageResizeTapWasOpen
+      ? ''
+      : this.getStageResizeHoverFit(clientX)
+    if (!this.stageResizeMoved && !selectedFit && !this.stageResizeTapWasOpen) {
+      this.openStageResizeTapMenu()
+      return
+    }
+    this.finishStageResize(selectedFit)
   },
 
   stageResizeCancel() {
@@ -869,17 +912,54 @@ const previewDefinition = {
   },
 
   stageResizerTap() {
+    const now = Date.now()
     if (this.ignoreNextStageTap) {
       this.ignoreNextStageTap = false
+      if (this.lastStageTapAt && now - this.lastStageTapAt <= 320) {
+        this.lastStageTapAt = 0
+        this.setData({
+          stageResizeMenuActive: false,
+          stageResizeTapOpen: false,
+          stageResizePressActive: false,
+          stageResizeHoverFit: ''
+        })
+        this.toggleStageViewMode()
+      } else {
+        this.lastStageTapAt = now
+      }
       return
     }
-    const now = Date.now()
     if (this.lastStageTapAt && now - this.lastStageTapAt <= 320) {
       this.lastStageTapAt = 0
+      this.setData({
+        stageResizeMenuActive: false,
+        stageResizeTapOpen: false,
+        stageResizePressActive: false,
+        stageResizeHoverFit: ''
+      })
       this.toggleStageViewMode()
       return
     }
     this.lastStageTapAt = now
+    this.setData({
+      stageResizeMenuActive: true,
+      stageResizeTapOpen: true,
+      stageResizePressActive: false,
+      stageResizeHoverFit: ''
+    }, () => this.measureStageResizeSelector())
+  },
+
+  selectStageResizeFit(event) {
+    const selectedFit = event.currentTarget.dataset.fit
+    if (!['contain', 'cover'].includes(selectedFit)) return
+    this.lastStageTapAt = 0
+    this.ignoreNextStageTap = false
+    this.setData({
+      stageResizeMenuActive: false,
+      stageResizeTapOpen: false,
+      stageResizePressActive: false,
+      stageResizeHoverFit: ''
+    }, () => this.applyFit(selectedFit, true))
   },
 
   resetStageHeight() {

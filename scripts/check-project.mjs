@@ -275,6 +275,24 @@ if (
   throw new Error('首页网页版底部提示、复制入口或旧 web-view 清理不完整')
 }
 
+if (
+  /saveToDevice|saveTargetLabel|保存到电脑|保存到手机/.test(homeLogic + homeMarkup)
+  || !/catchtap="shareFile"[\s\S]{0,160}>发送文件<\/button>/.test(homeMarkup)
+  || !/catchtap="deleteFile"[\s\S]{0,180}>删除文件<\/button>/.test(homeMarkup)
+  || (homeMarkup.match(/class="file-menu__danger"/g) || []).length !== 1
+) {
+  throw new Error('首页文件操作菜单必须只保留发送文件和删除文件')
+}
+if (
+  !/class="import-dropzone"[\s\S]{0,160}hover-class="is-pressed"/.test(homeMarkup)
+  || !/class="file-menu-toggle[\s\S]{0,240}hover-class="is-pressed"/.test(homeMarkup)
+  || !/class="web-link-footer__copy"[\s\S]{0,180}hover-class="is-pressed"/.test(homeMarkup)
+  || !/class="author-contact"[\s\S]{0,180}hover-class="is-pressed"/.test(homeMarkup)
+  || !/hover-class="file-row--pressed"[\s\S]{0,80}hover-start-time="0"/.test(homeMarkup)
+) {
+  throw new Error('首页主要点击入口缺少即时放大反馈')
+}
+
 if (/pageResize(Start|Move|End)/.test(previewMarkup + previewLogic)) {
   throw new Error('画布缩放仍绑定在页面手势上')
 }
@@ -286,8 +304,11 @@ if (
     /stageResizeMenuActive \? 'is-selecting'/.test(markup)
     && /stageResizeHoverFit === 'contain'/.test(markup)
     && /stageResizeHoverFit === 'cover'/.test(markup)
+    && /stageResizeTapOpen \? 'is-tap-open'/.test(markup)
+    && /stageResizePressActive \? 'is-press-active'/.test(markup)
     && /stage-resizer__mode--contain/.test(markup)
     && /stage-resizer__mode--cover/.test(markup)
+    && /catchtap="selectStageResizeFit"/.test(markup)
     && /catchtouchstart="stageResizeStart"/.test(markup)
     && /catchlongpress="stageResizeLongPress"/.test(markup)
     && /wx:if="\{\{stageResizeMenuActive\}\}" class="stage-resizer__modes"/.test(markup)
@@ -298,11 +319,16 @@ if (
   || !/getStageResizeHoverFit/.test(previewLogic)
   || !/updateStageResizeHover/.test(previewLogic)
   || !/stageResizeLongPress/.test(previewLogic)
+  || !/openStageResizeTapMenu\(\)[\s\S]{0,500}stageResizeTapOpen:\s*true/.test(previewLogic)
+  || !/stageResizeEnd\(event\)[\s\S]{0,500}openStageResizeTapMenu\(\)/.test(previewLogic)
+  || !/selectStageResizeFit\(event\)[\s\S]{0,500}applyFit\(selectedFit, true\)/.test(previewLogic)
   || !/ratio < 1 \/ 3[\s\S]{0,80}'contain'/.test(previewLogic)
   || !/ratio > 2 \/ 3[\s\S]{0,80}'cover'/.test(previewLogic)
   || !/applyFit\(selectedFit, true\)/.test(previewLogic)
   || !/grid-template-columns:\s*repeat\(3/.test(embeddedPreviewStyle)
   || !/is-selecting \.stage-resizer__grip\s*\{[\s\S]{0,100}width:\s*calc\(33\.333% - 16rpx\)/.test(embeddedPreviewStyle)
+  || !/is-tap-open \.stage-resizer__grip\s*\{[\s\S]{0,80}color:\s*#687588/.test(embeddedPreviewStyle)
+  || !/is-press-active \.stage-resizer__grip\s*\{[\s\S]{0,80}color:\s*#f2c94c/.test(embeddedPreviewStyle)
   || !/stage-resizer__mode\s*\{[\s\S]{0,220}flex-direction:\s*row/.test(embeddedPreviewStyle)
   || /stage-resizer__mode\.is-hovered\s*\{[\s\S]{0,120}(?:box-shadow|border)/.test(embeddedPreviewStyle)
   || !/stage-resizer\.is-selecting\s*\{\s*height:\s*40rpx/.test(embeddedPreviewStyle)
@@ -314,7 +340,7 @@ if (
   || !/arrows-in-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
   || !/arrows-out-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
 ) {
-  throw new Error('缩放手柄缺少按住展开、横向悬停或松手切换完整/铺满')
+  throw new Error('缩放手柄缺少单击展开、按住高亮、横向悬停或完整/铺满切换')
 }
 
 if (

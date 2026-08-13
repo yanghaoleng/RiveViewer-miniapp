@@ -402,7 +402,14 @@ button::after {
 
 .stage-resizer.is-selecting .stage-resizer__grip {
   width: calc(33.333% - 16rpx);
+}
+
+.stage-resizer.is-press-active .stage-resizer__grip {
   color: #f2c94c;
+}
+
+.stage-resizer.is-tap-open .stage-resizer__grip {
+  color: #687588;
 }
 
 .stage-resizer__grip view {

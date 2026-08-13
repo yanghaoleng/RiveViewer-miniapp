@@ -7,8 +7,6 @@ const {
 const {
   describeFileActionError,
   isCancelError,
-  isDesktopWechat,
-  savePreparedFileToDisk,
   sharePreparedFile
 } = require('../../utils/file-actions')
 const {
@@ -33,8 +31,7 @@ Page({
     userFileCount: 0,
     expandedFileId: '',
     desktopSplitEnabled: false,
-    desktopPreviewFileId: '',
-    saveTargetLabel: isDesktopWechat() ? '保存到电脑' : '保存到手机'
+    desktopPreviewFileId: ''
   },
 
   onLoad(options = {}) {
@@ -360,27 +357,6 @@ Page({
       content: describeFileActionError(error, '请稍后重试'),
       showCancel: false,
       confirmText: '知道了'
-    })
-  },
-
-  saveToDevice(event) {
-    const id = event.currentTarget.dataset.id
-    this.setData({ expandedFileId: '' })
-    if (isDesktopWechat()) {
-      savePreparedFileToDisk(id, {
-        success: () => wx.showToast({ title: '已保存到电脑', icon: 'success' }),
-        fail: (error) => this.showFileActionError('保存失败', error)
-      })
-      return
-    }
-    wx.showModal({
-      title: '保存到手机',
-      content: '微信暂不允许小程序把 .riv 直接写入系统文件管理器。请发送到“文件传输助手”，再从聊天文件中保存或用其他应用打开。',
-      confirmText: '去发送',
-      cancelText: '取消',
-      success: ({ confirm }) => {
-        if (confirm) this.shareFileById(id)
-      }
     })
   },
 

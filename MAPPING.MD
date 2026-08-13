@@ -15,14 +15,15 @@
 | 文件卡 / 文件行 | File row | `.file-row`、`.file-open` |
 | 倾斜文件图标 | File cover | `.file-cover`、`.file-cover__fallback` |
 | 文件右侧箭头 | File menu toggle | `.file-menu-toggle`、`toggleFileMenu` |
-| 三项操作菜单 | File action menu | `.file-menu`、`saveToDevice`、`shareFile`、`deleteFile`；示例与用户文件都可删除 |
+| 两项操作菜单 | File action menu | `.file-menu`、`shareFile`、`deleteFile`；只保留发送与删除，示例和用户文件都可删除 |
+| 首页按下回弹 | Home press spring feedback | `hover-class="is-pressed"`、`file-row--pressed`、`hover-start-time="0"`；小按钮 `scale(1.25)`，大面积入口 `scale(1.025)` |
 | 已删除示例 | Hidden built-in tombstone | `HIDDEN_BUILTIN_STORAGE_KEY`、`readHiddenBuiltinIds`、`writeHiddenBuiltinIds`、`visibleBuiltins` |
 | 联系作者反馈 | Author contact modal | `.author-contact`、`font-size: 24rpx`、`showAuthorWechat`；仅展示微信号，不访问剪贴板 |
 | 预览画布 | Rive Canvas stage | `.canvas-card`、`#riveCanvas`、`NativeRivePlayer` |
 | 画布 Loading | Loading overlay | `.canvas-state--loading`、`loadingProgress`、`loadingPhase` |
 | 详情首帧封面 | First-frame cover capture | `scheduleCoverCapture`、`captureCover`、`saveCover` |
 | 画布拖动手柄 | Stage resize handle | `.stage-resizer`、`stageResizeStart/Move/End/Cancel`、`catchtouchstart/move/end/cancel` |
-| 手柄原位缩放快捷行 | Inline resize-handle fit row | `stageResizeMenuActive`、`stageResizeHoverFit`、`stageResizeLongPress`、`getStageResizeHoverFit`、`finishStageResize`、`.stage-resizer.is-selecting`、`.stage-resizer__modes`、`stage-resizer-contain-in`、`stage-resizer-cover-in` |
+| 手柄原位缩放快捷行 | Inline resize-handle fit row | `stageResizeMenuActive`、`stageResizeTapOpen`、`stageResizePressActive`、`selectStageResizeFit`、`stageResizeHoverFit`、`stageResizeLongPress`、`.stage-resizer.is-selecting`、`.stage-resizer.is-tap-open`、`.stage-resizer.is-press-active` |
 | 预览按钮按下回弹 | Preview press spring feedback | `hover-class="is-pressed"`、`hover-start-time="0"`、`scale(1.25)`、`cubic-bezier(.34, 1.56, .64, 1)` |
 | 快速菜单空白取消层 | Native menu backdrop dismiss | `.native-menu-backdrop`、`dismissNativeMenus`、`showSpeedMenu`、`showFileMenu` |
 | 文件菜单按住滑选 | File menu press-drag selection | `fileNavigationTouchMove`、`fileMenuOptionRects`、`fileHoverId`、`fileNavigationGestureMovedIntoMenu`、`.file-popover__option.is-hovered` |

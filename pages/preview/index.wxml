@@ -65,7 +65,7 @@
   </view>
 
   <view
-    class="stage-resizer {{stageDragging ? 'is-dragging' : ''}} {{stageResizeMenuActive ? 'is-selecting' : ''}}"
+    class="stage-resizer {{stageDragging ? 'is-dragging' : ''}} {{stageResizeMenuActive ? 'is-selecting' : ''}} {{stageResizeTapOpen ? 'is-tap-open' : ''}} {{stageResizePressActive ? 'is-press-active' : ''}}"
     data-stage-resizer="true"
     catchtouchstart="stageResizeStart"
     catchtouchmove="stageResizeMove"
@@ -74,7 +74,7 @@
     catchlongpress="stageResizeLongPress"
     bindtap="stageResizerTap"
     role="slider"
-    aria-label="上下拖动画板高度，按住后左右滑动选择完整或铺满，双击切换参数全览"
+    aria-label="单击展开完整或铺满，上下拖动画板高度，按住后左右滑动选择，双击切换参数全览"
     aria-valuemin="{{stageMinHeight}}"
     aria-valuemax="{{stageMaxHeight}}"
     aria-valuenow="{{stageHeight}}"
@@ -100,11 +100,11 @@
         <view data-stage-resizer="true"></view>
       </view>
       <view wx:if="{{stageResizeMenuActive}}" class="stage-resizer__modes">
-        <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}">
+        <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}" data-fit="contain" catchtap="selectStageResizeFit" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="完整显示">
           <image class="stage-resizer__mode-icon" src="{{fit === 'contain' ? '/assets/icons/arrows-in-simple-active.svg' : '/assets/icons/arrows-in-simple.svg'}}"></image>
           <text>完整</text>
         </view>
-        <view class="stage-resizer__mode stage-resizer__mode--cover {{fit === 'cover' ? 'is-current' : ''}} {{stageResizeHoverFit === 'cover' ? 'is-hovered' : ''}}">
+        <view class="stage-resizer__mode stage-resizer__mode--cover {{fit === 'cover' ? 'is-current' : ''}} {{stageResizeHoverFit === 'cover' ? 'is-hovered' : ''}}" data-fit="cover" catchtap="selectStageResizeFit" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="铺满显示">
           <image class="stage-resizer__mode-icon" src="{{fit === 'cover' ? '/assets/icons/arrows-out-simple-active.svg' : '/assets/icons/arrows-out-simple.svg'}}"></image>
           <text>铺满</text>
         </view>
