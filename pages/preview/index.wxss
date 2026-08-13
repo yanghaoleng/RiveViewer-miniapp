@@ -270,7 +270,13 @@ page {
   color: #687588;
   touch-action: none;
   user-select: none;
-  transition: color 160ms ease;
+  transition:
+    height 220ms cubic-bezier(.22, 1, .36, 1),
+    color 160ms ease;
+}
+
+.stage-resizer.is-selecting {
+  height: 80rpx;
 }
 
 .resize-guide {
@@ -337,7 +343,7 @@ page {
 
 .stage-resizer__surface {
   width: 100%;
-  height: 48rpx;
+  height: 100%;
   position: absolute;
   left: 0;
   top: 0;
@@ -362,7 +368,9 @@ page {
   z-index: 2;
   transform: translate(-50%, -50%);
   color: #687588;
-  transition: color 160ms ease;
+  transition:
+    width 240ms cubic-bezier(.22, 1, .36, 1),
+    color 160ms ease;
 }
 
 .stage-resizer.is-selecting .stage-resizer__grip {
@@ -380,14 +388,13 @@ page {
   position: absolute;
   left: 12rpx;
   right: 12rpx;
-  top: 2rpx;
-  bottom: 2rpx;
+  top: 16rpx;
+  bottom: 16rpx;
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16rpx;
   pointer-events: none;
-  animation: stage-resizer-modes-in 160ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode {
@@ -414,12 +421,14 @@ page {
   grid-column: 1;
   justify-content: flex-start;
   padding-left: 20rpx;
+  animation: stage-resizer-contain-in 240ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode--cover {
   grid-column: 3;
   justify-content: flex-end;
   padding-right: 20rpx;
+  animation: stage-resizer-cover-in 240ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode.is-current {
@@ -439,12 +448,25 @@ page {
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-@keyframes stage-resizer-modes-in {
+@keyframes stage-resizer-contain-in {
   from {
     opacity: 0;
+    transform: translateX(calc(100% + 16rpx));
   }
   to {
     opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes stage-resizer-cover-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-100% - 16rpx));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 

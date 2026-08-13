@@ -305,6 +305,10 @@ if (
   || !/is-selecting \.stage-resizer__grip\s*\{[\s\S]{0,100}width:\s*calc\(33\.333% - 16rpx\)/.test(embeddedPreviewStyle)
   || !/stage-resizer__mode\s*\{[\s\S]{0,220}flex-direction:\s*row/.test(embeddedPreviewStyle)
   || /stage-resizer__mode\.is-hovered\s*\{[\s\S]{0,120}(?:box-shadow|border)/.test(embeddedPreviewStyle)
+  || !/stage-resizer\.is-selecting\s*\{\s*height:\s*40rpx/.test(embeddedPreviewStyle)
+  || !/stage-resizer__modes\s*\{[\s\S]{0,180}top:\s*8rpx;[\s\S]{0,40}bottom:\s*8rpx/.test(embeddedPreviewStyle)
+  || !/@keyframes stage-resizer-contain-in[\s\S]{0,180}translateX\(calc\(100% \+ 8rpx\)\)/.test(embeddedPreviewStyle)
+  || !/@keyframes stage-resizer-cover-in[\s\S]{0,180}translateX\(calc\(-100% - 8rpx\)\)/.test(embeddedPreviewStyle)
 ) {
   throw new Error('缩放手柄缺少按住展开、横向悬停或松手切换完整/铺满')
 }

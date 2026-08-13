@@ -296,7 +296,13 @@ button::after {
   color: #687588;
   touch-action: none;
   user-select: none;
-  transition: color 160ms ease;
+  transition:
+    height 220ms cubic-bezier(.22, 1, .36, 1),
+    color 160ms ease;
+}
+
+.stage-resizer.is-selecting {
+  height: 40rpx;
 }
 
 .resize-guide {
@@ -363,7 +369,7 @@ button::after {
 
 .stage-resizer__surface {
   width: 100%;
-  height: 24rpx;
+  height: 100%;
   position: absolute;
   left: 0;
   top: 0;
@@ -388,7 +394,9 @@ button::after {
   z-index: 2;
   transform: translate(-50%, -50%);
   color: #687588;
-  transition: color 160ms ease;
+  transition:
+    width 240ms cubic-bezier(.22, 1, .36, 1),
+    color 160ms ease;
 }
 
 .stage-resizer.is-selecting .stage-resizer__grip {
@@ -406,14 +414,13 @@ button::after {
   position: absolute;
   left: 6rpx;
   right: 6rpx;
-  top: 1rpx;
-  bottom: 1rpx;
+  top: 8rpx;
+  bottom: 8rpx;
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8rpx;
   pointer-events: none;
-  animation: stage-resizer-modes-in 160ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode {
@@ -440,12 +447,14 @@ button::after {
   grid-column: 1;
   justify-content: flex-start;
   padding-left: 10rpx;
+  animation: stage-resizer-contain-in 240ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode--cover {
   grid-column: 3;
   justify-content: flex-end;
   padding-right: 10rpx;
+  animation: stage-resizer-cover-in 240ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .stage-resizer__mode.is-current {
@@ -465,12 +474,25 @@ button::after {
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-@keyframes stage-resizer-modes-in {
+@keyframes stage-resizer-contain-in {
   from {
     opacity: 0;
+    transform: translateX(calc(100% + 8rpx));
   }
   to {
     opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes stage-resizer-cover-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-100% - 8rpx));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
