@@ -7,7 +7,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import policy from "../../../shared/rive-policy.json";
 import {
   archiveHostedComment,
@@ -94,10 +94,15 @@ const SPEEDS = policy.speeds;
 const CANVAS_TONES = policy.canvasTones;
 const PUBLISHED_CODES_STORAGE_KEY = "rive-host-published-codes-v1";
 const MAX_HOSTED_FILE_BYTES = 64 * 1024 * 1024;
+const FILE_RAIL_MIN_WIDTH = 160;
+const FILE_RAIL_DEFAULT_WIDTH = 184;
+const FILE_RAIL_MAX_WIDTH = 360;
+const FILE_RAIL_PREVIEW_MIN_WIDTH = 620;
 const WIDE_INSPECTOR_MIN_WIDTH = 360;
-const WIDE_INSPECTOR_DEFAULT_WIDTH = 390;
-const WIDE_INSPECTOR_MAX_WIDTH = 680;
+const WIDE_INSPECTOR_DEFAULT_WIDTH = 360;
+const WIDE_INSPECTOR_FALLBACK_MAX_WIDTH = 680;
 const WIDE_PREVIEW_MIN_WIDTH = 520;
+const WIDE_PREVIEW_PREFERRED_WIDTH = 800;
 const WIDE_COLUMN_RESIZER_WIDTH = 13;
 const WIDE_LAYOUT_MIN_WIDTH = 1194;
 const RAIL_ACTIVITY_STATE_KEY = "riveRailPreserveActivity";
@@ -247,6 +252,8 @@ export function RiveViewerApp({
   const [stageHeightCustomized, setStageHeightCustomized] = useState(false);
   const [draggingStage, setDraggingStage] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(WIDE_INSPECTOR_DEFAULT_WIDTH);
+  const [inspectorWidthMaximum, setInspectorWidthMaximum] = useState(WIDE_INSPECTOR_FALLBACK_MAX_WIDTH);
+  const [inspectorWidthCustomized, setInspectorWidthCustomized] = useState(false);
   const [draggingInspector, setDraggingInspector] = useState(false);
   const [stageResizeMenuActive, setStageResizeMenuActive] = useState(false);
   const [stageResizeTapOpen, setStageResizeTapOpen] = useState(false);
@@ -1555,15 +1562,35 @@ export function RiveViewerApp({
     const workbenchWidth = previewWorkbenchRef.current?.clientWidth || 0;
     const availableMaximum = workbenchWidth
       ? workbenchWidth - WIDE_COLUMN_RESIZER_WIDTH - WIDE_PREVIEW_MIN_WIDTH
-      : WIDE_INSPECTOR_MAX_WIDTH;
+      : WIDE_INSPECTOR_FALLBACK_MAX_WIDTH;
     return {
       minimum: WIDE_INSPECTOR_MIN_WIDTH,
-      maximum: Math.max(
-        WIDE_INSPECTOR_MIN_WIDTH,
-        Math.min(WIDE_INSPECTOR_MAX_WIDTH, availableMaximum),
-      ),
+      maximum: Math.max(WIDE_INSPECTOR_MIN_WIDTH, availableMaximum),
     };
   }, []);
+
+  useLayoutEffect(() => {
+    const workbench = previewWorkbenchRef.current;
+    if (!activeFile || !workbench) return undefined;
+
+    const syncInspectorWidth = () => {
+      const bounds = inspectorWidthBounds();
+      setInspectorWidthMaximum(Math.round(bounds.maximum));
+      const preferredWidth = window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH && !inspectorWidthCustomized
+        ? workbench.clientWidth - WIDE_COLUMN_RESIZER_WIDTH - WIDE_PREVIEW_PREFERRED_WIDTH
+        : currentInspectorWidthRef.current;
+      const nextWidth = Math.round(clamp(preferredWidth, bounds.minimum, bounds.maximum));
+      if (nextWidth === currentInspectorWidthRef.current) return;
+      currentInspectorWidthRef.current = nextWidth;
+      workbench.style.setProperty("--preview-inspector-width", `${nextWidth}px`);
+      setInspectorWidth(nextWidth);
+    };
+
+    syncInspectorWidth();
+    const observer = new ResizeObserver(syncInspectorWidth);
+    observer.observe(workbench);
+    return () => observer.disconnect();
+  }, [activeFile, inspectorWidthBounds, inspectorWidthCustomized]);
 
   const applyInspectorWidth = useCallback((width: number) => {
     const bounds = inspectorWidthBounds();
@@ -1588,6 +1615,7 @@ export function RiveViewerApp({
     inspectorResizeStartRef.current = { x: event.clientX, width: currentWidth };
     pendingInspectorWidthRef.current = currentWidth;
     draggingInspectorRef.current = true;
+    setInspectorWidthCustomized(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     setDraggingInspector(true);
     event.preventDefault();
@@ -1640,6 +1668,7 @@ export function RiveViewerApp({
     else return;
     event.preventDefault();
     event.stopPropagation();
+    setInspectorWidthCustomized(true);
     const appliedWidth = applyInspectorWidth(nextWidth);
     setInspectorWidth(appliedWidth);
   };
@@ -1719,7 +1748,7 @@ export function RiveViewerApp({
     return (
       <main className="app-shell public-state-shell">
         <header className="topbar">
-          <Brand label="Rive 公开预览" href={homeHref} />
+          <Brand label="Rive 预览台" href={homeHref} />
         </header>
         <PublicShareState
           kind={kind}
@@ -1777,7 +1806,7 @@ export function RiveViewerApp({
             >
               <Icon name="arrow-left" size={21} />
             </button>
-            <Brand label={isPublicRoute ? "Rive 公开预览" : "Rive 预览"} />
+            <Brand label="Rive 预览台" />
             <div className="topbar-actions preview-actions">
               <button
                 className="topbar-action topbar-download press-feedback"
@@ -1801,7 +1830,7 @@ export function RiveViewerApp({
             </div>
           </header>
           <header className="topbar drawer-home-topbar">
-            <Brand label={isPublicRoute ? "Rive 公开预览" : "Rive 预览台"} href={homeHref} />
+            <Brand label="Rive 预览台" href={homeHref} />
           </header>
         </>
       ) : (
@@ -1905,11 +1934,11 @@ export function RiveViewerApp({
           <button
             className="drawer-close"
             onClick={closeActiveFile}
-            aria-label="返回文件列表"
+            aria-label="关闭文件详情"
             aria-keyshortcuts="Escape"
-            title="返回文件列表 (Esc)"
+            title="关闭文件详情 (Esc)"
           >
-            <Icon name="arrow-left" size={21} />
+            <Icon name="x" size={21} />
           </button>
           <div className="file-heading-copy">
             <h1>{activeFile.file.name}</h1>
@@ -2026,12 +2055,7 @@ export function RiveViewerApp({
                   {playing ? <Icon name="pause" size={20} /> : <Icon name="play" size={20} />}
                 </button>
               </div>
-              <label className="speed-select">
-                <Icon name="gauge" size={18} className="speed-gauge" />
-                <select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-keyshortcuts="+ -" title="调整播放速度 (+ / -)">
-                  {SPEEDS.map((value) => <option key={value} value={value}>{value}x</option>)}
-                </select>
-              </label>
+              <PlaybackSpeedMenu value={speed} onChange={setSpeed} />
               <div className="transport-files">
                 <button className="press-feedback" disabled={activeIndex <= 0} onClick={() => navigateFile(-1)} aria-label="上一个文件" aria-keyshortcuts="ArrowLeft ArrowUp" title="上一个文件 (← / ↑)">
                   <Icon name="arrow-left" size={18} />
@@ -2052,7 +2076,7 @@ export function RiveViewerApp({
             aria-controls="preview-inspector"
             aria-orientation="vertical"
             aria-valuemin={WIDE_INSPECTOR_MIN_WIDTH}
-            aria-valuemax={WIDE_INSPECTOR_MAX_WIDTH}
+            aria-valuemax={inspectorWidthMaximum}
             aria-valuenow={inspectorWidth}
             aria-valuetext={`右侧栏宽度 ${inspectorWidth} 像素`}
             title="左右拖动调整两栏比例"
@@ -2276,6 +2300,102 @@ function MiniProgramEntry() {
   );
 }
 
+function PlaybackSpeedMenu({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    const focusFrame = window.requestAnimationFrame(() => {
+      rootRef.current?.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const selectSpeed = (nextSpeed: number) => {
+    onChange(nextSpeed);
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  return (
+    <div ref={rootRef} className={`speed-menu ${open ? "is-open" : ""}`}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="speed-menu-trigger press-feedback"
+        aria-label={`播放速度 ${value} 倍`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-keyshortcuts="+ -"
+        title="调整播放速度 (+ / -)"
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          setOpen(true);
+        }}
+      >
+        <Icon name="gauge" size={18} className="speed-gauge" />
+        <span className="speed-menu-value">{value}x</span>
+        <Icon name="caret-down" size={13} className="speed-menu-caret" />
+      </button>
+      {open && (
+        <div className="speed-menu-popover" role="listbox" aria-label="选择播放速度">
+          {SPEEDS.map((speedOption, optionIndex) => (
+            <button
+              key={speedOption}
+              type="button"
+              className="speed-menu-option"
+              role="option"
+              aria-selected={speedOption === value}
+              onClick={() => selectSpeed(speedOption)}
+              onKeyDown={(event) => {
+                if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const options = Array.from(
+                  rootRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') || [],
+                );
+                const nextIndex = event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? options.length - 1
+                    : (optionIndex + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+                options[nextIndex]?.focus();
+              }}
+            >
+              <span>{speedOption}x</span>
+              {speedOption === value && <Icon name="check" size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ShortcutHelp() {
   const [open, setOpen] = useState(false);
   const popoverId = useId();
@@ -2489,8 +2609,93 @@ function PreviewFileRail({
   onToggleUpload: (fileId: string) => void;
   onRetry: (fileId: string) => void;
 }) {
+  const railRef = useRef<HTMLElement>(null);
+  const resizeStartRef = useRef({ x: 0, width: FILE_RAIL_DEFAULT_WIDTH });
+  const draggingRailRef = useRef(false);
+  const [railWidth, setRailWidth] = useState(FILE_RAIL_DEFAULT_WIDTH);
+  const [railWidthMaximum, setRailWidthMaximum] = useState(FILE_RAIL_MAX_WIDTH);
+  const [draggingRail, setDraggingRail] = useState(false);
+  const [fileNameTooltip, setFileNameTooltip] = useState<{ name: string; top: number } | null>(null);
+
+  const railWidthBounds = () => {
+    const workspace = railRef.current?.closest<HTMLElement>(".drawer-workspace");
+    const availableMaximum = workspace
+      ? workspace.clientWidth - FILE_RAIL_PREVIEW_MIN_WIDTH
+      : FILE_RAIL_MAX_WIDTH;
+    return {
+      minimum: FILE_RAIL_MIN_WIDTH,
+      maximum: Math.max(FILE_RAIL_MIN_WIDTH, Math.min(FILE_RAIL_MAX_WIDTH, availableMaximum)),
+    };
+  };
+
+  const applyRailWidth = (width: number) => {
+    const bounds = railWidthBounds();
+    const nextWidth = Math.round(clamp(width, bounds.minimum, bounds.maximum));
+    railRef.current?.closest<HTMLElement>(".drawer-workspace")?.style.setProperty(
+      "--preview-file-rail-width",
+      `${nextWidth}px`,
+    );
+    setRailWidthMaximum(Math.round(bounds.maximum));
+    setRailWidth(nextWidth);
+    return nextWidth;
+  };
+
+  const beginRailResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const currentWidth = railRef.current?.getBoundingClientRect().width || railWidth;
+    resizeStartRef.current = { x: event.clientX, width: currentWidth };
+    applyRailWidth(currentWidth);
+    draggingRailRef.current = true;
+    setDraggingRail(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const moveRailResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggingRailRef.current) return;
+    applyRailWidth(resizeStartRef.current.width + event.clientX - resizeStartRef.current.x);
+    event.preventDefault();
+  };
+
+  const endRailResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggingRailRef.current) return;
+    draggingRailRef.current = false;
+    setDraggingRail(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const resizeRailWithKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const bounds = railWidthBounds();
+    const step = event.shiftKey ? 40 : 20;
+    let nextWidth = railWidth;
+    if (event.key === "ArrowLeft") nextWidth -= step;
+    else if (event.key === "ArrowRight") nextWidth += step;
+    else if (event.key === "Home") nextWidth = bounds.minimum;
+    else if (event.key === "End") nextWidth = bounds.maximum;
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+    applyRailWidth(nextWidth);
+  };
+
+  const showFileNameTooltip = (name: string, target: HTMLElement) => {
+    const railBounds = railRef.current?.getBoundingClientRect();
+    const targetBounds = target.getBoundingClientRect();
+    if (!railBounds) return;
+    setFileNameTooltip({
+      name,
+      top: clamp(
+        targetBounds.top - railBounds.top + targetBounds.height / 2,
+        24,
+        railBounds.height - 24,
+      ),
+    });
+  };
+
   return (
-    <aside className="preview-file-rail" aria-label="平台文件">
+    <aside ref={railRef} className={`preview-file-rail ${draggingRail ? "is-resizing" : ""}`} aria-label="平台文件">
       <header className="preview-file-rail-header">
         <div><strong>最近文件</strong><span>{items.length}</span></div>
         <button
@@ -2505,7 +2710,7 @@ function PreviewFileRail({
         </button>
       </header>
       {importError && <div className="rail-import-error" role="alert">{importError}</div>}
-      <div className="preview-file-rail-list">
+      <div className="preview-file-rail-list" onScroll={() => setFileNameTooltip(null)}>
         {items.map((item) => {
           const fileId = item.localFile?.id || item.file.id;
           const state = uploadStateForItem(item, uploadStates);
@@ -2527,7 +2732,17 @@ function PreviewFileRail({
                 </span>
               </button>
               <div className="preview-file-rail-copy">
-                <button className="preview-file-title" onClick={() => onOpen(item)}>{item.file.name}</button>
+                <button
+                  className="preview-file-title"
+                  onClick={() => onOpen(item)}
+                  onPointerEnter={(event) => showFileNameTooltip(item.file.name, event.currentTarget)}
+                  onPointerLeave={() => setFileNameTooltip(null)}
+                  onFocus={(event) => showFileNameTooltip(item.file.name, event.currentTarget)}
+                  onBlur={() => setFileNameTooltip(null)}
+                  aria-label={`打开 ${item.file.name}`}
+                >
+                  {item.file.name}
+                </button>
                 <div className="preview-file-meta">
                   <span>{formatBytes(item.file.size)}</span>
                   <FileUploadStatusButton
@@ -2548,6 +2763,38 @@ function PreviewFileRail({
           );
         })}
         {!items.length && <span className="preview-file-rail-empty">还没有文件</span>}
+      </div>
+      {fileNameTooltip && (
+        <span
+          className="preview-file-name-tooltip"
+          style={{ top: `${fileNameTooltip.top}px` }}
+          role="tooltip"
+        >
+          {fileNameTooltip.name}
+        </span>
+      )}
+      <div
+        className="preview-file-rail-resizer"
+        role="separator"
+        tabIndex={0}
+        aria-label="调整最近文件栏宽度"
+        aria-orientation="vertical"
+        aria-valuemin={FILE_RAIL_MIN_WIDTH}
+        aria-valuemax={railWidthMaximum}
+        aria-valuenow={railWidth}
+        aria-valuetext={`最近文件栏宽度 ${railWidth} 像素`}
+        title="左右拖动调整最近文件栏宽度"
+        onPointerDown={beginRailResize}
+        onPointerMove={moveRailResize}
+        onPointerUp={endRailResize}
+        onPointerCancel={endRailResize}
+        onKeyDown={resizeRailWithKeyboard}
+        onClick={(event) => {
+          event.stopPropagation();
+          event.currentTarget.focus();
+        }}
+      >
+        <span />
       </div>
     </aside>
   );

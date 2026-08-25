@@ -18,6 +18,7 @@ const {
   WebRivePlayer,
   getTimelinePosition,
   runtimeWasmFile,
+  setRiveAudioRegistryPaused,
 } = playerModule;
 
 after(async () => vite.close());
@@ -33,6 +34,32 @@ test("defaults to versioned WebGL2 and keeps the Canvas2D fallback asset", () =>
   assert.equal(DEFAULT_RENDER_ENGINE, "webgl2");
   assert.equal(runtimeWasmFile("webgl2"), "rive-webgl2-2.39.1.wasm");
   assert.equal(runtimeWasmFile("canvas2d"), "rive-2.39.1.wasm");
+});
+
+test("suspends and resumes the Rive audio device with playback", async () => {
+  let suspended = 0;
+  let resumed = 0;
+  const device = {
+    state: 1,
+    H: {
+      suspend: async () => { suspended += 1; },
+      resume: async () => { resumed += 1; },
+    },
+  };
+  const registry = {
+    devices: [device],
+    device_state: { stopped: 0, started: 1 },
+  };
+
+  setRiveAudioRegistryPaused(registry, true);
+  await Promise.resolve();
+  assert.equal(suspended, 1);
+  assert.equal(device.state, 0);
+
+  setRiveAudioRegistryPaused(registry, false);
+  await Promise.resolve();
+  assert.equal(resumed, 1);
+  assert.equal(device.state, 1);
 });
 
 test("inverts the Rive alignment matrix into artboard coordinates", () => {

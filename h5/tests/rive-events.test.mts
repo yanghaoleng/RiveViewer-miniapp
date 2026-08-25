@@ -113,6 +113,9 @@ test("keeps event console and shortcut disclosure accessible without auto-openin
   assert.match(consoleSource, /等待 Rive 事件/);
   assert.doesNotMatch(consoleSource, /dangerouslySetInnerHTML/);
   assert.match(styleSource, /\.runtime-event-console\s*\{[\s\S]{0,180}position:\s*sticky;[\s\S]{0,80}top:\s*0;/);
+  assert.match(styleSource, /\.runtime-event-summary\s*\{[\s\S]{0,180}grid-template-columns:[\s\S]{0,80}34px 18px;/);
+  assert.match(styleSource, /\.runtime-event-summary \.runtime-event-message strong\s*\{[\s\S]{0,100}flex:\s*1 1 auto;/);
+  assert.match(styleSource, /\.runtime-event-count\s*\{[\s\S]{0,100}font:\s*650 9px/);
   assert.match(styleSource, /@media \(any-hover: hover\) and \(any-pointer: fine\)/);
   assert.match(styleSource, /\.shortcut-help:hover \.shortcut-popover/);
   assert.match(styleSource, /\.shortcut-help:focus-within \.shortcut-popover/);

@@ -9,6 +9,8 @@ test("groups repeated first-level timeline prefixes and keeps deeper names", () 
     "TalkingEmotion_Happy",
     "Single_only",
   ]), [
+    { type: "timeline", item: { name: "idle", label: "idle" } },
+    { type: "timeline", item: { name: "Single_only", label: "Single_only" } },
     {
       type: "group",
       prefix: "TalkingEmotion",
@@ -17,8 +19,6 @@ test("groups repeated first-level timeline prefixes and keeps deeper names", () 
         { name: "TalkingEmotion_Happy", label: "Happy" },
       ],
     },
-    { type: "timeline", item: { name: "idle", label: "idle" } },
-    { type: "timeline", item: { name: "Single_only", label: "Single_only" } },
   ]);
 });
 

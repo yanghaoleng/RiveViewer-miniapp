@@ -1,7 +1,6 @@
 import { memo, useMemo, useState, useSyncExternalStore } from "react";
 import { formatPlaybackTime, type PlaybackTelemetry } from "../../lib/playback-telemetry";
 import { organizeTimelines } from "../../lib/timeline-groups";
-import { TimelineHint } from "./TimelineHint";
 
 function useTelemetry(telemetry: PlaybackTelemetry) {
   return useSyncExternalStore(
@@ -63,7 +62,7 @@ export const TimelineControl = memo(function TimelineControl({
   };
 
   return (
-    <div className="parameter-row timeline-parameter-row">
+    <div className={`parameter-row timeline-parameter-row ${animations.length > 10 ? "is-compact" : ""}`}>
       <div className="parameter-label timeline-label">
         <span>时间轴</span>
         <span className="timeline-layout-switch" role="group" aria-label="时间轴显示方式">
@@ -86,7 +85,6 @@ export const TimelineControl = memo(function TimelineControl({
         </span>
       </div>
       <div className="parameter-actions timeline-actions">
-        {animations.length ? <TimelineHint /> : null}
         {animations.length && layout === "expanded" && (
           <div className="timeline-expanded-list">
             {animations.map((name) => timelineButton(name))}

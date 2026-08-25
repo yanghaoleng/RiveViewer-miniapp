@@ -308,7 +308,8 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(commentPanelSource, /contentEditable=\{!submitting\}/);
   assert.doesNotMatch(commentPanelSource, /<textarea/);
   assert.doesNotMatch(commentPanelSource, /<input|称呼（选填）|COMMENT_NICKNAME_STORAGE_KEY|匿名/);
-  assert.match(commentPanelSource, /placeholder="写下评论或备注"/);
+  assert.match(commentPanelSource, /\{!draftBody && <TimelineHint \/>\}/);
+  assert.doesNotMatch(commentPanelSource, /placeholder="写下评论或备注"/);
   assert.match(commentPanelSource, /avatars\/\$\{comment\.avatar\}\.webp/);
   assert.match(commentPanelSource, /width="32"/);
   assert.match(commentPanelSource, /评论已归档/);
@@ -326,7 +327,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(panelSource, />下载</);
   assert.match(styleSource, /\.import-dropzone\.is-dragging/);
   assert.match(styleSource, /\.file-upload-progress/);
-  assert.match(styleSource, /\.preview-file-add[\s\S]{0,260}color:\s*#0b0f14/);
+  assert.match(styleSource, /\.preview-file-add[\s\S]{0,260}color:\s*var\(--text\);[\s\S]{0,80}background:\s*var\(--control\)/);
   assert.match(styleSource, /\.preview-file-rail-row\.is-current::before/);
   assert.match(styleSource, /\.archived-library-trigger \.archived-library-count[\s\S]{0,320}background:\s*transparent/);
   assert.match(styleSource, /\.topbar-copy-link\.is-copied,[\s\S]{0,240}background:\s*var\(--control\)/);
@@ -377,15 +378,21 @@ test("resolves static assets from Vite's configured public base", async () => {
   assert.equal(avatarFiles.length, 32);
 });
 
-test("bounds the speed icon inside its control on desktop and mobile", async () => {
-  const styleSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+test("uses a bounded custom speed menu instead of a native select", async () => {
+  const [styleSource, appSource] = await Promise.all([
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url), "utf8"),
+  ]);
   const speedRules = styleSource.slice(
-    styleSource.indexOf(".speed-select"),
+    styleSource.indexOf(".speed-menu"),
     styleSource.indexOf(".fit-group"),
   );
 
   assert.match(speedRules, /overflow:\s*hidden/);
-  assert.match(speedRules, /\.speed-select \.speed-gauge\s*\{[\s\S]*width:\s*18px/);
-  assert.match(speedRules, /\.speed-select \.speed-gauge\s*\{[\s\S]*height:\s*18px/);
+  assert.match(speedRules, /\.speed-menu \.speed-gauge\s*\{[\s\S]*width:\s*18px/);
+  assert.match(speedRules, /\.speed-menu \.speed-gauge\s*\{[\s\S]*height:\s*18px/);
   assert.match(speedRules, /transform:\s*none/);
+  assert.match(appSource, /className="speed-menu-popover" role="listbox"/);
+  assert.match(appSource, /role="option"/);
+  assert.doesNotMatch(appSource, /<select value=\{speed\}/);
 });

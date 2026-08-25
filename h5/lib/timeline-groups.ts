@@ -24,15 +24,16 @@ export function organizeTimelines(names: string[]): TimelineSection[] {
   });
 
   const emittedPrefixes = new Set<string>();
-  const sections: TimelineSection[] = [];
+  const standaloneSections: TimelineSection[] = [];
+  const groupedSections: TimelineSection[] = [];
   parsed.forEach(({ name, parts }) => {
     if (!parts || (prefixCounts.get(parts.prefix) || 0) < 2) {
-      sections.push({ type: "timeline", item: { name, label: name } });
+      standaloneSections.push({ type: "timeline", item: { name, label: name } });
       return;
     }
     if (emittedPrefixes.has(parts.prefix)) return;
     emittedPrefixes.add(parts.prefix);
-    sections.push({
+    groupedSections.push({
       type: "group",
       prefix: parts.prefix,
       items: parsed.flatMap(({ name: groupedName, parts: groupedParts }) => (
@@ -42,5 +43,5 @@ export function organizeTimelines(names: string[]): TimelineSection[] {
       )),
     });
   });
-  return sections;
+  return [...standaloneSections, ...groupedSections];
 }

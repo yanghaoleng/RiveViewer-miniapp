@@ -11,6 +11,7 @@ import type { HostedComment, HostedShare } from "../../lib/hosted-api";
 import { publicAssetUrl } from "../../lib/public-base";
 import { hostedSharePath, hostedShareUrl } from "../../lib/viewer-route";
 import { Icon } from "./Icon";
+import { TimelineHint } from "./TimelineHint";
 
 function CommentBody({
   body,
@@ -576,6 +577,7 @@ export function ShareCommentsPanel({
       </div>
 
       <form className="comment-form" onSubmit={submit}>
+        {!draftBody && <TimelineHint />}
         <div
           ref={editorRef}
           className="comment-editor"
@@ -585,7 +587,6 @@ export function ShareCommentsPanel({
           aria-multiline="true"
           aria-disabled={submitting}
           data-empty={draftBody ? "false" : "true"}
-          data-placeholder="写下评论或备注"
           suppressContentEditableWarning
           onFocus={() => {
             editorFocusedRef.current = true;

@@ -63,6 +63,22 @@ export type PlayerCallbacks = {
 };
 
 type RuntimeEventDraft = Omit<RiveRuntimeEvent, "id">;
+type RiveAudioContext = {
+  resume: () => Promise<void>;
+  suspend: () => Promise<void>;
+};
+type RiveAudioDevice = {
+  H?: RiveAudioContext;
+  state?: number;
+};
+type RiveMiniAudioRegistry = {
+  devices?: Array<RiveAudioDevice | null>;
+  device_state?: {
+    started?: number;
+    stopped?: number;
+  };
+};
+type WindowWithRiveAudio = Window & { miniaudio?: RiveMiniAudioRegistry };
 type StateMachineReportSource = Pick<
   StateMachineInstance,
   "reportedEventAt" | "reportedEventCount" | "stateChangedCount" | "stateChangedNameByIndex"
@@ -72,6 +88,22 @@ type StateMachineAdvanceSource = StateMachineReportSource & Pick<StateMachineIns
 function clippedText(value: unknown, maximum: number): string {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
+}
+
+export function setRiveAudioRegistryPaused(
+  registry: RiveMiniAudioRegistry | undefined,
+  paused: boolean,
+): void {
+  if (!registry?.devices) return;
+  registry.devices.forEach((device) => {
+    if (!device?.H) return;
+    const operation = paused ? device.H.suspend() : device.H.resume();
+    device.state = paused ? registry.device_state?.stopped : registry.device_state?.started;
+    void operation.catch((error) => console.warn(
+      paused ? "Rive 音频暂停失败" : "Rive 音频恢复失败",
+      error,
+    ));
+  });
 }
 
 function formatReportedEventDetail(event: ReturnType<StateMachineInstance["reportedEventAt"]>): string {
@@ -411,8 +443,9 @@ export class WebRivePlayer {
         this.activeAnimationName = "";
       }
     }
-    this.applyAudioPreference();
     this.playing = true;
+    this.applyAudioPreference();
+    this.setRuntimeAudioPaused(false);
     this.lastTimestamp = 0;
     this.updateViewMatrix();
     this.emitPlayback(true, selectedMachine ? `状态机 ${selectedMachine}` : "正在播放");
@@ -490,8 +523,9 @@ export class WebRivePlayer {
       this.sequenceHasOut = false;
     }
     this.bindDefaultViewModels(this.artboard);
-    this.applyAudioPreference();
     this.playing = true;
+    this.applyAudioPreference();
+    this.setRuntimeAudioPaused(false);
     this.lastTimestamp = 0;
     this.updateViewMatrix();
     this.publishProgress();
@@ -519,6 +553,8 @@ export class WebRivePlayer {
       return false;
     }
     this.playing = false;
+    this.applyAudioPreference();
+    this.setRuntimeAudioPaused(true);
     this.publishProgress(true);
     this.emitPlayback(false, `${currentName} 播放完成`);
     return true;
@@ -572,6 +608,8 @@ export class WebRivePlayer {
     if (this.runtimeFailureReported || this.disposed) return;
     this.runtimeFailureReported = true;
     this.playing = false;
+    this.applyAudioPreference();
+    this.setRuntimeAudioPaused(true);
     const error = value instanceof Error ? value : new Error("渲染引擎运行失败");
     this.callbacks.onRuntimeFailure?.(error);
   }
@@ -786,16 +824,22 @@ export class WebRivePlayer {
   setAudioEnabled(enabled: boolean): void {
     this.audioEnabled = enabled;
     this.applyAudioPreference();
+    if (enabled && this.playing) this.setRuntimeAudioPaused(false);
     this.emitMetadata(true);
   }
 
   private applyAudioPreference(): void {
     if (!this.artboard) return;
     try {
-      this.artboard.volume = this.audioEnabled ? 1 : 0;
+      this.artboard.volume = this.audioEnabled && this.playing ? 1 : 0;
     } catch (error) {
       console.warn("Rive 音量设置失败", error);
     }
+  }
+
+  private setRuntimeAudioPaused(paused: boolean): void {
+    if (typeof window === "undefined" || (!paused && (!this.playing || !this.audioEnabled))) return;
+    setRiveAudioRegistryPaused((window as WindowWithRiveAudio).miniaudio, paused);
   }
 
   play(): void {
@@ -809,6 +853,8 @@ export class WebRivePlayer {
       return;
     }
     this.playing = true;
+    this.applyAudioPreference();
+    this.setRuntimeAudioPaused(false);
     this.lastTimestamp = 0;
     this.emitPlayback(true, this.activeAnimationName ? `播放 ${this.activeAnimationName}` : "正在播放");
     this.requestFrame();
@@ -816,6 +862,8 @@ export class WebRivePlayer {
 
   pause(): void {
     this.playing = false;
+    this.applyAudioPreference();
+    this.setRuntimeAudioPaused(true);
     this.lastTimestamp = 0;
     if (this.runtime && this.frameRequest) this.runtime.cancelAnimationFrame(this.frameRequest);
     this.frameRequest = 0;
@@ -922,6 +970,7 @@ export class WebRivePlayer {
   private disposeFile(): void {
     if (this.runtime && this.frameRequest) this.runtime.cancelAnimationFrame(this.frameRequest);
     this.frameRequest = 0;
+    this.setRuntimeAudioPaused(true);
     this.disposeActiveInstances();
     this.file?.unref();
     this.renderer?.delete();

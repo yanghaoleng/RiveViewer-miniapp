@@ -5,9 +5,9 @@ const AnimatedCalligraph = lazy(() => import("calligraph").then(({ Calligraph })
 })));
 
 const TIMELINE_HINTS = [
+  "写下评论或备注",
   "点击时间轴，可以直接引用到评论",
   "一条评论可以引用多个时间轴",
-  "整理模式会按第一个下划线自动分组",
   "发现动作问题时，顺手留下评论",
 ];
 
@@ -39,13 +39,13 @@ export function TimelineHint() {
   }, [reducedMotion]);
 
   return (
-    <span className="timeline-hint">
+    <span className="comment-editor-placeholder" aria-hidden="true">
       {reducedMotion ? (
-        <span className="timeline-hint-text">{hint}</span>
+        <span className="comment-editor-placeholder-text">{hint}</span>
       ) : (
-        <Suspense fallback={<span className="timeline-hint-text">{hint}</span>}>
+        <Suspense fallback={<span className="comment-editor-placeholder-text">{hint}</span>}>
           <AnimatedCalligraph
-            className="timeline-hint-text"
+            className="comment-editor-placeholder-text"
             animation="smooth"
             autoSize={false}
             drift={{ x: 5, y: 3 }}

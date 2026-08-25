@@ -145,14 +145,22 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(appSource, /WIDE_INSPECTOR_DEFAULT_WIDTH = 390/);
+  assert.match(appSource, /WIDE_INSPECTOR_DEFAULT_WIDTH = 360/);
   assert.match(appSource, /WIDE_INSPECTOR_MIN_WIDTH = 360/);
+  assert.match(appSource, /WIDE_PREVIEW_PREFERRED_WIDTH = 800/);
+  assert.match(appSource, /workbench\.clientWidth - WIDE_COLUMN_RESIZER_WIDTH - WIDE_PREVIEW_PREFERRED_WIDTH/);
+  assert.match(appSource, /FILE_RAIL_MIN_WIDTH = 160/);
+  assert.match(appSource, /aria-label="调整最近文件栏宽度"/);
+  assert.match(appSource, /className="preview-file-name-tooltip"/);
+  assert.match(styleSource, /var\(--preview-file-rail-width, 184px\)/);
+  assert.match(styleSource, /\.preview-file-rail-resizer:hover > span/);
   assert.match(appSource, /role="separator"/);
   assert.match(appSource, /requestAnimationFrame[\s\S]{0,220}applyInspectorWidth/);
   assert.match(appSource, /const handleShortcut = \(event: KeyboardEvent\) => \{\s*if \(event\.defaultPrevented\) return;/);
   assert.match(appSource, /resizeInspectorWithKeyboard[\s\S]{0,700}event\.preventDefault\(\);\s*event\.stopPropagation\(\);/);
   assert.match(appSource, /draggingStageRef\.current \|\| draggingInspectorRef\.current/);
   assert.match(styleSource, /@media \(min-width: 1194px\)/);
+  assert.match(styleSource, /\.drawer-workspace\.is-open\s*\{[\s\S]{0,80}width:\s*100%;/);
   assert.match(styleSource, /\.preview-workbench[\s\S]{0,280}grid-template-columns/);
   assert.match(
     styleSource,
@@ -166,7 +174,12 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(styleSource, /\.comment-item p\s*\{[\s\S]{0,120}margin: 8px 0 0 40px;[\s\S]{0,120}font-size: 14px;/);
   assert.match(styleSource, /\.file-sync-toggle\.is-ready\s*\{\s*color: var\(--quiet\);/);
   assert.match(appSource, /<Icon name=\{icon\} size=\{13\} \/>/);
+  assert.doesNotMatch(appSource, /Rive 公开预览/);
+  assert.match(appSource, /aria-label="关闭文件详情"[\s\S]{0,150}<Icon name="x" size=\{21\}/);
+  assert.match(styleSource, /\.preview-file-add\s*\{[\s\S]{0,180}background:\s*var\(--control\);/);
   assert.match(hostedPanelsSource, /contentEditable=\{!submitting\}/);
+  assert.match(hostedPanelsSource, /<form className="comment-form"[\s\S]{0,120}\{!draftBody && <TimelineHint \/>\}/);
+  assert.doesNotMatch(timelineSource, /TimelineHint/);
   assert.match(hostedPanelsSource, /data-comment-timeline/);
   assert.match(hostedPanelsSource, /formatCommentTimelineMarker/);
   assert.match(hostedPanelsSource, /parseCommentTimelineSegments/);
@@ -184,10 +197,17 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(timelineSource, />\s*整理\s*<\/button>/);
   assert.match(timelineSource, /organizeTimelines\(animations\)/);
   assert.match(timelineSource, /timelineButton\(item\.name, item\.label\)/);
+  assert.match(timelineSource, /animations\.length > 10 \? "is-compact"/);
   assert.match(timelineHintSource, /import\("calligraph"\)/);
   assert.match(timelineHintSource, /prefers-reduced-motion: reduce/);
   assert.match(timelineHintSource, /点击时间轴，可以直接引用到评论/);
   assert.match(packageJson, /"calligraph": "\^1\.4\.1"/);
+  assert.match(styleSource, /\.timeline-layout-switch button\s*\{[\s\S]{0,160}font-size:\s*12px;/);
+  assert.match(styleSource, /\.timeline-group\s*\{[\s\S]{0,160}grid-template-columns:\s*max-content minmax\(0, 1fr\);/);
+  assert.match(styleSource, /\.timeline-label\s*\{[\s\S]{0,180}position:\s*sticky;[\s\S]{0,80}top:\s*56px;/);
+  assert.match(styleSource, /\.timeline-group-title\s*\{[\s\S]{0,180}padding:\s*9px 0 0 8px;[\s\S]{0,100}position:\s*sticky;[\s\S]{0,60}top:\s*88px;/);
+  assert.match(styleSource, /\.timeline-group:has\(\.timeline-tag:hover\) \.timeline-group-title/);
+  assert.match(styleSource, /\.timeline-parameter-row\.is-compact \.parameter-tag\.timeline-tag\s*\{[\s\S]{0,100}padding:\s*6px;/);
   assert.match(styleSource, /\.comment-meta-row \.comment-archive-action\s*\{[\s\S]{0,180}border: 0;[\s\S]{0,100}opacity: 0;/);
   assert.match(styleSource, /\.comment-item:hover \.comment-archive-action/);
   assert.doesNotMatch(hostedPanelsSource, /bodyLength|\/1000<\/span>/);
