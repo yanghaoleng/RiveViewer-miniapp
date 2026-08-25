@@ -2521,7 +2521,8 @@ button:disabled {
 }
 
 .comment-form input,
-.comment-form textarea {
+.comment-form textarea,
+.comment-editor {
   width: 100%;
   color: var(--text);
   background: #0e141c;
@@ -2643,51 +2644,54 @@ button:disabled {
   box-shadow: 0 0 0 1px rgb(242 201 76 / .18);
 }
 
-.comment-form label {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-}
-
 .comment-draft-timeline {
-  max-width: 38%;
-  margin: 12px 0 0 12px;
-  flex: none;
-  overflow: hidden;
+  max-width: 100%;
+  display: inline;
   color: #cbd2db;
-  font-size: 14px;
-  line-height: 1.5;
+  font: inherit;
+  line-height: inherit;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease;
 }
 
-.comment-form textarea {
+.comment-draft-timeline:hover,
+.comment-draft-timeline:focus-visible {
+  color: var(--accent);
+}
+
+.comment-draft-timeline:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.comment-editor {
   min-width: 0;
   height: 46px;
   min-height: 46px;
-  flex: 1;
   padding: 12px 94px 12px 12px;
-  resize: vertical;
+  overflow-x: hidden;
+  overflow-y: auto;
   font-size: 14px;
   line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
   background: transparent;
   border: 0;
   border-radius: inherit;
 }
 
-.comment-draft-timeline + textarea {
-  padding-left: 6px;
-}
-
-.comment-form textarea:focus-visible {
+.comment-editor:focus-visible {
   outline: 0;
 }
 
-.comment-form textarea::placeholder {
+.comment-editor[data-empty="true"]::before {
+  content: attr(data-placeholder);
   color: var(--muted);
+  pointer-events: none;
 }
 
 .comment-submit-row {
@@ -3214,8 +3218,8 @@ article.comment-item:focus-within .comment-meta-row time {
     overflow: hidden;
   }
 
-  .preview-main-column .canvas-card,
-  .preview-main-column .canvas-card.is-proportional {
+  .preview-main-column:not(.is-stage-height-customized) .canvas-card,
+  .preview-main-column:not(.is-stage-height-customized) .canvas-card.is-proportional {
     width: 100% !important;
     height: auto !important;
     max-height: none;
@@ -3224,8 +3228,14 @@ article.comment-item:focus-within .comment-meta-row time {
     aspect-ratio: auto !important;
   }
 
-  .preview-main-column .stage-resizer {
-    display: none;
+  .preview-main-column.is-stage-height-customized .canvas-card,
+  .preview-main-column.is-stage-height-customized .canvas-card.is-proportional {
+    width: 100% !important;
+    height: var(--manual-stage-height) !important;
+    max-height: none;
+    flex: none;
+    align-self: stretch;
+    aspect-ratio: auto !important;
   }
 
   .preview-column-resizer {
@@ -3445,7 +3455,7 @@ article.comment-item:focus-within .comment-meta-row time {
     display: none;
   }
 
-  .comment-form textarea {
+  .comment-editor {
     font-size: 16px;
   }
 

@@ -2,7 +2,10 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { copyText } from "../../lib/clipboard";
 import { formatCommentAbsoluteDate, formatCommentDate } from "../../lib/comment-time";
-import { formatCommentTimeline, parseCommentTimeline } from "../../lib/comment-timeline";
+import {
+  formatCommentTimelineMarker,
+  parseCommentTimelineSegments,
+} from "../../lib/comment-timeline";
 import { formatBytes } from "../../lib/library";
 import type { HostedComment, HostedShare } from "../../lib/hosted-api";
 import { publicAssetUrl } from "../../lib/public-base";
@@ -18,25 +21,47 @@ function CommentBody({
   timelines: string[];
   onSelectTimeline: (name: string) => void;
 }) {
-  const parsed = parseCommentTimeline(body);
-  if (!parsed.timelineName) return <p>{body}</p>;
-  const available = timelines.includes(parsed.timelineName);
+  const segments = parseCommentTimelineSegments(body);
   return (
     <p className="comment-body">
-      <button
-        className="comment-timeline-link"
-        type="button"
-        disabled={!available}
-        title={available ? `切换到时间轴 ${parsed.timelineName}` : `当前文件中没有时间轴 ${parsed.timelineName}`}
-        onPointerUp={(event) => event.currentTarget.blur()}
-        onClick={() => onSelectTimeline(parsed.timelineName)}
-      >
-        {parsed.timelineName}
-      </button>
-      {parsed.body && <span> {parsed.body}</span>}
+      {segments.map((segment, index) => {
+        if (segment.type === "text") return <span key={`text-${index}`}>{segment.value}</span>;
+        const available = timelines.includes(segment.timelineName);
+        return (
+          <button
+            className="comment-timeline-link"
+            key={`timeline-${index}-${segment.timelineName}`}
+            type="button"
+            disabled={!available}
+            title={available ? `切换到时间轴 ${segment.timelineName}` : `当前文件中没有时间轴 ${segment.timelineName}`}
+            onPointerUp={(event) => event.currentTarget.blur()}
+            onClick={() => onSelectTimeline(segment.timelineName)}
+          >
+            {segment.timelineName}
+          </button>
+        );
+      })}
     </p>
   );
 }
+
+function serializeCommentDraft(root: HTMLElement): string {
+  const serializeNode = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent || "";
+    if (!(node instanceof HTMLElement)) return "";
+    const timelineName = node.dataset.commentTimeline;
+    if (timelineName) return formatCommentTimelineMarker(timelineName);
+    if (node.tagName === "BR") return "\n";
+    const contents = Array.from(node.childNodes).map(serializeNode).join("");
+    return node.tagName === "DIV" || node.tagName === "P" ? `${contents}\n` : contents;
+  };
+  return Array.from(root.childNodes).map(serializeNode).join("").replace(/\n$/, "");
+}
+
+export type CommentTimelineInsertion = {
+  id: number;
+  name: string;
+};
 
 export function ArchivedLibraryDialog({
   archivedItems,
@@ -444,7 +469,7 @@ export function ShareCommentsPanel({
   actionBusyId,
   actionError,
   timelines,
-  activeTimeline,
+  timelineInsertion,
   onRetry,
   onSubmit,
   onArchive,
@@ -459,27 +484,86 @@ export function ShareCommentsPanel({
   actionBusyId: string;
   actionError: string;
   timelines: string[];
-  activeTimeline: string;
+  timelineInsertion: CommentTimelineInsertion | null;
   onRetry: () => void;
   onSubmit: (body: string) => Promise<boolean>;
   onArchive: (comment: HostedComment) => Promise<void>;
   onRestore: (comment: HostedComment) => Promise<void>;
   onSelectTimeline: (name: string) => void;
 }) {
-  const [body, setBody] = useState("");
-  const [draftTimeline, setDraftTimeline] = useState("");
+  const [draftBody, setDraftBody] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
+  const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const editorFocusedRef = useRef(false);
+  const editorBlurredAtRef = useRef(0);
+  const handledInsertionIdRef = useRef(0);
+
+  const captureCaret = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) savedRangeRef.current = range.cloneRange();
+  };
+
+  const syncDraftBody = () => {
+    const editor = editorRef.current;
+    if (editor) setDraftBody(serializeCommentDraft(editor));
+  };
+
+  useEffect(() => {
+    const insertion = timelineInsertion;
+    if (!insertion || handledInsertionIdRef.current === insertion.id) return;
+    handledInsertionIdRef.current = insertion.id;
+    const editor = editorRef.current;
+    const recentlyBlurred = Date.now() - editorBlurredAtRef.current < 900;
+    if (!editor || (!editorFocusedRef.current && !recentlyBlurred && !draftBody.trim())) return;
+
+    const range = savedRangeRef.current?.startContainer.isConnected
+      && editor.contains(savedRangeRef.current.commonAncestorContainer)
+      ? savedRangeRef.current
+      : document.createRange();
+    if (!editor.contains(range.commonAncestorContainer)) {
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+    range.deleteContents();
+
+    const marker = document.createElement("span");
+    marker.className = "comment-draft-timeline";
+    marker.contentEditable = "false";
+    marker.tabIndex = 0;
+    marker.dataset.commentTimeline = insertion.name;
+    marker.setAttribute("role", "button");
+    marker.setAttribute("aria-label", `时间轴 ${insertion.name}`);
+    marker.title = `切换到时间轴 ${insertion.name}`;
+    marker.textContent = insertion.name;
+    range.insertNode(marker);
+
+    const spacer = document.createTextNode(" ");
+    marker.after(spacer);
+    range.setStartAfter(spacer);
+    range.collapse(true);
+    savedRangeRef.current = range.cloneRange();
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    editor.focus({ preventScroll: true });
+    setDraftBody(serializeCommentDraft(editor));
+    setSubmitNotice("");
+  }, [draftBody, timelineInsertion]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const serializedBody = `${formatCommentTimeline(draftTimeline)}${body.trim()}`;
-    const submittedBody = Array.from(serializedBody).slice(0, 1000).join("").trim();
+    const submittedBody = Array.from(draftBody).slice(0, 1000).join("").trim();
     if (!submittedBody || submitting) return;
     setSubmitNotice("");
     const created = await onSubmit(submittedBody);
     if (created) {
-      setBody("");
-      setDraftTimeline("");
+      editorRef.current?.replaceChildren();
+      savedRangeRef.current = null;
+      setDraftBody("");
       setSubmitNotice("评论已发表");
     }
   };
@@ -492,26 +576,46 @@ export function ShareCommentsPanel({
       </div>
 
       <form className="comment-form" onSubmit={submit}>
-        <label>
-          <span className="sr-only">评论内容</span>
-          {draftTimeline && <span className="comment-draft-timeline">{draftTimeline}</span>}
-          <textarea
-            value={body}
-            rows={1}
-            onFocus={() => {
-              setDraftTimeline((current) => current || activeTimeline);
-              setSubmitNotice("");
-            }}
-            onChange={(event) => {
-              setBody(Array.from(event.target.value).slice(0, 1000).join(""));
-              setSubmitNotice("");
-            }}
-            placeholder="写下评论或备注"
-            disabled={submitting}
-          />
-        </label>
+        <div
+          ref={editorRef}
+          className="comment-editor"
+          contentEditable={!submitting}
+          role="textbox"
+          aria-label="评论内容"
+          aria-multiline="true"
+          aria-disabled={submitting}
+          data-empty={draftBody ? "false" : "true"}
+          data-placeholder="写下评论或备注"
+          suppressContentEditableWarning
+          onFocus={() => {
+            editorFocusedRef.current = true;
+            setSubmitNotice("");
+            window.requestAnimationFrame(captureCaret);
+          }}
+          onBlur={() => {
+            editorFocusedRef.current = false;
+            editorBlurredAtRef.current = Date.now();
+          }}
+          onInput={() => {
+            syncDraftBody();
+            captureCaret();
+            setSubmitNotice("");
+          }}
+          onKeyUp={captureCaret}
+          onMouseUp={captureCaret}
+          onClick={(event) => {
+            const marker = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-timeline]");
+            if (marker?.dataset.commentTimeline) onSelectTimeline(marker.dataset.commentTimeline);
+          }}
+          onKeyDown={(event) => {
+            const marker = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-timeline]");
+            if (!marker?.dataset.commentTimeline || (event.key !== "Enter" && event.key !== " ")) return;
+            event.preventDefault();
+            onSelectTimeline(marker.dataset.commentTimeline);
+          }}
+        />
         <div className="comment-submit-row">
-          <button className="primary-action press-feedback" type="submit" disabled={(!body.trim() && !draftTimeline) || submitting}>
+          <button className="primary-action press-feedback" type="submit" disabled={!draftBody.trim() || submitting}>
             {submitting ? "正在提交" : submitError ? "重新发表" : "发表评论"}
           </button>
         </div>

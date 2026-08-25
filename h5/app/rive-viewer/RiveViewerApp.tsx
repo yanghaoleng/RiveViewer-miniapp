@@ -99,6 +99,7 @@ const WIDE_INSPECTOR_DEFAULT_WIDTH = 390;
 const WIDE_INSPECTOR_MAX_WIDTH = 680;
 const WIDE_PREVIEW_MIN_WIDTH = 520;
 const WIDE_COLUMN_RESIZER_WIDTH = 13;
+const WIDE_LAYOUT_MIN_WIDTH = 1194;
 const RAIL_ACTIVITY_STATE_KEY = "riveRailPreserveActivity";
 
 type ActivityPolicy = "record" | "preserve";
@@ -243,6 +244,7 @@ export function RiveViewerApp({
   const [engineToast, setEngineToast] = useState("");
   const [canvasTone, setCanvasTone] = useState("mist");
   const [stageHeight, setStageHeight] = useState(460);
+  const [stageHeightCustomized, setStageHeightCustomized] = useState(false);
   const [draggingStage, setDraggingStage] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(WIDE_INSPECTOR_DEFAULT_WIDTH);
   const [draggingInspector, setDraggingInspector] = useState(false);
@@ -287,6 +289,7 @@ export function RiveViewerApp({
   const [commentActionBusyId, setCommentActionBusyId] = useState("");
   const [commentActionError, setCommentActionError] = useState("");
   const [commentsReload, setCommentsReload] = useState(0);
+  const [commentTimelineInsertion, setCommentTimelineInsertion] = useState<{ id: number; name: string } | null>(null);
   const [publicRouteDetached, setPublicRouteDetached] = useState(false);
   const comments = commentThread.code === shareCode ? commentThread.items : [];
   const telemetry = useMemo(() => new PlaybackTelemetry(), []);
@@ -324,6 +327,7 @@ export function RiveViewerApp({
   const capturedCoverIdsRef = useRef(new Set<string>());
   const cloudUploadBusyRef = useRef(false);
   const commentSubmitBusyRef = useRef(false);
+  const commentTimelineInsertionIdRef = useRef(0);
   const uploadRetryFilesRef = useRef(new Map<string, LibraryFile>());
   const dragDepthRef = useRef(0);
   const hostedLibraryRequestRef = useRef(0);
@@ -1421,9 +1425,23 @@ export function RiveViewerApp({
 
   const eventTargetStageResizerRef = useRef<HTMLDivElement>(null);
 
+  const maximumStageHeight = () => {
+    if (typeof window !== "undefined" && window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH) {
+      const workbenchHeight = previewWorkbenchRef.current?.clientHeight || window.innerHeight;
+      return Math.max(320, workbenchHeight - 80);
+    }
+    return Math.max(320, typeof window === "undefined" ? 620 : window.innerHeight * 0.66);
+  };
+
   const applyStageHeight = useCallback((height: number) => {
     const stage = stageRef.current;
     if (!stage) return;
+    if (window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH) {
+      stage.style.setProperty("--manual-stage-height", `${height}px`);
+      stage.style.width = "100%";
+      stage.style.height = `${height}px`;
+      return;
+    }
     if (fitRef.current === "contain" && metadata.width > 0 && metadata.height > 0) {
       stage.style.width = `min(100%, ${Math.round(height * (metadata.width / metadata.height))}px)`;
       stage.style.height = "";
@@ -1435,7 +1453,11 @@ export function RiveViewerApp({
 
   const beginStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest(".stage-resizer-mode")) return;
-    resizeStartRef.current = { x: event.clientX, y: event.clientY, height: stageHeight };
+    const currentHeight = stageRef.current?.getBoundingClientRect().height || stageHeight;
+    resizeStartRef.current = { x: event.clientX, y: event.clientY, height: currentHeight };
+    applyStageHeight(currentHeight);
+    setStageHeight(currentHeight);
+    setStageHeightCustomized(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     draggingStageRef.current = true;
     pendingStageHeightRef.current = null;
@@ -1466,7 +1488,7 @@ export function RiveViewerApp({
         setStageResizePressActive(true);
       }
     }
-    const maximum = Math.max(320, window.innerHeight * 0.66);
+    const maximum = maximumStageHeight();
     if (Math.abs(deltaY) >= Math.abs(deltaX)) {
       pendingStageHeightRef.current = clamp(resizeStartRef.current.height + deltaY, 250, maximum);
       if (stageResizeFrameRef.current === null) {
@@ -1641,12 +1663,14 @@ export function RiveViewerApp({
   const remainingArtboards = Math.max(0, metadata.artboardCount - metadata.artboardNames.length);
   const hasStageAspect = metadata.width > 0 && metadata.height > 0;
   const stageAspect = hasStageAspect ? metadata.width / metadata.height : 1;
-  const stageStyle = fit === "contain" && hasStageAspect
-    ? {
+  const stageStyle = {
+    ...(fit === "contain" && hasStageAspect ? {
         width: `min(100%, ${Math.round(stageHeight * stageAspect)}px)`,
         aspectRatio: `${metadata.width} / ${metadata.height}`,
       }
-    : { width: "100%", height: `${stageHeight}px` };
+      : { width: "100%", height: `${stageHeight}px` }),
+    "--manual-stage-height": `${stageHeight}px`,
+  } as CSSProperties & { "--manual-stage-height": string };
   const previewWorkbenchStyle = {
     "--preview-inspector-width": `${inspectorWidth}px`,
   } as CSSProperties;
@@ -1655,6 +1679,11 @@ export function RiveViewerApp({
   const homeHref = viewerHomePath(import.meta.env.BASE_URL);
   const selectTimeline = useCallback((name: string) => {
     playerRef.current?.selectAnimation(name);
+  }, []);
+  const selectTimelineFromControl = useCallback((name: string) => {
+    playerRef.current?.selectAnimation(name);
+    commentTimelineInsertionIdRef.current += 1;
+    setCommentTimelineInsertion({ id: commentTimelineInsertionIdRef.current, name });
   }, []);
   const commentsPanel = publicShare && publicShare.status === "active" ? (
     <ShareCommentsPanel
@@ -1666,7 +1695,7 @@ export function RiveViewerApp({
       actionBusyId={commentActionBusyId}
       actionError={commentActionError}
       timelines={metadata.animations}
-      activeTimeline={metadata.activeAnimation}
+      timelineInsertion={commentTimelineInsertion}
       onRetry={() => setCommentsReload((current) => current + 1)}
       onSubmit={submitComment}
       onArchive={(comment) => changeCommentStatus(comment, "archive")}
@@ -1908,7 +1937,7 @@ export function RiveViewerApp({
           className={`preview-workbench ${draggingInspector ? "is-resizing-columns" : ""}`}
           style={previewWorkbenchStyle}
         >
-          <div className="preview-main-column">
+          <div className={`preview-main-column ${stageHeightCustomized ? "is-stage-height-customized" : ""}`}>
             <div
               ref={stageRef}
               className={`canvas-card tone-${canvasTone} ${fit === "contain" && hasStageAspect ? "is-proportional" : ""}`}
@@ -1954,7 +1983,7 @@ export function RiveViewerApp({
               tabIndex={0}
               aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画布高度，按住后左右滑动选择，双击切换完整或铺满"
               aria-valuemin={250}
-              aria-valuemax={Math.round(Math.max(320, typeof window === "undefined" ? 620 : window.innerHeight * 0.66))}
+              aria-valuemax={Math.round(maximumStageHeight())}
               aria-valuenow={Math.round(stageHeight)}
             >
               <span className="stage-resizer-grip" />
@@ -2055,7 +2084,7 @@ export function RiveViewerApp({
             telemetry={telemetry}
             animations={metadata.animations}
             activeAnimation={metadata.activeAnimation}
-            onSelect={selectTimeline}
+            onSelect={selectTimelineFromControl}
           />
 
           <ParameterRow label="状态机输入">

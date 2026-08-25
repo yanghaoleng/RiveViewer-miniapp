@@ -304,7 +304,9 @@ test("keeps hosted API and file upload contracts explicit", async () => {
     panelSource.indexOf("export function ShareCommentsPanel"),
     panelSource.indexOf("export function PublicShareState"),
   );
-  assert.equal((commentPanelSource.match(/<textarea/g) || []).length, 1);
+  assert.equal((commentPanelSource.match(/className="comment-editor"/g) || []).length, 1);
+  assert.match(commentPanelSource, /contentEditable=\{!submitting\}/);
+  assert.doesNotMatch(commentPanelSource, /<textarea/);
   assert.doesNotMatch(commentPanelSource, /<input|称呼（选填）|COMMENT_NICKNAME_STORAGE_KEY|匿名/);
   assert.match(commentPanelSource, /placeholder="写下评论或备注"/);
   assert.match(commentPanelSource, /avatars\/\$\{comment\.avatar\}\.webp/);
@@ -346,7 +348,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(styleSource, /textarea:focus-visible/);
   assert.match(styleSource, /\.comment-author img[\s\S]{0,180}width:\s*32px[\s\S]{0,80}height:\s*32px[\s\S]{0,100}border-radius:\s*50%[\s\S]{0,80}object-fit:\s*cover/);
   assert.match(styleSource, /\.comment-item-archived summary/);
-  assert.match(styleSource, /@media \(max-width: 520px\)[\s\S]*\.comment-form textarea[\s\S]*font-size:\s*16px/);
+  assert.match(styleSource, /@media \(max-width: 520px\)[\s\S]*\.comment-editor[\s\S]*font-size:\s*16px/);
   assert.match(clipboardSource, /navigator\.clipboard\?\.writeText/);
   assert.match(clipboardSource, /document\.execCommand\("copy"\)/);
   assert.match(identitySource, /rive-host-comment-visitor-v1/);

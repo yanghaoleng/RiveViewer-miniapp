@@ -151,23 +151,30 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(appSource, /draggingStageRef\.current \|\| draggingInspectorRef\.current/);
   assert.match(styleSource, /@media \(min-width: 1194px\)/);
   assert.match(styleSource, /\.preview-workbench[\s\S]{0,280}grid-template-columns/);
-  assert.match(styleSource, /\.preview-main-column \.canvas-card[\s\S]{0,220}flex: 1;/);
-  assert.match(styleSource, /\.preview-main-column \.stage-resizer\s*\{\s*display: none;/);
+  assert.match(
+    styleSource,
+    /\.preview-main-column:not\(\.is-stage-height-customized\) \.canvas-card[\s\S]{0,260}flex: 1;/,
+  );
+  assert.doesNotMatch(styleSource, /\.preview-main-column \.stage-resizer\s*\{\s*display: none;/);
+  assert.match(appSource, /is-stage-height-customized/);
+  assert.match(styleSource, /\.preview-main-column\.is-stage-height-customized \.canvas-card[\s\S]{0,220}height: var\(--manual-stage-height\) !important;/);
   assert.match(styleSource, /\.comment-item p\s*\{[\s\S]{0,120}margin: 8px 0 0 40px;[\s\S]{0,120}font-size: 14px;/);
   assert.match(styleSource, /\.file-sync-toggle\.is-ready\s*\{\s*color: var\(--quiet\);/);
   assert.match(appSource, /<Icon name=\{icon\} size=\{13\} \/>/);
-  assert.match(hostedPanelsSource, /<span className="sr-only">评论内容<\/span>/);
-  assert.match(hostedPanelsSource, /rows=\{1\}/);
-  assert.match(hostedPanelsSource, /formatCommentTimeline\(draftTimeline\)/);
-  assert.match(hostedPanelsSource, /className="comment-draft-timeline"/);
+  assert.match(hostedPanelsSource, /contentEditable=\{!submitting\}/);
+  assert.match(hostedPanelsSource, /data-comment-timeline/);
+  assert.match(hostedPanelsSource, /formatCommentTimelineMarker/);
+  assert.match(hostedPanelsSource, /parseCommentTimelineSegments/);
+  assert.match(hostedPanelsSource, /marker\.after\(spacer\)/);
+  assert.match(hostedPanelsSource, /className = "comment-draft-timeline"/);
   assert.match(hostedPanelsSource, /className="comment-timeline-link"/);
   assert.match(hostedPanelsSource, /onPointerUp=\{\(event\) => event\.currentTarget\.blur\(\)\}/);
-  assert.match(hostedPanelsSource, /onClick=\{\(\) => onSelectTimeline\(parsed\.timelineName\)\}/);
+  assert.match(hostedPanelsSource, /onClick=\{\(\) => onSelectTimeline\(segment\.timelineName\)\}/);
   assert.doesNotMatch(hostedPanelsSource, /comment-timeline-link.*is-active/);
   assert.match(styleSource, /\.comment-timeline-link\s*\{[\s\S]{0,300}color: inherit;[\s\S]{0,300}text-decoration: underline;/);
   assert.match(styleSource, /\.comment-timeline-link:hover,[\s\S]{0,100}color: var\(--accent\);/);
   assert.match(appSource, /onSelectTimeline=\{selectTimeline\}/);
-  assert.match(appSource, /<TimelineControl[\s\S]{0,220}onSelect=\{selectTimeline\}/);
+  assert.match(appSource, /<TimelineControl[\s\S]{0,220}onSelect=\{selectTimelineFromControl\}/);
   assert.match(styleSource, /\.comment-meta-row \.comment-archive-action\s*\{[\s\S]{0,180}border: 0;[\s\S]{0,100}opacity: 0;/);
   assert.match(styleSource, /\.comment-item:hover \.comment-archive-action/);
   assert.doesNotMatch(hostedPanelsSource, /bodyLength|\/1000<\/span>/);
