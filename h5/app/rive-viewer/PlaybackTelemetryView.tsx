@@ -1,6 +1,10 @@
 import { memo, useMemo, useState, useSyncExternalStore } from "react";
 import { formatPlaybackTime, type PlaybackTelemetry } from "../../lib/playback-telemetry";
-import { organizeTimelines } from "../../lib/timeline-groups";
+import {
+  getDefaultTimelineLayout,
+  organizeTimelines,
+  type TimelineLayout,
+} from "../../lib/timeline-groups";
 
 function useTelemetry(telemetry: PlaybackTelemetry) {
   return useSyncExternalStore(
@@ -38,7 +42,18 @@ export const TimelineControl = memo(function TimelineControl({
   onSelect: (name: string) => void;
 }) {
   const { timeline } = useTelemetry(telemetry);
-  const [layout, setLayout] = useState<"expanded" | "organized">("expanded");
+  const animationSignature = useMemo(() => animations.join("\u0000"), [animations]);
+  const defaultLayout = getDefaultTimelineLayout(animations.length);
+  const [layoutSelection, setLayoutSelection] = useState<{
+    animationSignature: string;
+    layout: TimelineLayout;
+  }>(() => ({ animationSignature, layout: defaultLayout }));
+  const layout = layoutSelection.animationSignature === animationSignature
+    ? layoutSelection.layout
+    : defaultLayout;
+  const selectLayout = (nextLayout: TimelineLayout) => {
+    setLayoutSelection({ animationSignature, layout: nextLayout });
+  };
   const organizedSections = useMemo(() => organizeTimelines(animations), [animations]);
   const progress = `${Math.min(1, Math.max(0, timeline.progress)) * 100}%`;
   const timelineButton = (name: string, label = name) => {
@@ -70,7 +85,7 @@ export const TimelineControl = memo(function TimelineControl({
             type="button"
             className={layout === "expanded" ? "is-active" : ""}
             aria-pressed={layout === "expanded"}
-            onClick={() => setLayout("expanded")}
+            onClick={() => selectLayout("expanded")}
           >
             展开
           </button>
@@ -78,7 +93,7 @@ export const TimelineControl = memo(function TimelineControl({
             type="button"
             className={layout === "organized" ? "is-active" : ""}
             aria-pressed={layout === "organized"}
-            onClick={() => setLayout("organized")}
+            onClick={() => selectLayout("organized")}
           >
             整理
           </button>

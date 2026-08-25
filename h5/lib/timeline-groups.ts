@@ -3,6 +3,12 @@ export type TimelineGroupItem = {
   label: string;
 };
 
+export type TimelineLayout = "expanded" | "organized";
+
+export function getDefaultTimelineLayout(animationCount: number): TimelineLayout {
+  return animationCount > 10 ? "organized" : "expanded";
+}
+
 export type TimelineSection =
   | { type: "group"; prefix: string; items: TimelineGroupItem[] }
   | { type: "timeline"; item: TimelineGroupItem };

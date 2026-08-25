@@ -196,6 +196,9 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(timelineSource, />\s*展开\s*<\/button>/);
   assert.match(timelineSource, />\s*整理\s*<\/button>/);
   assert.match(timelineSource, /organizeTimelines\(animations\)/);
+  assert.match(timelineSource, /getDefaultTimelineLayout\(animations\.length\)/);
+  assert.match(timelineSource, /layoutSelection\.animationSignature === animationSignature/);
+  assert.match(appSource, /<TimelineControl\s+key=\{activeFile\.sessionId\}/);
   assert.match(timelineSource, /timelineButton\(item\.name, item\.label\)/);
   assert.match(timelineSource, /animations\.length > 10 \? "is-compact"/);
   assert.match(timelineHintSource, /import\("calligraph"\)/);

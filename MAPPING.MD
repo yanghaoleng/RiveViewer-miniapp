@@ -170,7 +170,7 @@
 | 公开评论栏 | File-scoped forest comment thread | `ShareCommentsPanel`、`CommentThreadState.code`、`targetCode`、`.public-comments-inline`、`GET/POST /api/v1/shares/:code/comments`；按三位短码隔离，切换文件不显示上一线程，事件控制台后的唯一正文输入区，无姓名控件 |
 | JOJO 可调工作台 | Resizable preview workbench | `.preview-workbench`、`.preview-main-column`、`.is-stage-height-customized`、`--manual-stage-height`、`.stage-resizer`、`.preview-inspector`、`1194px`；左画布默认满高、保持文件原比例且保留手柄；桌面优先给预览约 `800px`，右栏最小 `360px` |
 | 可调中缝 | Accessible column separator | `.preview-column-resizer`、`WIDE_COLUMN_RESIZER_WIDTH`、`applyInspectorWidth`、`role="separator"`；支持拖动、方向键、Home 和 End |
-| 时间轴整理 | Grouped timeline organizer | `TimelineControl`、`timelineDisplayMode`、`timelineGroups`、`.timeline-group-title`；无一级前缀项目排最前，按第一个下划线分组，标签显示后缀但评论引用完整名 |
+| 时间轴整理 | Grouped timeline organizer | `TimelineControl`、`getDefaultTimelineLayout`、`layoutSelection`、`organizeTimelines`、`.timeline-group-title`；超过 `10` 条默认整理，否则默认展开；无一级前缀项目排最前，按第一个下划线分组，标签显示后缀但评论引用完整名 |
 | 时间轴三层置顶 | Stacked timeline sticky headers | `.inspector-section-events`、`.timeline-section-header`、`.timeline-group-title`、`0 / 56 / 88px`；滚动时依次固定，Hover 标签高亮对应组标题 |
 | 评论时间轴引用 | Inline comment timeline link | `CommentTimelineInsertion`、`formatCommentTimelineMarker`、`parseCommentTimelineSegments`、`serializeCommentDraft`、`CommentBody`、`.comment-draft-timeline`、`.comment-timeline-link`、`selectTimelineFromControl`；点击时间轴按光标插入，同一评论可含多个标记；底层仍以 `【时间轴：idol】` 纯文本存储，发布前后只内联显示下划线名称；Hover 变黄，点击切换后不保留选中色 |
 | 评论相对时间 | Relative comment timestamp | `formatCommentDate`、`formatCommentAbsoluteDate`、`.comment-meta-row time`；一周内显示刚刚、几分钟前、几小时前或几天前，满一周显示绝对日期 |

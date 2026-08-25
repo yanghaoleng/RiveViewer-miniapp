@@ -2115,6 +2115,7 @@ export function RiveViewerApp({
           </ParameterRow>
 
           <TimelineControl
+            key={activeFile.sessionId}
             telemetry={telemetry}
             animations={metadata.animations}
             activeAnimation={metadata.activeAnimation}

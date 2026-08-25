@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { organizeTimelines } from "../lib/timeline-groups.ts";
+import { getDefaultTimelineLayout, organizeTimelines } from "../lib/timeline-groups.ts";
+
+test("defaults timeline layout to organized only above ten items", () => {
+  assert.equal(getDefaultTimelineLayout(0), "expanded");
+  assert.equal(getDefaultTimelineLayout(10), "expanded");
+  assert.equal(getDefaultTimelineLayout(11), "organized");
+});
 
 test("groups repeated first-level timeline prefixes and keeps deeper names", () => {
   assert.deepEqual(organizeTimelines([
