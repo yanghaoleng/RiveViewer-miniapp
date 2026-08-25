@@ -50,7 +50,12 @@ import { PlaybackTelemetry } from "../../lib/playback-telemetry";
 import { publicAssetUrl } from "../../lib/public-base";
 import { RuntimeEventLog } from "../../lib/runtime-event-log";
 import { mergeUnifiedFiles, type UnifiedFileItem } from "../../lib/unified-library";
-import { hostedSharePath, hostedShareUrl, viewerHomePath } from "../../lib/viewer-route";
+import {
+  hostedSharePath,
+  hostedShareUrl,
+  shareCodeFromPath,
+  viewerHomePath,
+} from "../../lib/viewer-route";
 import {
   ArchiveConfirmDialog,
   ArchivedLibraryDialog,
@@ -184,19 +189,6 @@ function clearRailActivityMarker(code: string | null): void {
   window.history.replaceState(Object.keys(next).length ? next : null, "", window.location.href);
 }
 
-function openHostedShareWithActivity(code: string, activityPolicy: ActivityPolicy): void {
-  const path = hostedSharePath(code);
-  if (activityPolicy === "record") {
-    window.location.assign(path);
-    return;
-  }
-  window.history.pushState({
-    ...historyStateRecord(window.history.state),
-    [RAIL_ACTIVITY_STATE_KEY]: code,
-  }, "", path);
-  window.location.reload();
-}
-
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -221,13 +213,16 @@ export type ViewerMode = "hosted" | "local";
 
 export function RiveViewerApp({
   mode,
-  shareCode,
+  shareCode: initialShareCode,
 }: {
   mode: ViewerMode;
   shareCode: string | null;
 }) {
   const isHostedPlatform = mode === "hosted";
-  const [preservePublicActivity] = useState(() => hasRailActivityMarker(shareCode));
+  const [shareCode, setShareCode] = useState(initialShareCode);
+  const [preservePublicActivity, setPreservePublicActivity] = useState(
+    () => hasRailActivityMarker(initialShareCode),
+  );
   const [files, setFiles] = useState<LibraryFile[]>([]);
   const [expandedFileId, setExpandedFileId] = useState("");
   const [activeFile, setActiveFile] = useState<ActiveFile | null>(null);
@@ -341,6 +336,46 @@ export function RiveViewerApp({
   const detailCopyTimerRef = useRef<number | null>(null);
   const engineToastTimerRef = useRef<number | null>(null);
 
+  const navigateHostedShare = useCallback((code: string, activityPolicy: ActivityPolicy) => {
+    const nextState = historyStateRecord(window.history.state);
+    if (activityPolicy === "preserve") nextState[RAIL_ACTIVITY_STATE_KEY] = code;
+    else delete nextState[RAIL_ACTIVITY_STATE_KEY];
+    window.history.pushState(
+      Object.keys(nextState).length ? nextState : null,
+      "",
+      hostedSharePath(code),
+    );
+    playerRef.current?.pause();
+    setPreservePublicActivity(activityPolicy === "preserve");
+    setPublicRouteDetached(false);
+    setPublicShare(null);
+    setPublicShareState("loading");
+    setLoading({ active: true, progress: 0, phase: "正在读取公开文件信息" });
+    setShareCode(code);
+  }, []);
+
+  useEffect(() => {
+    const syncRouteFromHistory = () => {
+      const nextCode = shareCodeFromPath(window.location.pathname, import.meta.env.BASE_URL);
+      setPreservePublicActivity(hasRailActivityMarker(nextCode));
+      setPublicRouteDetached(false);
+      setShareCode(nextCode);
+      if (nextCode) return;
+      openRequestRef.current += 1;
+      activeSourceRef.current = null;
+      playerRef.current?.pause();
+      telemetry.reset();
+      runtimeEventLog.reset();
+      setActiveFile(null);
+      setPublicShare(null);
+      setPublicShareState("idle");
+      setCommentThread({ code: null, items: [] });
+      setLoading({ active: false, progress: 0, phase: "已返回文件列表" });
+    };
+    window.addEventListener("popstate", syncRouteFromHistory);
+    return () => window.removeEventListener("popstate", syncRouteFromHistory);
+  }, [runtimeEventLog, telemetry]);
+
   const showEngineToast = useCallback((message: string) => {
     if (engineToastTimerRef.current !== null) {
       window.clearTimeout(engineToastTimerRef.current);
@@ -420,6 +455,10 @@ export function RiveViewerApp({
     if (!shareCode) return;
     const controller = new AbortController();
     const sessionId = ++openRequestRef.current;
+    playerRef.current?.pause();
+    setMetadata(EMPTY_METADATA);
+    telemetry.reset();
+    runtimeEventLog.reset();
     setPublicShareState("loading");
     setPublicShareError("");
     setPublicShare(null);
@@ -444,6 +483,17 @@ export function RiveViewerApp({
           return;
         }
 
+        setActiveFile({
+          file: {
+            id: `hosted-${share.code}`,
+            name: share.filename,
+            size: share.size,
+            updatedAt: Date.parse(share.createdAt) || Date.now(),
+            hostedCode: share.code,
+          },
+          sessionId,
+          hostedShare: share,
+        });
         setLoading({ active: true, progress: 0, phase: "正在下载公开文件" });
         const data = await getHostedFile(share.code, {
           signal: controller.signal,
@@ -500,7 +550,7 @@ export function RiveViewerApp({
         activeSourceRef.current = null;
       }
     };
-  }, [preservePublicActivity, publicShareReload, refreshLibrary, shareCode, telemetry]);
+  }, [preservePublicActivity, publicShareReload, refreshLibrary, runtimeEventLog, shareCode, telemetry]);
 
   useEffect(() => {
     if (!shareCode || publicShare?.status !== "active") return;
@@ -816,7 +866,7 @@ export function RiveViewerApp({
     activityPolicy: ActivityPolicy = "record",
   ) => {
     if (file.hostedCode) {
-      openHostedShareWithActivity(file.hostedCode, activityPolicy);
+      navigateHostedShare(file.hostedCode, activityPolicy);
       return;
     }
     const sessionId = ++openRequestRef.current;
@@ -853,14 +903,14 @@ export function RiveViewerApp({
       setLoading({ active: false, progress: 0, phase: "读取失败" });
       setError(openError instanceof Error ? openError.message : "无法读取文件");
     }
-  }, [telemetry]);
+  }, [navigateHostedShare, telemetry]);
 
   const openUnifiedFile = useCallback((
     item: UnifiedFileItem,
     activityPolicy: ActivityPolicy = "record",
   ) => {
     if (isHostedPlatform && item.hostedCode) {
-      openHostedShareWithActivity(item.hostedCode, activityPolicy);
+      navigateHostedShare(item.hostedCode, activityPolicy);
       return;
     }
     if (item.localFile) {
@@ -868,11 +918,11 @@ export function RiveViewerApp({
       return;
     }
     if (item.hostedCode) {
-      openHostedShareWithActivity(item.hostedCode, activityPolicy);
+      navigateHostedShare(item.hostedCode, activityPolicy);
       return;
     }
     void openFile(item.file, activityPolicy);
-  }, [isHostedPlatform, openFile]);
+  }, [isHostedPlatform, navigateHostedShare, openFile]);
 
   const rememberPublishedCode = useCallback((fileId: string, code: string) => {
     setPublishedCodes((current) => {
@@ -1743,7 +1793,7 @@ export function RiveViewerApp({
     />
   ) : null;
 
-  if (isPublicRoute && publicShareState !== "ready") {
+  if (isPublicRoute && publicShareState !== "ready" && !activeFile) {
     const kind = publicShareState === "archived" ? "archived" : publicShareState === "error" ? "error" : "loading";
     return (
       <main className="app-shell public-state-shell">

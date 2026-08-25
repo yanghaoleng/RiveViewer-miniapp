@@ -179,6 +179,14 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(styleSource, /\.preview-file-add\s*\{[\s\S]{0,180}background:\s*var\(--control\);/);
   assert.match(hostedPanelsSource, /contentEditable=\{!submitting\}/);
   assert.match(hostedPanelsSource, /<form className="comment-form"[\s\S]{0,120}\{!draftBody && <TimelineHint \/>\}/);
+  assert.match(hostedPanelsSource, /getCommentKeyboardAction/);
+  assert.match(hostedPanelsSource, /document\.execCommand\("insertLineBreak"\)/);
+  assert.match(hostedPanelsSource, /closest\("form"\)\?\.requestSubmit\(\)/);
+  assert.match(styleSource, /\.comment-submit-row\s*\{[\s\S]{0,120}z-index:\s*2;/);
+  assert.match(appSource, /const navigateHostedShare = useCallback/);
+  assert.match(appSource, /window\.history\.pushState[\s\S]{0,500}setShareCode\(code\)/);
+  assert.doesNotMatch(appSource, /window\.location\.reload\(\)/);
+  assert.match(appSource, /publicShareState !== "ready" && !activeFile/);
   assert.doesNotMatch(timelineSource, /TimelineHint/);
   assert.match(hostedPanelsSource, /data-comment-timeline/);
   assert.match(hostedPanelsSource, /formatCommentTimelineMarker/);

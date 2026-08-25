@@ -175,7 +175,8 @@
 | 评论时间轴引用 | Inline comment timeline link | `CommentTimelineInsertion`、`formatCommentTimelineMarker`、`parseCommentTimelineSegments`、`serializeCommentDraft`、`CommentBody`、`.comment-draft-timeline`、`.comment-timeline-link`、`selectTimelineFromControl`；点击时间轴按光标插入，同一评论可含多个标记；底层仍以 `【时间轴：idol】` 纯文本存储，发布前后只内联显示下划线名称；Hover 变黄，点击切换后不保留选中色 |
 | 评论相对时间 | Relative comment timestamp | `formatCommentDate`、`formatCommentAbsoluteDate`、`.comment-meta-row time`；一周内显示刚刚、几分钟前、几小时前或几天前，满一周显示绝对日期 |
 | 紧凑评论列表 | Compact comment list | `article.comment-item`、`.comment-avatar`、`.comment-content`、`.comment-nickname`；头像左列，昵称和正文右列紧凑对齐 |
-| 紧凑评论输入 | Inline compact comment composer | `.comment-form`、`.comment-editor[contentEditable]`、`.comment-submit-row`；默认 `46px` 单行高度，按钮内置，不显示可见标题与字数 |
+| 紧凑评论输入 | Inline compact comment composer | `.comment-form`、`.comment-editor[contentEditable]`、`.comment-submit-row`、`z-index: 2`；默认 `46px` 单行高度，按钮内置且不被编辑层遮挡，不显示可见标题与字数 |
+| 评论回车快捷键 | Comment submit shortcut | `getCommentKeyboardAction`、`requestSubmit`、`insertLineBreak`、`nativeEvent.isComposing`；普通 Enter 发表，Shift / Command + Enter 显式换行，IME 组字期间不发表 |
 | 评论动画占位 | Animated comment placeholder | `Calligraph`、`COMMENT_PROMPT_LINES`、`.comment-placeholder-calligraph`；输入为空时轮换评论提示，减少动态模式下退化为静态文字 |
 | 评论归档操作 | Hover archive action | `.comment-archive-action`；无边框无背景，Hover/聚焦显示，触屏常驻 |
 | 萌萌森林身份 | Stable pseudonymous commenter identity | `getCommentVisitorId`、`rive-host-comment-visitor-v1`、`pickForestIdentity`、`FOREST_IDENTITIES`；浏览器随机标识优先，IP 与 User-Agent 哈希仅兜底，不保存原始 IP |
@@ -187,6 +188,7 @@
 | 已归档入口 | Archived library trigger | `.archived-library-trigger`、`.archived-library-count`、`archivedDialogOpen`、`aria-controls="archived-library-dialog"`；位于首页“最近文件”标题右侧，数量是无底色的普通灰字 |
 | 已归档文件 | Archived file dialog | `ArchivedLibraryDialog`、`.archived-library-dialog`、`.archived-dialog-body`、`ArchiveConfirmDialog`；默认不占首页高度，弹窗内复制、恢复、刷新 |
 | 恢复文件 | Restore archived file | `restoreHostedShare`、`X-Rive-Action: restore`、清空 `archivedAt`、保留原短码和评论 |
+| 详情内文件加载 | Inline hosted-file loading | `navigateHostedShare`、`shareCode`内部路由状态、`history.pushState`、`.canvas-card .loading-state`；切换云端文件不刷新全页，Loading 只位于预览画布 |
 | 播放速度菜单 | Custom playback speed listbox | `.speed-select`、`.speed-menu`、`.speed-option`、`speedMenuOpen`；向上展开的自定义 `listbox`，不使用浏览器原生下拉控件 |
 | Rive 音频暂停 | Synchronized Rive audio suspension | `suspendRiveAudio`、`resumeRiveAudio`、`AudioContext.suspend/resume`；暂停画面时同步暂停内部声音 |
 | 托管 API 服务 | Rive host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |

@@ -9,6 +9,7 @@ import {
 import { formatBytes } from "../../lib/library";
 import type { HostedComment, HostedShare } from "../../lib/hosted-api";
 import { publicAssetUrl } from "../../lib/public-base";
+import { getCommentKeyboardAction } from "../../lib/comment-shortcut";
 import { hostedSharePath, hostedShareUrl } from "../../lib/viewer-route";
 import { Icon } from "./Icon";
 import { TimelineHint } from "./TimelineHint";
@@ -610,9 +611,29 @@ export function ShareCommentsPanel({
           }}
           onKeyDown={(event) => {
             const marker = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-timeline]");
-            if (!marker?.dataset.commentTimeline || (event.key !== "Enter" && event.key !== " ")) return;
+            if (marker?.dataset.commentTimeline && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              onSelectTimeline(marker.dataset.commentTimeline);
+              return;
+            }
+            const keyboardAction = getCommentKeyboardAction({
+              key: event.key,
+              metaKey: event.metaKey,
+              shiftKey: event.shiftKey,
+              isComposing: event.nativeEvent.isComposing,
+            });
+            if (keyboardAction === "line-break") {
+              event.preventDefault();
+              document.execCommand("insertLineBreak");
+              window.requestAnimationFrame(() => {
+                syncDraftBody();
+                captureCaret();
+              });
+              return;
+            }
+            if (keyboardAction !== "submit") return;
             event.preventDefault();
-            onSelectTimeline(marker.dataset.commentTimeline);
+            event.currentTarget.closest("form")?.requestSubmit();
           }}
         />
         <div className="comment-submit-row">

@@ -265,7 +265,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /openUnifiedFile\(item, "preserve"\)/);
   assert.match(appSource, /openUnifiedFile\(next, "preserve"\)/);
   assert.match(appSource, /type CommentThreadState = \{[\s\S]{0,120}code: string \| null;[\s\S]{0,120}items: HostedComment\[\]/);
-  assert.match(appSource, /if \(isHostedPlatform && item\.hostedCode\) \{[\s\S]{0,120}openHostedShareWithActivity\(item\.hostedCode, activityPolicy\)/);
+  assert.match(appSource, /if \(isHostedPlatform && item\.hostedCode\) \{[\s\S]{0,120}navigateHostedShare\(item\.hostedCode, activityPolicy\)/);
   assert.match(appSource, /if \(current\.code !== targetCode\) return current/);
   assert.equal((appSource.match(/"复制当前文件链接"/g) || []).length, 4);
   assert.match(appSource, /copyActiveHostedLink/);
