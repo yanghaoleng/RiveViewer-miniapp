@@ -333,7 +333,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(styleSource, /\.topbar-copy-link\.is-copied,[\s\S]{0,240}background:\s*var\(--control\)/);
   assert.doesNotMatch(styleSource, /#f6d76b/);
   assert.match(styleSource, /\.public-download-progress/);
-  assert.match(styleSource, /grid-template-columns:\s*184px minmax\(0, 1fr\)/);
+  assert.match(styleSource, /var\(--preview-file-rail-width, 184px\)/);
   assert.match(styleSource, /grid-template-columns:\s*40px minmax\(0, 1fr\) max-content/);
   assert.match(styleSource, /\.file-heading-copy-link[\s\S]{0,520}background:\s*var\(--accent\)/);
   assert.match(styleSource, /\.topbar-copy-link[\s\S]{0,220}min-width:\s*122px/);
