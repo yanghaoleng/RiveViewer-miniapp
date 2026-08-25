@@ -185,3 +185,4 @@
 | 播放速度图标 | Bounded speed gauge icon | `.speed-select`、`.speed-gauge`、`18×18px`、`overflow: hidden`、`transform: none` |
 | 托管 API 服务 | Rive host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |
 | 托管原子发布 | Hosted atomic release | `/opt/rive-host/releases/<时间戳>`、`/var/www/rive-host/releases/<时间戳>`、两个 `current` 软链接 |
+| 当前 JOJO 前端 | Active hosted frontend release | `/var/www/rive-host/releases/20260825-192225`；WebGL2、横屏双栏与紧凑评论正式版，`20260824-163850` 保留为发布前稳定回滚点 |

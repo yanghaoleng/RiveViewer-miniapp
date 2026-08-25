@@ -103,13 +103,13 @@ H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机�
 - 线上入口 JS、CSS、WASM 解压后 SHA-256 与本地生产构建逐字节一致，内置 `.riv` 样例文件头为 `RIVE`；Nginx 配置检查与服务状态均正常。
 - 发布使用版本目录加 `current` 软链接原子切换。第一次验收因本机请求缺少域名命中默认站点而自动回滚，修正为带 `mikeywa.site` 的 HTTPS 验收后重新切换成功，期间旧站未丢失。
 
-### 2026-08-25 JOJO 渲染兼容性诊断与本地修复
+### 2026-08-25 JOJO 渲染兼容性修复与正式发布
 
 - 正式页实测 `ai叫叫学伴.riv` 与 `ai叫叫学伴_源文件_绿豆.riv` 均能下载、解析、播放并读取状态机，但柔和内阴影和虚化边缘缺失；切换“高清”不恢复。
 - 同一份绿豆文件使用同为 `2.39.1` 的 Canvas2D 与 WebGL2 渲染同一静态初始帧：Canvas2D 为硬边平涂，WebGL2 / Rive Renderer 能显示柔和体积光影。问题定位为渲染器能力边界，不是文件损坏、下载失败或清晰度档位。
 - H5 已在本地改为默认 `@rive-app/webgl2-advanced@2.39.1`，Canvas2D 继续作为兼容模式；两套运行时保持动态拆包，分别使用 `rive-webgl2-2.39.1.wasm` 与 `rive-2.39.1.wasm`，避免旧 immutable 缓存冲突。
 - WebGL2 初始化、逐帧运行或上下文失败会重建 Canvas、自动切换兼容模式，并显示约 `4.2s` 的“WebGL2 不可用，已切换到兼容模式”Toast。参数面板最后新增“渲染引擎”，可手动选择 WebGL2 或兼容模式。
-- 本机真实绿豆文件已完成 WebGL2 / Canvas2D 双向切换和缺失 WebGL2 WASM 的失败注入；柔化光影仅在 WebGL2 恢复，兼容模式保持可播放。当前尚未正式发布。
+- 本机真实绿豆文件已完成 WebGL2 / Canvas2D 双向切换和缺失 WebGL2 WASM 的失败注入；柔化光影仅在 WebGL2 恢复，兼容模式保持可播放。JOJO 前端已发布为 `/var/www/rive-host/releases/20260825-192225`，发布前稳定版 `20260824-163850` 保留回滚；线上双引擎分包、双 WASM 与本地产物逐字节一致。
 
 渲染链路使用微信 `<canvas type="2d">`、`@rive-app/canvas-advanced@2.39.1` 和 `WXWebAssembly`。完整运行时用于保留 Rive Layout、嵌套画板、Listener 与 Data Binding 能力。
 
