@@ -1438,6 +1438,11 @@ export function RiveViewerApp({
     if (!stage) return;
     if (window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH) {
       stage.style.setProperty("--manual-stage-height", `${height}px`);
+      if (fitRef.current === "contain" && metadata.width > 0 && metadata.height > 0) {
+        stage.style.width = `min(100%, ${Math.round(height * (metadata.width / metadata.height))}px)`;
+        stage.style.height = "";
+        return;
+      }
       stage.style.width = "100%";
       stage.style.height = `${height}px`;
       return;
@@ -1663,13 +1668,18 @@ export function RiveViewerApp({
   const remainingArtboards = Math.max(0, metadata.artboardCount - metadata.artboardNames.length);
   const hasStageAspect = metadata.width > 0 && metadata.height > 0;
   const stageAspect = hasStageAspect ? metadata.width / metadata.height : 1;
+  const stageSizingHeight = !stageHeightCustomized
+    && typeof window !== "undefined"
+    && window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH
+    ? maximumStageHeight()
+    : stageHeight;
   const stageStyle = {
     ...(fit === "contain" && hasStageAspect ? {
-        width: `min(100%, ${Math.round(stageHeight * stageAspect)}px)`,
+        width: `min(100%, ${Math.round(stageSizingHeight * stageAspect)}px)`,
         aspectRatio: `${metadata.width} / ${metadata.height}`,
       }
       : { width: "100%", height: `${stageHeight}px` }),
-    "--manual-stage-height": `${stageHeight}px`,
+    "--manual-stage-height": `${stageSizingHeight}px`,
   } as CSSProperties & { "--manual-stage-height": string };
   const previewWorkbenchStyle = {
     "--preview-inspector-width": `${inspectorWidth}px`,
@@ -1984,7 +1994,7 @@ export function RiveViewerApp({
               aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画布高度，按住后左右滑动选择，双击切换完整或铺满"
               aria-valuemin={250}
               aria-valuemax={Math.round(maximumStageHeight())}
-              aria-valuenow={Math.round(stageHeight)}
+              aria-valuenow={Math.round(stageSizingHeight)}
             >
               <span className="stage-resizer-grip" />
               <div className="stage-resizer-modes" aria-hidden={!stageResizeMenuActive}>

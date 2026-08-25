@@ -136,10 +136,13 @@ test("batches stage resizing and delays backing-canvas allocation", async () => 
 });
 
 test("uses a resizable inspector from iPad Pro landscape width", async () => {
-  const [appSource, hostedPanelsSource, styleSource] = await Promise.all([
+  const [appSource, hostedPanelsSource, timelineSource, timelineHintSource, styleSource, packageJson] = await Promise.all([
     readFile(new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/rive-viewer/HostedPanels.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/rive-viewer/PlaybackTelemetryView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/rive-viewer/TimelineHint.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
   assert.match(appSource, /WIDE_INSPECTOR_DEFAULT_WIDTH = 390/);
@@ -153,11 +156,13 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(styleSource, /\.preview-workbench[\s\S]{0,280}grid-template-columns/);
   assert.match(
     styleSource,
-    /\.preview-main-column:not\(\.is-stage-height-customized\) \.canvas-card[\s\S]{0,260}flex: 1;/,
+    /\.preview-main-column:not\(\.is-stage-height-customized\) \.canvas-card:not\(\.is-proportional\)[\s\S]{0,260}flex: 1;/,
   );
+  assert.match(styleSource, /\.preview-main-column:not\(\.is-stage-height-customized\) \.canvas-card\.is-proportional[\s\S]{0,180}height: auto !important;[\s\S]{0,160}align-self: center;/);
   assert.doesNotMatch(styleSource, /\.preview-main-column \.stage-resizer\s*\{\s*display: none;/);
   assert.match(appSource, /is-stage-height-customized/);
-  assert.match(styleSource, /\.preview-main-column\.is-stage-height-customized \.canvas-card[\s\S]{0,220}height: var\(--manual-stage-height\) !important;/);
+  assert.match(styleSource, /\.preview-main-column\.is-stage-height-customized \.canvas-card:not\(\.is-proportional\)[\s\S]{0,220}height: var\(--manual-stage-height\) !important;/);
+  assert.match(appSource, /stageSizingHeight[\s\S]{0,300}width: `min\(100%, \$\{Math\.round\(stageSizingHeight \* stageAspect\)\}px\)`/);
   assert.match(styleSource, /\.comment-item p\s*\{[\s\S]{0,120}margin: 8px 0 0 40px;[\s\S]{0,120}font-size: 14px;/);
   assert.match(styleSource, /\.file-sync-toggle\.is-ready\s*\{\s*color: var\(--quiet\);/);
   assert.match(appSource, /<Icon name=\{icon\} size=\{13\} \/>/);
@@ -175,6 +180,14 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(styleSource, /\.comment-timeline-link:hover,[\s\S]{0,100}color: var\(--accent\);/);
   assert.match(appSource, /onSelectTimeline=\{selectTimeline\}/);
   assert.match(appSource, /<TimelineControl[\s\S]{0,220}onSelect=\{selectTimelineFromControl\}/);
+  assert.match(timelineSource, />\s*展开\s*<\/button>/);
+  assert.match(timelineSource, />\s*整理\s*<\/button>/);
+  assert.match(timelineSource, /organizeTimelines\(animations\)/);
+  assert.match(timelineSource, /timelineButton\(item\.name, item\.label\)/);
+  assert.match(timelineHintSource, /import\("calligraph"\)/);
+  assert.match(timelineHintSource, /prefers-reduced-motion: reduce/);
+  assert.match(timelineHintSource, /点击时间轴，可以直接引用到评论/);
+  assert.match(packageJson, /"calligraph": "\^1\.4\.1"/);
   assert.match(styleSource, /\.comment-meta-row \.comment-archive-action\s*\{[\s\S]{0,180}border: 0;[\s\S]{0,100}opacity: 0;/);
   assert.match(styleSource, /\.comment-item:hover \.comment-archive-action/);
   assert.doesNotMatch(hostedPanelsSource, /bodyLength|\/1000<\/span>/);

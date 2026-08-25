@@ -112,6 +112,7 @@ test("keeps event console and shortcut disclosure accessible without auto-openin
   assert.match(consoleSource, /aria-controls=\{listId\}/);
   assert.match(consoleSource, /等待 Rive 事件/);
   assert.doesNotMatch(consoleSource, /dangerouslySetInnerHTML/);
+  assert.match(styleSource, /\.runtime-event-console\s*\{[\s\S]{0,180}position:\s*sticky;[\s\S]{0,80}top:\s*0;/);
   assert.match(styleSource, /@media \(any-hover: hover\) and \(any-pointer: fine\)/);
   assert.match(styleSource, /\.shortcut-help:hover \.shortcut-popover/);
   assert.match(styleSource, /\.shortcut-help:focus-within \.shortcut-popover/);
