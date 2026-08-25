@@ -1300,6 +1300,7 @@ export function RiveViewerApp({
   useEffect(() => {
     if (!activeFile) return;
     const handleShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       const tagName = target?.tagName;
       if (
@@ -1611,6 +1612,7 @@ export function RiveViewerApp({
     else if (event.key === "End") nextWidth = bounds.maximum;
     else return;
     event.preventDefault();
+    event.stopPropagation();
     const appliedWidth = applyInspectorWidth(nextWidth);
     setInspectorWidth(appliedWidth);
   };

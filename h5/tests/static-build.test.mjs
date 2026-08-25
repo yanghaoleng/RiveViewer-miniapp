@@ -146,6 +146,8 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(appSource, /WIDE_INSPECTOR_MIN_WIDTH = 360/);
   assert.match(appSource, /role="separator"/);
   assert.match(appSource, /requestAnimationFrame[\s\S]{0,220}applyInspectorWidth/);
+  assert.match(appSource, /const handleShortcut = \(event: KeyboardEvent\) => \{\s*if \(event\.defaultPrevented\) return;/);
+  assert.match(appSource, /resizeInspectorWithKeyboard[\s\S]{0,700}event\.preventDefault\(\);\s*event\.stopPropagation\(\);/);
   assert.match(appSource, /draggingStageRef\.current \|\| draggingInspectorRef\.current/);
   assert.match(styleSource, /@media \(min-width: 1194px\)/);
   assert.match(styleSource, /\.preview-workbench[\s\S]{0,280}grid-template-columns/);
