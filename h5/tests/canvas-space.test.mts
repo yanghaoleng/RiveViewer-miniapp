@@ -9,11 +9,16 @@ const vite = await createServer({
   configFile: false,
   root: fileURLToPath(new URL("..", import.meta.url)),
   appType: "custom",
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, hmr: false },
   optimizeDeps: { noDiscovery: true },
 });
 const playerModule = await vite.ssrLoadModule("/lib/rive-player.ts");
-const { WebRivePlayer, getTimelinePosition } = playerModule;
+const {
+  DEFAULT_RENDER_ENGINE,
+  WebRivePlayer,
+  getTimelinePosition,
+  runtimeWasmFile,
+} = playerModule;
 
 after(async () => vite.close());
 
@@ -22,6 +27,12 @@ test("maps CSS pointer coordinates into the high-DPI backing canvas", () => {
     canvasPointToBacking(120, 80, 360, 240, 720, 480),
     { x: 240, y: 160 },
   );
+});
+
+test("defaults to versioned WebGL2 and keeps the Canvas2D fallback asset", () => {
+  assert.equal(DEFAULT_RENDER_ENGINE, "webgl2");
+  assert.equal(runtimeWasmFile("webgl2"), "rive-webgl2-2.39.1.wasm");
+  assert.equal(runtimeWasmFile("canvas2d"), "rive-2.39.1.wasm");
 });
 
 test("inverts the Rive alignment matrix into artboard coordinates", () => {

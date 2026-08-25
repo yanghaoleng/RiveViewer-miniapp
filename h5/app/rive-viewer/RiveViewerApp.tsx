@@ -1,55 +1,71 @@
 "use client";
 
-import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowsInSimple,
-  ArrowsOutSimple,
-  CaretDown,
-  ChatCircleDots,
-  DownloadSimple,
-  Gauge,
-  Keyboard,
-  Pause,
-  Play,
-  Plus,
-  SpeakerHigh,
-  SpeakerSlash,
-  Trash,
-  ShareNetwork,
-  ArrowCounterClockwise,
-  WechatLogo,
-  X,
-} from "@phosphor-icons/react";
 import type {
   ChangeEvent,
+  CSSProperties,
+  DragEvent as ReactDragEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import policy from "../../../shared/rive-policy.json";
+import {
+  archiveHostedComment,
+  archiveHostedShare,
+  createHostedComment,
+  createHostedShare,
+  getHostedFile,
+  getHostedShare,
+  hostedFileUrl,
+  HostedApiError,
+  listHostedComments,
+  listHostedShares,
+  restoreHostedComment,
+  restoreHostedShare,
+  type HostedComment,
+  type HostedShare,
+} from "../../lib/hosted-api";
+import { copyText } from "../../lib/clipboard";
+import { getCommentVisitorId } from "../../lib/comment-identity";
 import {
   attachLibraryCovers,
-  deleteLocalFile,
   formatBytes,
   formatDate,
-  getVisibleBuiltinFiles,
-  hideBuiltinFile,
   listLocalFiles,
+  listRecentHostedFiles,
   readLibraryFile,
+  rememberRecentHostedFile,
   saveLocalFile,
   saveLibraryCover,
+  touchLocalFile,
   type LibraryFile,
 } from "../../lib/library";
-import {
+import type {
+  RenderEngine,
+  RiveInput,
+  RiveMetadata,
   WebRivePlayer,
-  type RiveInput,
-  type RiveMetadata,
-  type TimelineProgress,
 } from "../../lib/rive-player";
+import { PlaybackTelemetry } from "../../lib/playback-telemetry";
+import { publicAssetUrl } from "../../lib/public-base";
+import { RuntimeEventLog } from "../../lib/runtime-event-log";
+import { mergeUnifiedFiles, type UnifiedFileItem } from "../../lib/unified-library";
+import { hostedSharePath, hostedShareUrl, viewerHomePath } from "../../lib/viewer-route";
+import {
+  ArchiveConfirmDialog,
+  ArchivedLibraryDialog,
+  PublicShareState,
+  ShareActionsDialog,
+  ShareCommentsPanel,
+} from "./HostedPanels";
+import { Icon, type IconName } from "./Icon";
+import { PlaybackMeta, TimelineControl } from "./PlaybackTelemetryView";
+import { RuntimeEventConsole } from "./RuntimeEventConsole";
 
 type ActiveFile = {
   file: LibraryFile;
-  data: ArrayBuffer;
+  sessionId: number;
+  hostedShare?: HostedShare;
 };
 
 type LoadingState = {
@@ -74,29 +90,139 @@ const EMPTY_METADATA: RiveMetadata = {
   audioEnabled: true,
 };
 
-const SPEEDS = [0.5, 1, 1.5, 2, 8];
-const AUTHOR_WECHAT = "yanghaoeleng";
-const CANVAS_TONES = [
-  { key: "mist", label: "浅灰" },
-  { key: "paper", label: "米白" },
-  { key: "white", label: "纯白" },
-  { key: "yellow", label: "黄色" },
-  { key: "ink", label: "深色" },
-];
+const SPEEDS = policy.speeds;
+const CANVAS_TONES = policy.canvasTones;
+const PUBLISHED_CODES_STORAGE_KEY = "rive-host-published-codes-v1";
+const MAX_HOSTED_FILE_BYTES = 64 * 1024 * 1024;
+const WIDE_INSPECTOR_MIN_WIDTH = 360;
+const WIDE_INSPECTOR_DEFAULT_WIDTH = 390;
+const WIDE_INSPECTOR_MAX_WIDTH = 680;
+const WIDE_PREVIEW_MIN_WIDTH = 520;
+const WIDE_COLUMN_RESIZER_WIDTH = 13;
+const RAIL_ACTIVITY_STATE_KEY = "riveRailPreserveActivity";
+
+type ActivityPolicy = "record" | "preserve";
+
+type FileUploadPhase = "local" | "uploading" | "ready" | "error";
+
+type FileUploadState = {
+  phase: FileUploadPhase;
+  progress: number;
+  error: string;
+  retryable: boolean;
+  share?: HostedShare;
+  updatedAt: number;
+};
+
+type DetailCopyFeedback = {
+  code: string;
+  status: "copied" | "error";
+};
+
+function uploadStateForItem(
+  item: UnifiedFileItem,
+  uploadStates: Record<string, FileUploadState>,
+): FileUploadState {
+  const localState = item.localFile ? uploadStates[item.localFile.id] : undefined;
+  if (localState) return localState;
+  if (item.hostedCode) {
+    return {
+      phase: "ready",
+      progress: 100,
+      error: "",
+      retryable: false,
+      share: item.share,
+      updatedAt: item.activityAt,
+    };
+  }
+  return {
+    phase: "local",
+    progress: 0,
+    error: "",
+    retryable: false,
+    updatedAt: item.activityAt,
+  };
+}
+
+function readPublishedCodes(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const value = JSON.parse(window.localStorage.getItem(PUBLISHED_CODES_STORAGE_KEY) || "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => (
+      typeof entry[1] === "string" && /^[0-9A-Za-z]{3}$/.test(entry[1])
+    )));
+  } catch {
+    return {};
+  }
+}
+
+function historyStateRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function hasRailActivityMarker(code: string | null): boolean {
+  if (!code || typeof window === "undefined") return false;
+  const current = historyStateRecord(window.history.state);
+  return current[RAIL_ACTIVITY_STATE_KEY] === code;
+}
+
+function clearRailActivityMarker(code: string | null): void {
+  if (!code || typeof window === "undefined") return;
+  const current = historyStateRecord(window.history.state);
+  if (current[RAIL_ACTIVITY_STATE_KEY] !== code) return;
+  const next = { ...current };
+  delete next[RAIL_ACTIVITY_STATE_KEY];
+  window.history.replaceState(Object.keys(next).length ? next : null, "", window.location.href);
+}
+
+function openHostedShareWithActivity(code: string, activityPolicy: ActivityPolicy): void {
+  const path = hostedSharePath(code);
+  if (activityPolicy === "record") {
+    window.location.assign(path);
+    return;
+  }
+  window.history.pushState({
+    ...historyStateRecord(window.history.state),
+    [RAIL_ACTIVITY_STATE_KEY]: code,
+  }, "", path);
+  window.location.reload();
+}
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "00:00.0";
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds - minutes * 60;
-  return `${String(minutes).padStart(2, "0")}:${remainder.toFixed(1).padStart(4, "0")}`;
+function errorMessage(value: unknown, fallback: string): string {
+  return value instanceof Error ? value.message : fallback;
 }
 
-export function RiveViewerApp() {
-  const [files, setFiles] = useState<LibraryFile[]>(getVisibleBuiltinFiles());
+type HostedLibraryState = {
+  activeItems: HostedShare[];
+  archivedItems: HostedShare[];
+  loading: boolean;
+  error: string;
+};
+
+type PublicShareStateName = "idle" | "loading" | "ready" | "archived" | "error";
+type CommentThreadState = {
+  code: string | null;
+  items: HostedComment[];
+};
+export type ViewerMode = "hosted" | "local";
+
+export function RiveViewerApp({
+  mode,
+  shareCode,
+}: {
+  mode: ViewerMode;
+  shareCode: string | null;
+}) {
+  const isHostedPlatform = mode === "hosted";
+  const [preservePublicActivity] = useState(() => hasRailActivityMarker(shareCode));
+  const [files, setFiles] = useState<LibraryFile[]>([]);
   const [expandedFileId, setExpandedFileId] = useState("");
   const [activeFile, setActiveFile] = useState<ActiveFile | null>(null);
   const [metadata, setMetadata] = useState<RiveMetadata>(EMPTY_METADATA);
@@ -107,31 +233,83 @@ export function RiveViewerApp() {
   });
   const [error, setError] = useState("");
   const [playing, setPlaying] = useState(true);
-  const [timeline, setTimeline] = useState<TimelineProgress>({
-    name: "",
-    time: 0,
-    duration: 0,
-    progress: 0,
-  });
   const [speed, setSpeed] = useState(1);
-  const [fit, setFit] = useState<"contain" | "cover">("cover");
+  const [fit, setFit] = useState<"contain" | "cover">(() => (
+    isHostedPlatform ? "contain" : "cover"
+  ));
   const [quality, setQuality] = useState(1);
+  const [renderEngine, setRenderEngine] = useState<RenderEngine>("webgl2");
+  const [canvasGeneration, setCanvasGeneration] = useState(0);
+  const [engineToast, setEngineToast] = useState("");
   const [canvasTone, setCanvasTone] = useState("mist");
   const [stageHeight, setStageHeight] = useState(460);
   const [draggingStage, setDraggingStage] = useState(false);
+  const [inspectorWidth, setInspectorWidth] = useState(WIDE_INSPECTOR_DEFAULT_WIDTH);
+  const [draggingInspector, setDraggingInspector] = useState(false);
   const [stageResizeMenuActive, setStageResizeMenuActive] = useState(false);
   const [stageResizeTapOpen, setStageResizeTapOpen] = useState(false);
   const [stageResizePressActive, setStageResizePressActive] = useState(false);
   const [stageResizeHoverFit, setStageResizeHoverFit] = useState<"contain" | "cover" | "">("");
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogProgress, setCatalogProgress] = useState(0);
-  const [fps, setFps] = useState(0);
+  const [hostedLibrary, setHostedLibrary] = useState<HostedLibraryState>({
+    activeItems: [],
+    archivedItems: [],
+    loading: false,
+    error: "",
+  });
+  const [hostingError, setHostingError] = useState("");
+  const [dropActive, setDropActive] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [uploadStates, setUploadStates] = useState<Record<string, FileUploadState>>({});
+  const [expandedUploadFileId, setExpandedUploadFileId] = useState("");
+  const [pendingArchiveShare, setPendingArchiveShare] = useState<HostedShare | null>(null);
+  const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
+  const [publishedCodes, setPublishedCodes] = useState<Record<string, string>>(readPublishedCodes);
+  const [publishedShare, setPublishedShare] = useState<HostedShare | null>(null);
+  const [detailCopyFeedback, setDetailCopyFeedback] = useState<DetailCopyFeedback | null>(null);
+  const [hostedBusyCode, setHostedBusyCode] = useState("");
+  const [publicShare, setPublicShare] = useState<HostedShare | null>(null);
+  const [publicShareState, setPublicShareState] = useState<PublicShareStateName>(
+    shareCode ? "loading" : "idle",
+  );
+  const [publicShareError, setPublicShareError] = useState("");
+  const [publicShareReload, setPublicShareReload] = useState(0);
+  const [commentThread, setCommentThread] = useState<CommentThreadState>({
+    code: shareCode,
+    items: [],
+  });
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsLoadError, setCommentsLoadError] = useState("");
+  const [commentSubmitError, setCommentSubmitError] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [commentActionBusyId, setCommentActionBusyId] = useState("");
+  const [commentActionError, setCommentActionError] = useState("");
+  const [commentsReload, setCommentsReload] = useState(0);
+  const [publicRouteDetached, setPublicRouteDetached] = useState(false);
+  const comments = commentThread.code === shareCode ? commentThread.items : [];
+  const telemetry = useMemo(() => new PlaybackTelemetry(), []);
+  const runtimeEventLog = useMemo(() => new RuntimeEventLog(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const previewWorkbenchRef = useRef<HTMLDivElement>(null);
+  const previewInspectorRef = useRef<HTMLElement>(null);
+  const previewColumnResizerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<WebRivePlayer | null>(null);
+  const activeSourceRef = useRef<{ sessionId: number; data: ArrayBuffer } | null>(null);
+  const openRequestRef = useRef(0);
+  const pendingStageHeightRef = useRef<number | null>(null);
+  const stageResizeFrameRef = useRef<number | null>(null);
+  const pendingPlayerSizeRef = useRef<{ width: number; height: number } | null>(null);
   const resizeStartRef = useRef({ x: 0, y: 0, height: 0 });
   const draggingStageRef = useRef(false);
+  const inspectorResizeStartRef = useRef({ x: 0, width: WIDE_INSPECTOR_DEFAULT_WIDTH });
+  const pendingInspectorWidthRef = useRef<number | null>(null);
+  const inspectorResizeFrameRef = useRef<number | null>(null);
+  const currentInspectorWidthRef = useRef(WIDE_INSPECTOR_DEFAULT_WIDTH);
+  const draggingInspectorRef = useRef(false);
   const stageResizeMovedRef = useRef(false);
   const stageResizeStartedOpenRef = useRef(false);
   const stageResizeLongPressTimerRef = useRef<number | null>(null);
@@ -140,12 +318,50 @@ export function RiveViewerApp() {
   const speedRef = useRef(speed);
   const fitRef = useRef(fit);
   const qualityRef = useRef(quality);
+  const renderEngineRef = useRef<RenderEngine>("webgl2");
+  const engineFallbackBusyRef = useRef(false);
+  const reloadActiveFileRef = useRef<() => void>(() => {});
   const capturedCoverIdsRef = useRef(new Set<string>());
+  const cloudUploadBusyRef = useRef(false);
+  const commentSubmitBusyRef = useRef(false);
+  const uploadRetryFilesRef = useRef(new Map<string, LibraryFile>());
+  const dragDepthRef = useRef(0);
+  const hostedLibraryRequestRef = useRef(0);
+  const detailCopyTimerRef = useRef<number | null>(null);
+  const engineToastTimerRef = useRef<number | null>(null);
+
+  const showEngineToast = useCallback((message: string) => {
+    if (engineToastTimerRef.current !== null) {
+      window.clearTimeout(engineToastTimerRef.current);
+    }
+    setEngineToast(message);
+    engineToastTimerRef.current = window.setTimeout(() => {
+      setEngineToast("");
+      engineToastTimerRef.current = null;
+    }, 4200);
+  }, []);
+
+  useEffect(() => {
+    if (preservePublicActivity) clearRailActivityMarker(shareCode);
+  }, [preservePublicActivity, shareCode]);
+
+  useEffect(() => () => {
+    if (detailCopyTimerRef.current !== null) window.clearTimeout(detailCopyTimerRef.current);
+    if (engineToastTimerRef.current !== null) window.clearTimeout(engineToastTimerRef.current);
+    if (inspectorResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(inspectorResizeFrameRef.current);
+    }
+  }, []);
 
   const refreshLibrary = useCallback(async () => {
     try {
-      const localFiles = await listLocalFiles();
-      const nextFiles = await attachLibraryCovers([...getVisibleBuiltinFiles(), ...localFiles]);
+      const [recentHostedFiles, localFiles] = await Promise.all([
+        isHostedPlatform ? listRecentHostedFiles() : Promise.resolve([]),
+        listLocalFiles(),
+      ]);
+      const nextFiles = await attachLibraryCovers(
+        [...recentHostedFiles, ...localFiles].sort((left, right) => right.updatedAt - left.updatedAt),
+      );
       nextFiles.forEach((file) => {
         if (file.cover) capturedCoverIdsRef.current.add(file.id);
       });
@@ -153,11 +369,166 @@ export function RiveViewerApp() {
     } catch (libraryError) {
       console.warn("读取本地文件库失败", libraryError);
     }
-  }, []);
+  }, [isHostedPlatform]);
 
   useEffect(() => {
     queueMicrotask(() => refreshLibrary());
   }, [refreshLibrary]);
+
+  const refreshHostedLibrary = useCallback(async () => {
+    if (!isHostedPlatform) {
+      setHostedLibrary({ activeItems: [], archivedItems: [], loading: false, error: "" });
+      return;
+    }
+    const requestId = ++hostedLibraryRequestRef.current;
+    setHostedLibrary((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const [activeItems, archivedItems] = await Promise.all([
+        listHostedShares("active"),
+        listHostedShares("archived"),
+      ]);
+      if (requestId === hostedLibraryRequestRef.current) {
+        setHostedLibrary({ activeItems, archivedItems, loading: false, error: "" });
+      }
+    } catch (hostedError) {
+      if (requestId !== hostedLibraryRequestRef.current) return;
+      setHostedLibrary((current) => ({
+        ...current,
+        loading: false,
+        error: errorMessage(hostedError, "托管文件读取失败"),
+      }));
+    }
+  }, [isHostedPlatform]);
+
+  useEffect(() => {
+    if (!isHostedPlatform) return;
+    queueMicrotask(() => refreshHostedLibrary());
+  }, [isHostedPlatform, refreshHostedLibrary]);
+
+  useEffect(() => {
+    if (!shareCode) return;
+    const controller = new AbortController();
+    const sessionId = ++openRequestRef.current;
+    setPublicShareState("loading");
+    setPublicShareError("");
+    setPublicShare(null);
+    setCommentThread({ code: shareCode, items: [] });
+    setCommentsLoadError("");
+    setCommentSubmitError("");
+    setError("");
+    setLoading({ active: true, progress: 0, phase: "正在读取公开文件信息" });
+
+    const loadPublicShare = async () => {
+      try {
+        const share = await getHostedShare(shareCode, controller.signal);
+        if (sessionId !== openRequestRef.current) return;
+        setPublicShare(share);
+        document.title = `${share.filename} - Rive 预览`;
+        if (share.status === "archived") {
+          activeSourceRef.current = null;
+          telemetry.reset();
+          setActiveFile(null);
+          setLoading({ active: false, progress: 0, phase: "文件已归档" });
+          setPublicShareState("archived");
+          return;
+        }
+
+        setLoading({ active: true, progress: 0, phase: "正在下载公开文件" });
+        const data = await getHostedFile(share.code, {
+          signal: controller.signal,
+          expectedBytes: share.size,
+          onProgress: (progress) => {
+            if (sessionId !== openRequestRef.current) return;
+            setLoading({ active: true, progress, phase: "正在下载公开文件" });
+          },
+        });
+        if (sessionId !== openRequestRef.current) return;
+        activeSourceRef.current = { sessionId, data };
+        telemetry.reset();
+        setActiveFile({
+          file: {
+            id: `hosted-${share.code}`,
+            name: share.filename,
+            size: share.size || data.byteLength,
+            updatedAt: Date.parse(share.createdAt) || Date.now(),
+            hostedCode: share.code,
+          },
+          sessionId,
+          hostedShare: share,
+        });
+        setPublicShareState("ready");
+        if (!share.isExample) {
+          void (async () => {
+            try {
+              await rememberRecentHostedFile(
+                share,
+                preservePublicActivity ? Date.parse(share.createdAt) || Date.now() : Date.now(),
+                preservePublicActivity,
+              );
+              if (sessionId === openRequestRef.current) await refreshLibrary();
+            } catch (recentError) {
+              console.warn("保存最近查看记录失败", recentError);
+            }
+          })();
+        }
+      } catch (loadError) {
+        if (controller.signal.aborted || sessionId !== openRequestRef.current) return;
+        activeSourceRef.current = null;
+        setActiveFile(null);
+        setLoading({ active: false, progress: 0, phase: "公开文件读取失败" });
+        setPublicShareError(errorMessage(loadError, "公开链接无法打开"));
+        setPublicShareState("error");
+      }
+    };
+    loadPublicShare();
+
+    return () => {
+      controller.abort();
+      if (sessionId === openRequestRef.current) {
+        openRequestRef.current += 1;
+        activeSourceRef.current = null;
+      }
+    };
+  }, [preservePublicActivity, publicShareReload, refreshLibrary, shareCode, telemetry]);
+
+  useEffect(() => {
+    if (!shareCode || publicShare?.status !== "active") return;
+    const controller = new AbortController();
+    const targetCode = shareCode;
+    setCommentsLoading(true);
+    setCommentsLoadError("");
+    setCommentActionError("");
+    setCommentThread((current) => current.code === targetCode
+      ? current
+      : { code: targetCode, items: [] });
+    listHostedComments(targetCode, controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) {
+          setCommentThread((current) => {
+            if (current.code !== targetCode) return current;
+            const incomingIds = new Set(items.map((item) => item.id));
+            return {
+              code: targetCode,
+              items: [...items, ...current.items.filter((item) => !incomingIds.has(item.id))]
+                .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt)),
+            };
+          });
+        }
+      })
+      .catch((commentsLoadError) => {
+        if (!controller.signal.aborted) {
+          setCommentsLoadError(errorMessage(commentsLoadError, "评论读取失败"));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCommentsLoading(false);
+      });
+    return () => controller.abort();
+  }, [commentsReload, publicShare?.status, shareCode]);
+
+  useEffect(() => () => {
+    if (shareCode) document.title = "Rive 预览台 H5";
+  }, [shareCode]);
 
   useEffect(() => {
     speedRef.current = speed;
@@ -169,34 +540,89 @@ export function RiveViewerApp() {
     const canvas = canvasRef.current;
     const stage = stageRef.current;
     if (!activeFile || !canvas || !stage) return;
+    const source = activeSourceRef.current;
+    if (!source || source.sessionId !== activeFile.sessionId) return;
+    activeSourceRef.current = null;
+    let sourceData: ArrayBuffer | null = source.data;
+    source.data = new ArrayBuffer(0);
     let cancelled = false;
-    const player = new WebRivePlayer(canvas, {
-      onMetadata: (nextMetadata) => !cancelled && setMetadata(nextMetadata),
-      onPlayback: (nextPlaying) => {
-        if (cancelled) return;
-        setPlaying(nextPlaying);
-      },
-      onProgress: (progress) => !cancelled && setTimeline(progress),
-      onPerformance: (nextFps) => !cancelled && setFps(nextFps),
-    });
-    playerRef.current = player;
-    const observer = new ResizeObserver(([entry]) => {
-      const box = entry.contentRect;
-      player.resize(box.width, box.height);
-    });
-    observer.observe(stage);
+    let player: WebRivePlayer | null = null;
+    let observer: ResizeObserver | null = null;
+    let loadReady = false;
+    let pendingRuntimeFailure: Error | null = null;
 
     const load = async () => {
       try {
         setError("");
         setMetadata(EMPTY_METADATA);
-        setTimeline({ name: "", time: 0, duration: 0, progress: 0 });
+        telemetry.reset();
+        runtimeEventLog.reset();
         setLoading({ active: true, progress: 28, phase: "正在初始化 Rive" });
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         if (cancelled) return;
-        setLoading({ active: true, progress: 56, phase: "正在解析文件" });
-        await player.load(activeFile.data);
+        const { WebRivePlayer: Player } = await import("../../lib/rive-player");
         if (cancelled) return;
+        const selectedEngine = renderEngineRef.current;
+        player = new Player(canvas, {
+          onMetadata: (nextMetadata) => !cancelled && setMetadata(nextMetadata),
+          onPlayback: (nextPlaying) => {
+            if (!cancelled) setPlaying(nextPlaying);
+          },
+          onProgress: (progress) => !cancelled && telemetry.updateTimeline(progress),
+          onPerformance: (nextFps) => !cancelled && telemetry.updateFps(nextFps),
+          onEvent: (event) => {
+            if (!cancelled) runtimeEventLog.append(event);
+          },
+          onRuntimeFailure: (runtimeError) => {
+            if (cancelled || selectedEngine !== "webgl2" || engineFallbackBusyRef.current) return;
+            if (!loadReady) {
+              pendingRuntimeFailure = runtimeError;
+              return;
+            }
+            engineFallbackBusyRef.current = true;
+            console.warn("WebGL2 运行失败，切换到兼容模式", runtimeError);
+            renderEngineRef.current = "canvas2d";
+            setRenderEngine("canvas2d");
+            setCanvasGeneration((current) => current + 1);
+            showEngineToast("WebGL2 不可用，已切换到兼容模式");
+            queueMicrotask(() => reloadActiveFileRef.current());
+          },
+        }, selectedEngine);
+        playerRef.current = player;
+        observer = new ResizeObserver(([entry]) => {
+          if (!player) return;
+          const box = entry.contentRect;
+          if (draggingStageRef.current || draggingInspectorRef.current) {
+            pendingPlayerSizeRef.current = { width: box.width, height: box.height };
+            return;
+          }
+          player.resize(box.width, box.height);
+        });
+        observer.observe(stage);
+        setLoading({ active: true, progress: 56, phase: "正在解析文件" });
+        if (!sourceData) return;
+        try {
+          await player.load(sourceData);
+          if (pendingRuntimeFailure) throw pendingRuntimeFailure;
+        } catch (engineError) {
+          if (selectedEngine !== "webgl2" || engineFallbackBusyRef.current || cancelled) {
+            throw engineError;
+          }
+          engineFallbackBusyRef.current = true;
+          console.warn("WebGL2 初始化失败，切换到兼容模式", engineError);
+          activeSourceRef.current = { sessionId: activeFile.sessionId, data: sourceData };
+          sourceData = null;
+          renderEngineRef.current = "canvas2d";
+          setRenderEngine("canvas2d");
+          setCanvasGeneration((current) => current + 1);
+          showEngineToast("WebGL2 不可用，已切换到兼容模式");
+          setLoading({ active: true, progress: 34, phase: "正在切换兼容模式" });
+          return;
+        }
+        sourceData = null;
+        if (cancelled) return;
+        loadReady = true;
+        engineFallbackBusyRef.current = false;
         player.setSpeed(speedRef.current);
         player.setFit(fitRef.current);
         player.setQuality(qualityRef.current);
@@ -228,12 +654,15 @@ export function RiveViewerApp() {
         if (cancelled) return;
         setLoading({ active: false, progress: 0, phase: "加载失败" });
         setError(loadError instanceof Error ? loadError.message : "Rive 文件无法打开");
+      } finally {
+        sourceData = null;
       }
     };
     load();
 
     return () => {
       cancelled = true;
+      sourceData = null;
       if (stageResizeLongPressTimerRef.current !== null) {
         window.clearTimeout(stageResizeLongPressTimerRef.current);
         stageResizeLongPressTimerRef.current = null;
@@ -242,11 +671,15 @@ export function RiveViewerApp() {
         window.clearTimeout(stageResizeMenuDismissTimerRef.current);
         stageResizeMenuDismissTimerRef.current = null;
       }
-      observer.disconnect();
-      player.dispose();
+      if (stageResizeFrameRef.current !== null) {
+        cancelAnimationFrame(stageResizeFrameRef.current);
+        stageResizeFrameRef.current = null;
+      }
+      observer?.disconnect();
+      player?.dispose();
       if (playerRef.current === player) playerRef.current = null;
     };
-  }, [activeFile, refreshLibrary]);
+  }, [activeFile, canvasGeneration, refreshLibrary, runtimeEventLog, showEngineToast, telemetry]);
 
   useEffect(() => {
     playerRef.current?.setSpeed(speed);
@@ -260,15 +693,72 @@ export function RiveViewerApp() {
     playerRef.current?.setQuality(quality);
   }, [quality]);
 
-  const activeIndex = useMemo(
-    () => files.findIndex((file) => file.id === activeFile?.file.id),
-    [activeFile, files],
-  );
+  const unifiedFiles = useMemo(() => mergeUnifiedFiles(
+    activeFile ? [...files, activeFile.file] : files,
+    hostedLibrary.activeItems,
+    hostedLibrary.archivedItems,
+    publishedCodes,
+  ).map((item) => {
+    const uploadState = item.localFile ? uploadStates[item.localFile.id] : undefined;
+    const activityAt = Math.max(item.activityAt, uploadState?.updatedAt || 0);
+    return activityAt === item.activityAt
+      ? item
+      : { ...item, activityAt, file: { ...item.file, updatedAt: activityAt } };
+  }).sort((left, right) => right.activityAt - left.activityAt), [
+    activeFile,
+    files,
+    hostedLibrary.activeItems,
+    hostedLibrary.archivedItems,
+    publishedCodes,
+    uploadStates,
+  ]);
+  const activeIndex = useMemo(() => unifiedFiles.findIndex((item) => (
+    item.localFile?.id === activeFile?.file.id
+    || item.file.id === activeFile?.file.id
+    || Boolean(activeFile?.hostedShare?.code && item.hostedCode === activeFile.hostedShare.code)
+  )), [activeFile, unifiedFiles]);
+  const activeHostedCode = isHostedPlatform && activeFile
+    ? activeFile.hostedShare?.code
+      || activeFile.file.hostedCode
+      || uploadStates[activeFile.file.id]?.share?.code
+      || publishedCodes[activeFile.file.id]
+      || ""
+    : "";
+  const activeDetailCopyStatus = detailCopyFeedback?.code === activeHostedCode
+    ? detailCopyFeedback.status
+    : "";
+  const detailCopyLabel = activeDetailCopyStatus === "copied"
+    ? "已复制"
+    : activeDetailCopyStatus === "error"
+      ? "复制失败"
+      : "复制分享链接";
+  const detailCopyIcon: IconName = activeDetailCopyStatus === "copied"
+    ? "check"
+    : activeDetailCopyStatus === "error"
+      ? "x"
+      : "copy-simple";
+
+  const copyActiveHostedLink = useCallback(async () => {
+    const code = activeHostedCode;
+    if (!code) return;
+    let status: DetailCopyFeedback["status"] = "copied";
+    try {
+      await copyText(hostedShareUrl(code));
+    } catch {
+      status = "error";
+    }
+    setDetailCopyFeedback({ code, status });
+    if (detailCopyTimerRef.current !== null) window.clearTimeout(detailCopyTimerRef.current);
+    detailCopyTimerRef.current = window.setTimeout(() => {
+      setDetailCopyFeedback((current) => current?.code === code ? null : current);
+      detailCopyTimerRef.current = null;
+    }, 2200);
+  }, [activeHostedCode]);
   const coverUrls = useMemo(() => new Map(
-    files
-      .filter((file) => file.cover)
+    [...files, ...(activeFile?.file.cover ? [activeFile.file] : [])]
+      .filter((file, index, values) => file.cover && values.findIndex((item) => item.id === file.id) === index)
       .map((file) => [file.id, URL.createObjectURL(file.cover!)]),
-  ), [files]);
+  ), [activeFile, files]);
 
   useEffect(() => () => {
     coverUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -284,40 +774,288 @@ export function RiveViewerApp() {
     return () => document.removeEventListener("pointerdown", closeFileMenu);
   }, [expandedFileId]);
 
-  const openFile = useCallback(async (file: LibraryFile) => {
+  const closeActiveFile = useCallback(() => {
+    if (shareCode && !publicRouteDetached) {
+      window.location.assign(viewerHomePath(import.meta.env.BASE_URL));
+      return;
+    }
+    openRequestRef.current += 1;
+    activeSourceRef.current = null;
+    pendingPlayerSizeRef.current = null;
+    telemetry.reset();
+    runtimeEventLog.reset();
+    setActiveFile(null);
+    setLoading({ active: false, progress: 0, phase: "已关闭" });
+  }, [publicRouteDetached, runtimeEventLog, shareCode, telemetry]);
+
+  useEffect(() => {
+    if (!activeFile && (!shareCode || publicRouteDetached)) return;
+    const returnHomeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      closeActiveFile();
+    };
+    window.addEventListener("keydown", returnHomeOnEscape);
+    return () => window.removeEventListener("keydown", returnHomeOnEscape);
+  }, [activeFile, closeActiveFile, publicRouteDetached, shareCode]);
+
+  const openFile = useCallback(async (
+    file: LibraryFile,
+    activityPolicy: ActivityPolicy = "record",
+  ) => {
+    if (file.hostedCode) {
+      openHostedShareWithActivity(file.hostedCode, activityPolicy);
+      return;
+    }
+    const sessionId = ++openRequestRef.current;
     try {
       setExpandedFileId("");
       setError("");
       setLoading({ active: true, progress: 8, phase: "正在读取本地文件" });
       const data = await readLibraryFile(file);
-      setActiveFile({ file: { ...file, size: file.size || data.byteLength }, data });
-      setFps(0);
+      if (sessionId !== openRequestRef.current) return;
+      const updatedAt = activityPolicy === "record" ? Date.now() : file.updatedAt;
+      const openedFile = { ...file, size: file.size || data.byteLength, updatedAt };
+      setFiles((current) => {
+        if (activityPolicy === "record") {
+          return [
+            openedFile,
+            ...current.filter((item) => item.id !== openedFile.id),
+          ].sort((left, right) => right.updatedAt - left.updatedAt);
+        }
+        const exists = current.some((item) => item.id === openedFile.id);
+        if (!exists) return [openedFile, ...current];
+        return current.map((item) => item.id === openedFile.id ? { ...item, ...openedFile } : item);
+      });
+      activeSourceRef.current = { sessionId, data };
+      telemetry.reset();
+      setActiveFile({ file: openedFile, sessionId });
+      document.title = `${openedFile.name} - Rive 预览`;
+      if (activityPolicy === "record") {
+        void touchLocalFile(file.id, updatedAt).catch((touchError) => {
+          console.warn("更新最近打开时间失败", touchError);
+        });
+      }
     } catch (openError) {
+      if (sessionId !== openRequestRef.current) return;
       setLoading({ active: false, progress: 0, phase: "读取失败" });
       setError(openError instanceof Error ? openError.message : "无法读取文件");
     }
+  }, [telemetry]);
+
+  const openUnifiedFile = useCallback((
+    item: UnifiedFileItem,
+    activityPolicy: ActivityPolicy = "record",
+  ) => {
+    if (isHostedPlatform && item.hostedCode) {
+      openHostedShareWithActivity(item.hostedCode, activityPolicy);
+      return;
+    }
+    if (item.localFile) {
+      void openFile(item.localFile, activityPolicy);
+      return;
+    }
+    if (item.hostedCode) {
+      openHostedShareWithActivity(item.hostedCode, activityPolicy);
+      return;
+    }
+    void openFile(item.file, activityPolicy);
+  }, [isHostedPlatform, openFile]);
+
+  const rememberPublishedCode = useCallback((fileId: string, code: string) => {
+    setPublishedCodes((current) => {
+      const next = { ...current, [fileId]: code };
+      try {
+        window.localStorage.setItem(PUBLISHED_CODES_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // 禁用站点存储时仍保留当前页面的复制入口。
+      }
+      return next;
+    });
   }, []);
 
-  const importFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(event.target.files || []).filter((file) => (
-      file.name.toLowerCase().endsWith(".riv")
-    ));
-    event.target.value = "";
-    if (!selected.length) return;
-    setLoading({ active: true, progress: 12, phase: `正在保存 ${selected.length} 个文件` });
-    try {
-      const saved: LibraryFile[] = [];
-      for (const file of selected) saved.push(await saveLocalFile(file));
-      await refreshLibrary();
-      setLoading({ active: false, progress: 100, phase: "导入完成" });
-      if (saved[0]) await openFile(saved[0]);
-    } catch (importError) {
-      setLoading({ active: false, progress: 0, phase: "导入失败" });
-      setError(importError instanceof Error ? importError.message : "文件导入失败");
+  const uploadSavedFiles = useCallback(async (savedFiles: LibraryFile[]) => {
+    const uploadedShares: HostedShare[] = [];
+    for (const file of savedFiles) {
+      setUploadStates((current) => ({
+        ...current,
+        [file.id]: {
+          phase: "uploading",
+          progress: 0,
+          error: "",
+          retryable: false,
+          updatedAt: Date.now(),
+        },
+      }));
+      try {
+        const data = await readLibraryFile(file);
+        const share = await createHostedShare(data, file.name, (progress) => {
+          setUploadStates((current) => {
+            const state = current[file.id];
+            if (!state || state.phase !== "uploading") return current;
+            return { ...current, [file.id]: { ...state, progress } };
+          });
+        });
+        uploadRetryFilesRef.current.delete(file.id);
+        uploadedShares.push(share);
+        rememberPublishedCode(file.id, share.code);
+        setHostedLibrary((current) => ({
+          ...current,
+          activeItems: [share, ...current.activeItems.filter((item) => item.code !== share.code)],
+        }));
+        setUploadStates((current) => ({
+          ...current,
+          [file.id]: {
+            phase: "ready",
+            progress: 100,
+            error: "",
+            retryable: false,
+            share,
+            updatedAt: Date.now(),
+          },
+        }));
+        setExpandedUploadFileId((current) => current === file.id ? "" : current);
+      } catch (uploadError) {
+        const retryable = !(uploadError instanceof HostedApiError
+          && uploadError.status >= 400
+          && uploadError.status < 500
+          && uploadError.status !== 429);
+        if (retryable) uploadRetryFilesRef.current.set(file.id, file);
+        else uploadRetryFilesRef.current.delete(file.id);
+        setExpandedUploadFileId(file.id);
+        setUploadStates((current) => ({
+          ...current,
+          [file.id]: {
+            phase: "error",
+            progress: current[file.id]?.progress || 0,
+            error: errorMessage(uploadError, "云端上传失败"),
+            retryable,
+            updatedAt: Date.now(),
+          },
+        }));
+      }
     }
+    await refreshHostedLibrary();
+    return uploadedShares;
+  }, [refreshHostedLibrary, rememberPublishedCode]);
+
+  const handleIncomingFiles = useCallback(async (values: File[] | FileList) => {
+    if (cloudUploadBusyRef.current) {
+      setImportError("当前文件仍在上传，请完成后再选择下一批文件。");
+      return;
+    }
+    const selected = Array.from(values).filter((file) => file.name.toLowerCase().endsWith(".riv"));
+    if (!selected.length) {
+      setImportError("只接受 .riv 文件，请重新选择。");
+      return;
+    }
+    const oversized = selected.find((file) => file.size > MAX_HOSTED_FILE_BYTES);
+    if (isHostedPlatform && oversized) {
+      setImportError(`${oversized.name} 超过 64 MiB，无法上传。`);
+      return;
+    }
+
+    cloudUploadBusyRef.current = true;
+    setImportBusy(true);
+    setImportError("");
+    const saved: LibraryFile[] = [];
+    let openPromise: Promise<void> | null = null;
+    try {
+      for (const file of selected) {
+        const savedFile = await saveLocalFile(file);
+        saved.push(savedFile);
+        setUploadStates((current) => ({
+          ...current,
+          [savedFile.id]: {
+            phase: "local",
+            progress: 0,
+            error: "",
+            retryable: false,
+            updatedAt: Date.now(),
+          },
+        }));
+        setFiles((current) => [savedFile, ...current.filter((item) => item.id !== savedFile.id)]);
+        if (saved.length === 1) {
+          if (shareCode && !publicRouteDetached) {
+            window.history.replaceState({}, "", viewerHomePath(import.meta.env.BASE_URL));
+            setPublicRouteDetached(true);
+            setPublicShare(null);
+            setCommentThread({ code: null, items: [] });
+            setCommentsLoadError("");
+            setCommentSubmitError("");
+          }
+          setExpandedUploadFileId(savedFile.id);
+          openPromise = openFile(savedFile);
+        }
+      }
+      const uploadPromise = isHostedPlatform
+        ? uploadSavedFiles(saved)
+        : Promise.resolve([] as HostedShare[]);
+      await Promise.all([openPromise, refreshLibrary(), uploadPromise]);
+    } catch (incomingError) {
+      setImportError(errorMessage(incomingError, "文件保存失败，请重新选择"));
+    } finally {
+      cloudUploadBusyRef.current = false;
+      setImportBusy(false);
+    }
+  }, [isHostedPlatform, openFile, publicRouteDetached, refreshLibrary, shareCode, uploadSavedFiles]);
+
+  const importFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (selected.length) void handleIncomingFiles(selected);
   };
 
-  const downloadFile = useCallback(async (file: LibraryFile) => {
+  const dropFiles = (event: ReactDragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = 0;
+    setDropActive(false);
+    void handleIncomingFiles(event.dataTransfer.files);
+  };
+
+  const enterDropTarget = (event: ReactDragEvent<HTMLElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDropActive(true);
+  };
+
+  const showDropTarget = (event: ReactDragEvent<HTMLElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDropActive(true);
+  };
+
+  const hideDropTarget = (event: ReactDragEvent<HTMLElement>) => {
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDropActive(false);
+  };
+
+  const retryFileUpload = useCallback(async (fileId: string) => {
+    const retryFile = uploadRetryFilesRef.current.get(fileId);
+    if (!retryFile || cloudUploadBusyRef.current) return;
+    cloudUploadBusyRef.current = true;
+    setImportBusy(true);
+    try {
+      await uploadSavedFiles([retryFile]);
+    } finally {
+      cloudUploadBusyRef.current = false;
+      setImportBusy(false);
+    }
+  }, [uploadSavedFiles]);
+
+  const downloadFile = useCallback(async (file: LibraryFile, hostedCode?: string) => {
+    if (hostedCode) {
+      const anchor = document.createElement("a");
+      anchor.href = hostedFileUrl(hostedCode);
+      anchor.download = file.name;
+      anchor.click();
+      return;
+    }
     const data = await readLibraryFile(file);
     const blob = new Blob([data], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
@@ -328,7 +1066,11 @@ export function RiveViewerApp() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, []);
 
-  const shareFile = useCallback(async (file: LibraryFile) => {
+  const shareFile = useCallback(async (file: LibraryFile, hostedCode?: string) => {
+    if (hostedCode || file.hostedCode) {
+      await downloadFile(file, hostedCode || file.hostedCode);
+      return;
+    }
     const data = await readLibraryFile(file);
     const sharedFile = new File([data], file.name, { type: "application/octet-stream" });
     const payload = { files: [sharedFile], title: file.name };
@@ -343,13 +1085,193 @@ export function RiveViewerApp() {
     await downloadFile(file);
   }, [downloadFile]);
 
-  const removeFile = useCallback(async (file: LibraryFile) => {
-    if (file.builtin) hideBuiltinFile(file.id);
-    else await deleteLocalFile(file.id);
+  const requestPublishFile = useCallback(async (file: LibraryFile) => {
+    const code = file.hostedCode || publishedCodes[file.id];
+    if (code) {
+      const knownShare = [...hostedLibrary.activeItems, ...hostedLibrary.archivedItems]
+        .find((share) => share.code === code);
+      setExpandedFileId("");
+      setHostingError("");
+      if (knownShare) {
+        setPublishedShare(knownShare);
+        return;
+      }
+      try {
+        setPublishedShare(await getHostedShare(code));
+      } catch (shareError) {
+        setHostingError(errorMessage(shareError, "这个公开链接暂时无法读取"));
+      }
+      return;
+    }
+    if (cloudUploadBusyRef.current) {
+      setImportError("当前文件仍在上传，请稍后重试。");
+      return;
+    }
     setExpandedFileId("");
-    if (activeFile?.file.id === file.id) setActiveFile(null);
-    await refreshLibrary();
-  }, [activeFile?.file.id, refreshLibrary]);
+    setHostingError("");
+    setExpandedUploadFileId(file.id);
+    cloudUploadBusyRef.current = true;
+    setImportBusy(true);
+    try {
+      const shares = await uploadSavedFiles([file]);
+      if (shares[0]) setPublishedShare(shares[0]);
+    } finally {
+      cloudUploadBusyRef.current = false;
+      setImportBusy(false);
+    }
+  }, [hostedLibrary.activeItems, hostedLibrary.archivedItems, publishedCodes, uploadSavedFiles]);
+
+  const archiveShare = useCallback(async (share: HostedShare) => {
+    if (hostedBusyCode) return;
+    setHostedBusyCode(share.code);
+    setHostedLibrary((current) => ({ ...current, error: "" }));
+    try {
+      await archiveHostedShare(share.code);
+      setUploadStates((current) => Object.fromEntries(Object.entries(current).map(([fileId, state]) => (
+        state.share?.code === share.code
+          ? [fileId, { ...state, phase: "local", progress: 0, share: undefined }]
+          : [fileId, state]
+      ))));
+      await refreshHostedLibrary();
+    } catch (archiveError) {
+      setHostedLibrary((current) => ({
+        ...current,
+        error: errorMessage(archiveError, "文件归档失败"),
+      }));
+      throw archiveError;
+    } finally {
+      setHostedBusyCode("");
+    }
+  }, [hostedBusyCode, refreshHostedLibrary]);
+
+  const confirmPendingArchive = useCallback(async () => {
+    if (!pendingArchiveShare) return;
+    try {
+      await archiveShare(pendingArchiveShare);
+      setPendingArchiveShare(null);
+    } catch {
+      // 列表区域保留服务端错误，确认框继续打开便于重试或取消。
+    }
+  }, [archiveShare, pendingArchiveShare]);
+
+  const restoreShare = useCallback(async (share: HostedShare) => {
+    if (hostedBusyCode) return;
+    setHostedBusyCode(share.code);
+    setHostedLibrary((current) => ({ ...current, error: "" }));
+    try {
+      const restoredShare = await restoreHostedShare(share.code);
+      setUploadStates((current) => Object.fromEntries(Object.entries(current).map(([fileId, state]) => (
+        publishedCodes[fileId] === share.code
+          ? [fileId, { ...state, phase: "ready", progress: 100, share: restoredShare }]
+          : [fileId, state]
+      ))));
+      await refreshHostedLibrary();
+    } catch (restoreError) {
+      setHostedLibrary((current) => ({
+        ...current,
+        error: errorMessage(restoreError, "文件恢复失败"),
+      }));
+    } finally {
+      setHostedBusyCode("");
+    }
+  }, [hostedBusyCode, publishedCodes, refreshHostedLibrary]);
+
+  const submitComment = useCallback(async (body: string) => {
+    if (!shareCode || commentSubmitBusyRef.current) return false;
+    const targetCode = shareCode;
+    commentSubmitBusyRef.current = true;
+    setCommentSubmitting(true);
+    setCommentSubmitError("");
+    try {
+      const comment = await createHostedComment(targetCode, {
+        visitorId: getCommentVisitorId(),
+        body,
+      });
+      setCommentThread((current) => {
+        if (current.code !== targetCode || current.items.some((item) => item.id === comment.id)) {
+          return current;
+        }
+        return { code: targetCode, items: [...current.items, comment] };
+      });
+      const nextShare = publicShare?.code === targetCode
+        ? { ...publicShare, commentCount: publicShare.commentCount + 1 }
+        : null;
+      setPublicShare((current) => current?.code === targetCode ? nextShare : current);
+      if (nextShare && !nextShare.isExample) {
+        try {
+          await rememberRecentHostedFile(nextShare);
+          await refreshLibrary();
+        } catch (recentError) {
+          console.warn("更新最近评论记录失败", recentError);
+        }
+      }
+      return true;
+    } catch (commentError) {
+      if (commentError instanceof HostedApiError && commentError.code === "share_archived") {
+        playerRef.current?.pause();
+        setActiveFile(null);
+        setPublicShare((current) => current ? { ...current, status: "archived" } : current);
+        setPublicShareState("archived");
+        setCommentsLoadError("");
+        setCommentSubmitError("");
+        return false;
+      }
+      setCommentSubmitError(errorMessage(commentError, "评论提交失败"));
+      return false;
+    } finally {
+      commentSubmitBusyRef.current = false;
+      setCommentSubmitting(false);
+    }
+  }, [publicShare, refreshLibrary, shareCode]);
+
+  const changeCommentStatus = useCallback(async (
+    comment: HostedComment,
+    action: "archive" | "restore",
+  ) => {
+    if (!shareCode || commentActionBusyId) return;
+    const targetCode = shareCode;
+    setCommentActionBusyId(comment.id);
+    setCommentActionError("");
+    try {
+      const updated = action === "archive"
+        ? await archiveHostedComment(targetCode, comment.id)
+        : await restoreHostedComment(targetCode, comment.id);
+      setCommentThread((current) => current.code === targetCode
+        ? {
+            code: targetCode,
+            items: current.items.map((item) => item.id === updated.id ? updated : item),
+          }
+        : current);
+    } catch (commentActionFailure) {
+      setCommentActionError(errorMessage(
+        commentActionFailure,
+        action === "archive" ? "评论归档失败" : "评论恢复失败",
+      ));
+    } finally {
+      setCommentActionBusyId("");
+    }
+  }, [commentActionBusyId, shareCode]);
+
+  const reloadActiveFile = useCallback(() => {
+    if (activeFile?.hostedShare) {
+      setPublicShareReload((current) => current + 1);
+      return;
+    }
+    if (activeFile) openFile(activeFile.file, "preserve");
+  }, [activeFile, openFile]);
+
+  useEffect(() => {
+    reloadActiveFileRef.current = reloadActiveFile;
+  }, [reloadActiveFile]);
+
+  const selectRenderEngine = useCallback((nextEngine: RenderEngine) => {
+    if (renderEngineRef.current === nextEngine) return;
+    engineFallbackBusyRef.current = false;
+    renderEngineRef.current = nextEngine;
+    setRenderEngine(nextEngine);
+    setCanvasGeneration((current) => current + 1);
+    if (activeFile) reloadActiveFile();
+  }, [activeFile, reloadActiveFile]);
 
   const togglePlayback = useCallback(() => {
     const player = playerRef.current;
@@ -359,9 +1281,9 @@ export function RiveViewerApp() {
   }, [playing]);
 
   const navigateFile = useCallback((offset: number) => {
-    const next = files[activeIndex + offset];
-    if (next) openFile(next);
-  }, [activeIndex, files, openFile]);
+    const next = unifiedFiles[activeIndex + offset];
+    if (next) openUnifiedFile(next, "preserve");
+  }, [activeIndex, openUnifiedFile, unifiedFiles]);
 
   const resetPlayback = useCallback(() => {
     playerRef.current?.reset();
@@ -389,11 +1311,6 @@ export function RiveViewerApp() {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       const key = event.key.toLowerCase();
-      if (key === "escape") {
-        event.preventDefault();
-        setActiveFile(null);
-        return;
-      }
       if (key === " " && target?.closest(".shortcut-button")) return;
 
       if (key === "r") resetPlayback();
@@ -488,7 +1405,7 @@ export function RiveViewerApp() {
       setStageResizeTapOpen(false);
       setStageResizePressActive(false);
       setStageResizeHoverFit("");
-    }, 3000);
+    }, policy.gesture.menuDismissMs);
   };
 
   const stageFitAtPointer = (clientX: number): "contain" | "cover" | "" => {
@@ -503,11 +1420,24 @@ export function RiveViewerApp() {
 
   const eventTargetStageResizerRef = useRef<HTMLDivElement>(null);
 
+  const applyStageHeight = useCallback((height: number) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    if (fitRef.current === "contain" && metadata.width > 0 && metadata.height > 0) {
+      stage.style.width = `min(100%, ${Math.round(height * (metadata.width / metadata.height))}px)`;
+      stage.style.height = "";
+      return;
+    }
+    stage.style.width = "100%";
+    stage.style.height = `${height}px`;
+  }, [metadata.height, metadata.width]);
+
   const beginStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest(".stage-resizer-mode")) return;
     resizeStartRef.current = { x: event.clientX, y: event.clientY, height: stageHeight };
     event.currentTarget.setPointerCapture(event.pointerId);
     draggingStageRef.current = true;
+    pendingStageHeightRef.current = null;
     stageResizeMovedRef.current = false;
     stageResizeStartedOpenRef.current = stageResizeTapOpen;
     setStageResizeMenuActive(true);
@@ -525,23 +1455,47 @@ export function RiveViewerApp() {
     if (!draggingStageRef.current) return;
     const deltaX = event.clientX - resizeStartRef.current.x;
     const deltaY = event.clientY - resizeStartRef.current.y;
-    setStageResizeHoverFit(stageFitAtPointer(event.clientX));
-    if (Math.abs(deltaY) > 4 || Math.abs(deltaX) > 4) {
+    const hoverFit = stageFitAtPointer(event.clientX);
+    setStageResizeHoverFit((current) => current === hoverFit ? current : hoverFit);
+    if (Math.abs(deltaY) > policy.gesture.webSlopPx || Math.abs(deltaX) > policy.gesture.webSlopPx) {
+      const wasMoved = stageResizeMovedRef.current;
       stageResizeMovedRef.current = true;
-      setDraggingStage(true);
-      setStageResizePressActive(true);
+      if (!wasMoved) {
+        setDraggingStage(true);
+        setStageResizePressActive(true);
+      }
     }
     const maximum = Math.max(320, window.innerHeight * 0.66);
     if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-      setStageHeight(clamp(resizeStartRef.current.height + deltaY, 250, maximum));
+      pendingStageHeightRef.current = clamp(resizeStartRef.current.height + deltaY, 250, maximum);
+      if (stageResizeFrameRef.current === null) {
+        stageResizeFrameRef.current = requestAnimationFrame(() => {
+          stageResizeFrameRef.current = null;
+          if (pendingStageHeightRef.current !== null) {
+            applyStageHeight(pendingStageHeightRef.current);
+          }
+        });
+      }
     }
   };
 
   const endStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!draggingStageRef.current) return;
     clearStageResizeTimer();
+    if (stageResizeFrameRef.current !== null) {
+      cancelAnimationFrame(stageResizeFrameRef.current);
+      stageResizeFrameRef.current = null;
+    }
+    if (pendingStageHeightRef.current !== null) {
+      applyStageHeight(pendingStageHeightRef.current);
+      setStageHeight(pendingStageHeightRef.current);
+      pendingStageHeightRef.current = null;
+    }
     const selectedFit = stageResizeStartedOpenRef.current ? "" : stageFitAtPointer(event.clientX);
     draggingStageRef.current = false;
+    const stageBounds = stageRef.current?.getBoundingClientRect();
+    pendingPlayerSizeRef.current = null;
+    if (stageBounds) playerRef.current?.resize(stageBounds.width, stageBounds.height);
     setDraggingStage(false);
     setStageResizePressActive(false);
     setStageResizeHoverFit("");
@@ -569,6 +1523,98 @@ export function RiveViewerApp() {
     selectFit(fitRef.current === "contain" ? "cover" : "contain");
   };
 
+  const inspectorWidthBounds = useCallback(() => {
+    const workbenchWidth = previewWorkbenchRef.current?.clientWidth || 0;
+    const availableMaximum = workbenchWidth
+      ? workbenchWidth - WIDE_COLUMN_RESIZER_WIDTH - WIDE_PREVIEW_MIN_WIDTH
+      : WIDE_INSPECTOR_MAX_WIDTH;
+    return {
+      minimum: WIDE_INSPECTOR_MIN_WIDTH,
+      maximum: Math.max(
+        WIDE_INSPECTOR_MIN_WIDTH,
+        Math.min(WIDE_INSPECTOR_MAX_WIDTH, availableMaximum),
+      ),
+    };
+  }, []);
+
+  const applyInspectorWidth = useCallback((width: number) => {
+    const bounds = inspectorWidthBounds();
+    const nextWidth = Math.round(clamp(width, bounds.minimum, bounds.maximum));
+    currentInspectorWidthRef.current = nextWidth;
+    previewWorkbenchRef.current?.style.setProperty(
+      "--preview-inspector-width",
+      `${nextWidth}px`,
+    );
+    previewColumnResizerRef.current?.setAttribute("aria-valuenow", String(nextWidth));
+    previewColumnResizerRef.current?.setAttribute(
+      "aria-valuetext",
+      `右侧栏宽度 ${nextWidth} 像素`,
+    );
+    return nextWidth;
+  }, [inspectorWidthBounds]);
+
+  const beginInspectorResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const currentWidth = previewInspectorRef.current?.getBoundingClientRect().width
+      || currentInspectorWidthRef.current;
+    inspectorResizeStartRef.current = { x: event.clientX, width: currentWidth };
+    pendingInspectorWidthRef.current = currentWidth;
+    draggingInspectorRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDraggingInspector(true);
+    event.preventDefault();
+  };
+
+  const moveInspectorResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggingInspectorRef.current) return;
+    pendingInspectorWidthRef.current = inspectorResizeStartRef.current.width
+      - (event.clientX - inspectorResizeStartRef.current.x);
+    if (inspectorResizeFrameRef.current === null) {
+      inspectorResizeFrameRef.current = window.requestAnimationFrame(() => {
+        inspectorResizeFrameRef.current = null;
+        if (pendingInspectorWidthRef.current !== null) {
+          applyInspectorWidth(pendingInspectorWidthRef.current);
+        }
+      });
+    }
+    event.preventDefault();
+  };
+
+  const endInspectorResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggingInspectorRef.current) return;
+    if (inspectorResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(inspectorResizeFrameRef.current);
+      inspectorResizeFrameRef.current = null;
+    }
+    const finalWidth = applyInspectorWidth(
+      pendingInspectorWidthRef.current ?? currentInspectorWidthRef.current,
+    );
+    pendingInspectorWidthRef.current = null;
+    draggingInspectorRef.current = false;
+    setInspectorWidth(finalWidth);
+    setDraggingInspector(false);
+    pendingPlayerSizeRef.current = null;
+    const stageBounds = stageRef.current?.getBoundingClientRect();
+    if (stageBounds) playerRef.current?.resize(stageBounds.width, stageBounds.height);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const resizeInspectorWithKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const bounds = inspectorWidthBounds();
+    const step = event.shiftKey ? 48 : 24;
+    let nextWidth = currentInspectorWidthRef.current;
+    if (event.key === "ArrowLeft") nextWidth += step;
+    else if (event.key === "ArrowRight") nextWidth -= step;
+    else if (event.key === "Home") nextWidth = bounds.minimum;
+    else if (event.key === "End") nextWidth = bounds.maximum;
+    else return;
+    event.preventDefault();
+    const appliedWidth = applyInspectorWidth(nextWidth);
+    setInspectorWidth(appliedWidth);
+  };
+
   const handleStageTap = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (stageResizeMovedRef.current) {
       stageResizeMovedRef.current = false;
@@ -582,7 +1628,7 @@ export function RiveViewerApp() {
       return;
     }
     const now = performance.now();
-    if (lastStageTapRef.current > 0 && now - lastStageTapRef.current <= 320) {
+    if (lastStageTapRef.current > 0 && now - lastStageTapRef.current <= policy.gesture.webDoubleClickMs) {
       closeStageResizeTapMenu();
       toggleStageFit();
       return;
@@ -599,35 +1645,122 @@ export function RiveViewerApp() {
         aspectRatio: `${metadata.width} / ${metadata.height}`,
       }
     : { width: "100%", height: `${stageHeight}px` };
-  const timelineProgress = `${clamp(timeline.progress, 0, 1) * 100}%`;
+  const previewWorkbenchStyle = {
+    "--preview-inspector-width": `${inspectorWidth}px`,
+  } as CSSProperties;
+  const isPublicRoute = Boolean(shareCode && !publicRouteDetached);
+  const uploadBusy = importBusy;
+  const homeHref = viewerHomePath(import.meta.env.BASE_URL);
+  const selectTimeline = useCallback((name: string) => {
+    playerRef.current?.selectAnimation(name);
+  }, []);
+  const commentsPanel = publicShare && publicShare.status === "active" ? (
+    <ShareCommentsPanel
+      comments={comments}
+      loading={commentsLoading}
+      loadError={commentsLoadError}
+      submitError={commentSubmitError}
+      submitting={commentSubmitting}
+      actionBusyId={commentActionBusyId}
+      actionError={commentActionError}
+      timelines={metadata.animations}
+      activeTimeline={metadata.activeAnimation}
+      onRetry={() => setCommentsReload((current) => current + 1)}
+      onSubmit={submitComment}
+      onArchive={(comment) => changeCommentStatus(comment, "archive")}
+      onRestore={(comment) => changeCommentStatus(comment, "restore")}
+      onSelectTimeline={selectTimeline}
+    />
+  ) : null;
+
+  if (isPublicRoute && publicShareState !== "ready") {
+    const kind = publicShareState === "archived" ? "archived" : publicShareState === "error" ? "error" : "loading";
+    return (
+      <main className="app-shell public-state-shell">
+        <header className="topbar">
+          <Brand label="Rive 公开预览" href={homeHref} />
+        </header>
+        <PublicShareState
+          kind={kind}
+          title={kind === "archived" ? "文件已归档" : kind === "error" ? "公开链接无法打开" : "正在打开公开文件"}
+          message={kind === "archived"
+            ? `${publicShare?.filename || "这个文件"} 已停止播放和评论，恢复后原链接仍可使用。`
+            : kind === "error"
+              ? publicShareError || "请检查链接后重试。"
+              : publicShare
+                ? `${publicShare.filename} · ${formatBytes(publicShare.size)}`
+                : "正在读取文件信息。"}
+          progress={kind === "loading" ? loading.progress : undefined}
+          progressLabel={kind === "loading" ? loading.phase : undefined}
+          onRetry={kind === "error" ? () => setPublicShareReload((current) => current + 1) : undefined}
+          homeHref={homeHref}
+        />
+        {engineToast && <EngineToast message={engineToast} />}
+      </main>
+    );
+  }
 
   return (
-    <main className={`app-shell ${activeFile ? "preview-shell" : ""}`}>
+    <main
+      className={`app-shell ${activeFile ? "preview-shell" : ""} ${isPublicRoute ? "public-share-shell" : ""}`}
+      onDragEnter={enterDropTarget}
+      onDragOver={showDropTarget}
+      onDragLeave={hideDropTarget}
+      onDrop={dropFiles}
+    >
+      <input
+        ref={fileInputRef}
+        className="sr-only"
+        type="file"
+        accept=".riv,application/octet-stream"
+        multiple
+        disabled={uploadBusy}
+        onChange={importFiles}
+      />
+      {activeFile && dropActive && (
+        <div className="detail-drop-overlay" role="status" aria-live="polite">
+          <span><Icon name="cloud-arrow-up" size={24} /></span>
+          <strong>松开后立即打开并上传</strong>
+          <small>只接受 .riv 文件</small>
+        </div>
+      )}
       {activeFile ? (
         <>
           <header className="topbar preview-topbar">
             <button
               className="topbar-back"
-              onClick={() => setActiveFile(null)}
-              aria-label="关闭当前文件"
+              onClick={closeActiveFile}
+              aria-label="返回文件列表"
               aria-keyshortcuts="Escape"
-              title="关闭当前文件 (Esc)"
+              title="返回文件列表 (Esc)"
             >
-              <X size={21} weight="bold" />
+              <Icon name="arrow-left" size={21} />
             </button>
-            <Brand label="Rive 预览" />
+            <Brand label={isPublicRoute ? "Rive 公开预览" : "Rive 预览"} />
             <div className="topbar-actions preview-actions">
-              <button className="topbar-download" onClick={() => downloadFile(activeFile.file)}>
-                <DownloadSimple size={18} weight="bold" />下载
+              <button
+                className="topbar-action topbar-download press-feedback"
+                onClick={() => downloadFile(activeFile.file, activeHostedCode || undefined)}
+                aria-label="下载当前文件"
+                title="下载当前文件"
+              >
+                <Icon name="download-simple" size={18} /><span className="topbar-action-label">下载</span>
               </button>
-              <ShortcutHelp />
+              {activeHostedCode && (
+                <button
+                  className={`topbar-action topbar-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
+                  onClick={() => void copyActiveHostedLink()}
+                  aria-label={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
+                  title={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
+                >
+                  <Icon name={detailCopyIcon} size={18} />
+                  <span aria-live="polite">{detailCopyLabel}</span>
+                </button>
+              )}
             </div>
           </header>
           <header className="topbar drawer-home-topbar">
-            <Brand label="Rive 预览台" />
-            <div className="topbar-actions">
-              <ShortcutHelp />
-            </div>
+            <Brand label={isPublicRoute ? "Rive 公开预览" : "Rive 预览台"} href={homeHref} />
           </header>
         </>
       ) : (
@@ -639,168 +1772,265 @@ export function RiveViewerApp() {
         </header>
       )}
 
-      <div className={`drawer-workspace ${activeFile ? "is-open" : ""}`}>
+      <div className={`drawer-workspace ${activeFile ? "is-open" : ""} ${isPublicRoute ? "is-public" : ""}`}>
         <div className="drawer-home-pane">
-          <section className="library-page">
-            <input
-              ref={fileInputRef}
-              className="sr-only"
-              type="file"
-              accept=".riv,application/octet-stream"
-              multiple
-              onChange={importFiles}
+          {activeFile ? (
+            <PreviewFileRail
+              items={unifiedFiles}
+              activeFile={activeFile}
+              coverUrls={coverUrls}
+              uploadStates={uploadStates}
+              expandedUploadFileId={expandedUploadFileId}
+              uploadBusy={uploadBusy}
+              importError={importError}
+              onAdd={() => fileInputRef.current?.click()}
+              onOpen={(item) => openUnifiedFile(item, "preserve")}
+              onToggleUpload={(fileId) => setExpandedUploadFileId(
+                expandedUploadFileId === fileId ? "" : fileId,
+              )}
+              onRetry={(fileId) => void retryFileUpload(fileId)}
             />
-            <button className="import-dropzone press-feedback-large" onClick={() => fileInputRef.current?.click()}>
-              <span className="import-mark"><Plus size={24} weight="bold" /></span>
-              <span>导入 Rive 文件</span>
+          ) : <section className="library-page">
+            <button
+              type="button"
+              className={`import-dropzone press-feedback-large ${dropActive ? "is-dragging" : ""} ${uploadBusy ? "is-busy" : ""}`}
+              aria-disabled={uploadBusy}
+              onClick={() => {
+                if (!uploadBusy) fileInputRef.current?.click();
+              }}
+            >
+              <span className="import-mark"><Icon name="plus" size={24} /></span>
+              <span>{isHostedPlatform ? "上传 Rive 文件" : "导入 Rive 文件"}</span>
+              <small>{isHostedPlatform
+                ? "拖入或点击选择，上传后自动生成公开链接"
+                : "拖入或点击选择，只保存在当前浏览器"}</small>
             </button>
+            {importError && <div className="inline-error import-error" role="alert">{importError}</div>}
 
             {error && !activeFile && <div className="inline-error">{error}</div>}
 
             <div className="section-heading">
               <h1>最近文件</h1>
-              <span>{files.length} 个</span>
+              <div className="section-heading-actions">
+                <span>{unifiedFiles.length} 个</span>
+                {isHostedPlatform && (
+                  <button
+                    className="archived-library-trigger press-feedback"
+                    type="button"
+                    onClick={() => {
+                      setArchivedDialogOpen(true);
+                      void refreshHostedLibrary();
+                    }}
+                    aria-haspopup="dialog"
+                    aria-expanded={archivedDialogOpen}
+                    aria-controls="archived-library-dialog"
+                  >
+                    <Icon name="archive" size={15} />
+                    <span>已归档</span>
+                    <span className="archived-library-count">{hostedLibrary.archivedItems.length}</span>
+                  </button>
+                )}
+              </div>
             </div>
             <LibraryList
-              files={files}
+              items={unifiedFiles}
               coverUrls={coverUrls}
               expandedFileId={expandedFileId}
-              activeFileId={activeFile?.file.id}
-              onOpen={openFile}
+              activeFile={activeFile}
+              hostedMode={isHostedPlatform}
+              uploadStates={uploadStates}
+              expandedUploadFileId={expandedUploadFileId}
+              uploadBusy={uploadBusy}
+              onOpen={openUnifiedFile}
               onShare={shareFile}
-              onRemove={removeFile}
+              onPublish={requestPublishFile}
+              onArchive={setPendingArchiveShare}
+              onToggleUpload={(fileId) => setExpandedUploadFileId(
+                expandedUploadFileId === fileId ? "" : fileId,
+              )}
+              onRetry={(fileId) => void retryFileUpload(fileId)}
               onToggleMenu={(id) => setExpandedFileId(expandedFileId === id ? "" : id)}
             />
+            {hostingError && <div className="inline-error hosting-error" role="alert">{hostingError}</div>}
             <div className="library-footer-actions">
               <MiniProgramEntry />
               <FeedbackContact />
             </div>
-          </section>
+          </section>}
         </div>
 
       {activeFile && <section className="preview-page drawer-preview-panel">
         <div className="file-heading">
           <button
             className="drawer-close"
-            onClick={() => setActiveFile(null)}
-            aria-label="关闭当前文件"
+            onClick={closeActiveFile}
+            aria-label="返回文件列表"
             aria-keyshortcuts="Escape"
-            title="关闭当前文件 (Esc)"
+            title="返回文件列表 (Esc)"
           >
-            <X size={21} weight="bold" />
+            <Icon name="arrow-left" size={21} />
           </button>
           <div className="file-heading-copy">
             <h1>{activeFile.file.name}</h1>
             <div className="file-heading-meta">
               <span>{formatBytes(activeFile.file.size)}</span>
               {metadata.width > 0 && <span>{Math.round(metadata.width)} × {Math.round(metadata.height)}</span>}
-              <span className="timecode">{formatTime(timeline.time)} / {formatTime(timeline.duration)}</span>
-              <span className="file-fps">{fps || "--"} FPS</span>
+              <PlaybackMeta telemetry={telemetry} />
             </div>
           </div>
-          <button
-            className="file-heading-download press-feedback"
-            onClick={() => downloadFile(activeFile.file)}
-            aria-label="下载当前文件"
-          >
-            <DownloadSimple size={18} weight="bold" />
-          </button>
+          <div className="file-heading-actions">
+            <button
+              className="file-heading-download press-feedback"
+              onClick={() => downloadFile(activeFile.file, activeHostedCode || undefined)}
+              aria-label="下载当前文件"
+              title="下载当前文件"
+            >
+              <Icon name="download-simple" size={18} />
+            </button>
+            {activeHostedCode && (
+              <button
+                className={`file-heading-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
+                onClick={() => void copyActiveHostedLink()}
+                aria-label={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
+                title={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
+              >
+                <Icon name={detailCopyIcon} size={18} />
+                <span aria-live="polite">{detailCopyLabel}</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div
-          ref={stageRef}
-          className={`canvas-card tone-${canvasTone} ${fit === "contain" && hasStageAspect ? "is-proportional" : ""}`}
-          style={stageStyle}
+          ref={previewWorkbenchRef}
+          className={`preview-workbench ${draggingInspector ? "is-resizing-columns" : ""}`}
+          style={previewWorkbenchStyle}
         >
-          <canvas
-            ref={canvasRef}
-            aria-label="Rive 交互画布"
-            onPointerDown={(event) => canvasPointer("down", event)}
-            onPointerMove={(event) => canvasPointer("move", event)}
-            onPointerUp={(event) => canvasPointer("up", event)}
-            onPointerCancel={(event) => canvasPointer("exit", event)}
-            onPointerLeave={(event) => canvasPointer("exit", event)}
-          />
-          {loading.active && (
-            <div className="canvas-state loading-state">
-              <div className="loading-ring">
-                <span>{loading.progress}%</span>
+          <div className="preview-main-column">
+            <div
+              ref={stageRef}
+              className={`canvas-card tone-${canvasTone} ${fit === "contain" && hasStageAspect ? "is-proportional" : ""}`}
+              style={stageStyle}
+            >
+              <canvas
+                key={canvasGeneration}
+                ref={canvasRef}
+                aria-label="Rive 交互画布"
+                onPointerDown={(event) => canvasPointer("down", event)}
+                onPointerMove={(event) => canvasPointer("move", event)}
+                onPointerUp={(event) => canvasPointer("up", event)}
+                onPointerCancel={(event) => canvasPointer("exit", event)}
+                onPointerLeave={(event) => canvasPointer("exit", event)}
+              />
+              {loading.active && (
+                <div className="canvas-state loading-state">
+                  <div className="loading-ring">
+                    <span>{loading.progress}%</span>
+                  </div>
+                  <p>{loading.phase}</p>
+                  <div className="loading-track"><i style={{ width: `${loading.progress}%` }} /></div>
+                </div>
+              )}
+              {error && (
+                <div className="canvas-state error-state">
+                  <strong>Rive 文件未能加载</strong>
+                  <p>{error}</p>
+                  <button onClick={reloadActiveFile}>重新加载</button>
+                </div>
+              )}
+            </div>
+
+            <div
+              ref={eventTargetStageResizerRef}
+              className={`stage-resizer ${draggingStage ? "is-dragging" : ""} ${stageResizeMenuActive ? "is-selecting" : ""} ${stageResizeTapOpen ? "is-tap-open" : ""} ${stageResizePressActive ? "is-press-active" : ""}`}
+              onPointerDown={beginStageResize}
+              onPointerMove={moveStageResize}
+              onPointerUp={endStageResize}
+              onPointerCancel={endStageResize}
+              onClick={handleStageTap}
+              role="slider"
+              tabIndex={0}
+              aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画布高度，按住后左右滑动选择，双击切换完整或铺满"
+              aria-valuemin={250}
+              aria-valuemax={Math.round(Math.max(320, typeof window === "undefined" ? 620 : window.innerHeight * 0.66))}
+              aria-valuenow={Math.round(stageHeight)}
+            >
+              <span className="stage-resizer-grip" />
+              <div className="stage-resizer-modes" aria-hidden={!stageResizeMenuActive}>
+                  <button
+                    className={`stage-resizer-mode mode-contain ${fit === "contain" ? "is-current" : ""} ${stageResizeHoverFit === "contain" ? "is-hovered" : ""}`}
+                    tabIndex={stageResizeMenuActive ? 0 : -1}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => { event.stopPropagation(); selectFit("contain"); closeStageResizeTapMenu(); }}
+                  >
+                    <Icon name="arrows-in-simple" size={18} /><span>完整</span>
+                  </button>
+                  <button
+                    className={`stage-resizer-mode mode-cover ${fit === "cover" ? "is-current" : ""} ${stageResizeHoverFit === "cover" ? "is-hovered" : ""}`}
+                    tabIndex={stageResizeMenuActive ? 0 : -1}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => { event.stopPropagation(); selectFit("cover"); closeStageResizeTapMenu(); }}
+                  >
+                    <Icon name="arrows-out-simple" size={18} /><span>铺满</span>
+                  </button>
               </div>
-              <p>{loading.phase}</p>
-              <div className="loading-track"><i style={{ width: `${loading.progress}%` }} /></div>
             </div>
-          )}
-          {error && (
-            <div className="canvas-state error-state">
-              <strong>Rive 文件未能加载</strong>
-              <p>{error}</p>
-              <button onClick={() => openFile(activeFile.file)}>重新加载</button>
+
+            <div className="transport">
+              <div className="transport-playback">
+                <button className="icon-button press-feedback" onClick={resetPlayback} aria-label="重播" aria-keyshortcuts="R" title="重播 (R)">
+                  <Icon name="arrow-counter-clockwise" size={20} />
+                </button>
+                <button className="icon-button press-feedback" onClick={togglePlayback} aria-label={playing ? "暂停" : "播放"} aria-keyshortcuts="Space" title={`${playing ? "暂停" : "播放"} (空格)`}>
+                  {playing ? <Icon name="pause" size={20} /> : <Icon name="play" size={20} />}
+                </button>
+              </div>
+              <label className="speed-select">
+                <Icon name="gauge" size={18} className="speed-gauge" />
+                <select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-keyshortcuts="+ -" title="调整播放速度 (+ / -)">
+                  {SPEEDS.map((value) => <option key={value} value={value}>{value}x</option>)}
+                </select>
+              </label>
+              <div className="transport-files">
+                <button className="press-feedback" disabled={activeIndex <= 0} onClick={() => navigateFile(-1)} aria-label="上一个文件" aria-keyshortcuts="ArrowLeft ArrowUp" title="上一个文件 (← / ↑)">
+                  <Icon name="arrow-left" size={18} />
+                </button>
+                <button className="press-feedback" disabled={activeIndex < 0 || activeIndex >= unifiedFiles.length - 1} onClick={() => navigateFile(1)} aria-label="下一个文件" aria-keyshortcuts="ArrowRight ArrowDown" title="下一个文件 (→ / ↓)">
+                  <Icon name="arrow-right" size={18} />
+                </button>
+              </div>
             </div>
+          </div>
+
+          <div
+            ref={previewColumnResizerRef}
+            className="preview-column-resizer"
+            role="separator"
+            tabIndex={0}
+            aria-label="调整画面与右侧栏的宽度"
+            aria-controls="preview-inspector"
+            aria-orientation="vertical"
+            aria-valuemin={WIDE_INSPECTOR_MIN_WIDTH}
+            aria-valuemax={WIDE_INSPECTOR_MAX_WIDTH}
+            aria-valuenow={inspectorWidth}
+            aria-valuetext={`右侧栏宽度 ${inspectorWidth} 像素`}
+            title="左右拖动调整两栏比例"
+            onPointerDown={beginInspectorResize}
+            onPointerMove={moveInspectorResize}
+            onPointerUp={endInspectorResize}
+            onPointerCancel={endInspectorResize}
+            onKeyDown={resizeInspectorWithKeyboard}
+          >
+            <span />
+          </div>
+
+          <aside ref={previewInspectorRef} id="preview-inspector" className="preview-inspector" aria-label="评论与预览参数">
+            <div className="control-panel">
+          <RuntimeEventConsole log={runtimeEventLog} />
+          {isPublicRoute && commentsPanel && (
+            <div className="public-comments-inline">{commentsPanel}</div>
           )}
-        </div>
 
-        <div
-          ref={eventTargetStageResizerRef}
-          className={`stage-resizer ${draggingStage ? "is-dragging" : ""} ${stageResizeMenuActive ? "is-selecting" : ""} ${stageResizeTapOpen ? "is-tap-open" : ""} ${stageResizePressActive ? "is-press-active" : ""}`}
-          onPointerDown={beginStageResize}
-          onPointerMove={moveStageResize}
-          onPointerUp={endStageResize}
-          onPointerCancel={endStageResize}
-          onClick={handleStageTap}
-          role="slider"
-          tabIndex={0}
-          aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画布高度，按住后左右滑动选择，双击切换完整或铺满"
-          aria-valuemin={250}
-          aria-valuemax={Math.round(Math.max(320, typeof window === "undefined" ? 620 : window.innerHeight * 0.66))}
-          aria-valuenow={Math.round(stageHeight)}
-        >
-          <span className="stage-resizer-grip" />
-          <div className="stage-resizer-modes" aria-hidden={!stageResizeMenuActive}>
-              <button
-                className={`stage-resizer-mode mode-contain ${fit === "contain" ? "is-current" : ""} ${stageResizeHoverFit === "contain" ? "is-hovered" : ""}`}
-                tabIndex={stageResizeMenuActive ? 0 : -1}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => { event.stopPropagation(); selectFit("contain"); closeStageResizeTapMenu(); }}
-              >
-                <ArrowsInSimple size={18} weight="bold" /><span>完整</span>
-              </button>
-              <button
-                className={`stage-resizer-mode mode-cover ${fit === "cover" ? "is-current" : ""} ${stageResizeHoverFit === "cover" ? "is-hovered" : ""}`}
-                tabIndex={stageResizeMenuActive ? 0 : -1}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => { event.stopPropagation(); selectFit("cover"); closeStageResizeTapMenu(); }}
-              >
-                <ArrowsOutSimple size={18} weight="bold" /><span>铺满</span>
-              </button>
-          </div>
-        </div>
-
-        <div className="transport">
-          <div className="transport-playback">
-            <button className="icon-button press-feedback" onClick={resetPlayback} aria-label="重播" aria-keyshortcuts="R" title="重播 (R)">
-              <ArrowCounterClockwise size={20} weight="bold" />
-            </button>
-            <button className="icon-button press-feedback" onClick={togglePlayback} aria-label={playing ? "暂停" : "播放"} aria-keyshortcuts="Space" title={`${playing ? "暂停" : "播放"} (空格)`}>
-              {playing ? <Pause size={20} weight="bold" /> : <Play size={20} weight="bold" />}
-            </button>
-          </div>
-          <label className="speed-select">
-            <Gauge size={18} weight="bold" />
-            <select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-keyshortcuts="+ -" title="调整播放速度 (+ / -)">
-              {SPEEDS.map((value) => <option key={value} value={value}>{value}x</option>)}
-            </select>
-          </label>
-          <div className="transport-files">
-            <button className="press-feedback" disabled={activeIndex <= 0} onClick={() => navigateFile(-1)} aria-label="上一个文件" aria-keyshortcuts="ArrowLeft ArrowUp" title="上一个文件 (← / ↑)">
-              <ArrowLeft size={18} weight="bold" />
-            </button>
-            <button className="press-feedback" disabled={activeIndex < 0 || activeIndex >= files.length - 1} onClick={() => navigateFile(1)} aria-label="下一个文件" aria-keyshortcuts="ArrowRight ArrowDown" title="下一个文件 (→ / ↓)">
-              <ArrowRight size={18} weight="bold" />
-            </button>
-          </div>
-        </div>
-
-        <div className="control-panel">
           <ParameterRow label="画板">
             {metadata.artboardNames.map((name) => (
               <Tag key={name} selected={metadata.activeArtboard === name} onClick={() => playerRef.current?.selectArtboard(name)}>{name}</Tag>
@@ -819,18 +2049,12 @@ export function RiveViewerApp() {
             )) : <EmptyTag>无状态机</EmptyTag>}
           </ParameterRow>
 
-          <ParameterRow label="时间轴">
-            {metadata.animations.length ? metadata.animations.map((name) => (
-              <Tag
-                key={name}
-                className="timeline-tag"
-                selected={metadata.activeAnimation === name}
-                active={metadata.activeAnimation === name}
-                progress={metadata.activeAnimation === name ? timelineProgress : undefined}
-                onClick={() => playerRef.current?.selectAnimation(name)}
-              >{name}</Tag>
-            )) : <EmptyTag>无时间轴</EmptyTag>}
-          </ParameterRow>
+          <TimelineControl
+            telemetry={telemetry}
+            animations={metadata.animations}
+            activeAnimation={metadata.activeAnimation}
+            onSelect={selectTimeline}
+          />
 
           <ParameterRow label="状态机输入">
             {metadata.inputs.length ? metadata.inputs.map((input) => (
@@ -875,7 +2099,7 @@ export function RiveViewerApp() {
                 selected={metadata.audioEnabled}
                 onClick={() => playerRef.current?.setAudioEnabled(!metadata.audioEnabled)}
               >
-                {metadata.audioEnabled ? <SpeakerHigh size={16} weight="bold" /> : <SpeakerSlash size={16} weight="bold" />}
+                {metadata.audioEnabled ? <Icon name="speaker-high" size={16} /> : <Icon name="speaker-slash" size={16} />}
                 {metadata.audioEnabled ? "开启" : "静音"}
               </Tag>
             </ParameterRow>
@@ -890,75 +2114,80 @@ export function RiveViewerApp() {
             <Tag selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>
             <Tag selected={fit === "cover"} onClick={() => selectFit("cover")}>铺满</Tag>
           </ParameterRow>
+          <ParameterRow label="渲染引擎">
+            <Tag selected={renderEngine === "webgl2"} onClick={() => selectRenderEngine("webgl2")}>WebGL2</Tag>
+            <Tag selected={renderEngine === "canvas2d"} onClick={() => selectRenderEngine("canvas2d")}>兼容模式</Tag>
+          </ParameterRow>
+            </div>
+          </aside>
         </div>
 
       </section>}
       </div>
+      {isHostedPlatform && pendingArchiveShare && (
+        <ArchiveConfirmDialog
+          share={pendingArchiveShare}
+          busy={hostedBusyCode === pendingArchiveShare.code}
+          error={hostedLibrary.error}
+          onCancel={() => setPendingArchiveShare(null)}
+          onConfirm={() => void confirmPendingArchive()}
+        />
+      )}
+      {isHostedPlatform && !activeFile && archivedDialogOpen && (
+        <ArchivedLibraryDialog
+          archivedItems={hostedLibrary.archivedItems}
+          loading={hostedLibrary.loading}
+          error={hostedLibrary.error}
+          busyCode={hostedBusyCode}
+          onRefresh={refreshHostedLibrary}
+          onRestore={restoreShare}
+          onClose={() => setArchivedDialogOpen(false)}
+        />
+      )}
+      {isHostedPlatform && publishedShare && (
+        <ShareActionsDialog
+          dialogId="published-share-actions-dialog"
+          share={publishedShare}
+          onDownload={() => downloadFile({
+            id: `hosted-${publishedShare.code}`,
+            name: publishedShare.filename,
+            size: publishedShare.size,
+            updatedAt: Date.parse(publishedShare.createdAt) || Date.now(),
+            hostedCode: publishedShare.code,
+          }, publishedShare.code)}
+          onClose={() => setPublishedShare(null)}
+        />
+      )}
+      {engineToast && <EngineToast message={engineToast} />}
     </main>
   );
 }
 
-function Brand({ label }: { label: string }) {
+function EngineToast({ message }: { message: string }) {
   return (
-    <div className="brand">
-      {/* 与浏览器页签复用同一份本地图标，避免品牌图形分叉。 */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="brand-mark" src="/rive-viewer/favicon.webp?v=2" alt="" />
-      <span>{label}</span>
+    <div className="engine-toast" role="status" aria-live="polite">
+      {message}
     </div>
   );
 }
 
-function FeedbackContact() {
-  const [notice, setNotice] = useState("");
-  const noticeTimerRef = useRef<number | null>(null);
-
-  useEffect(() => () => {
-    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
-  }, []);
-
-  const showNotice = (message: string) => {
-    setNotice(message);
-    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
-    noticeTimerRef.current = window.setTimeout(() => setNotice(""), 2200);
-  };
-
-  const copyWechat = async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(AUTHOR_WECHAT);
-      } else {
-        const input = document.createElement("textarea");
-        input.value = AUTHOR_WECHAT;
-        input.setAttribute("readonly", "");
-        input.style.position = "fixed";
-        input.style.opacity = "0";
-        document.body.appendChild(input);
-        input.select();
-        const copied = document.execCommand("copy");
-        input.remove();
-        if (!copied) throw new Error("浏览器未允许复制");
-      }
-      showNotice("微信号已复制");
-    } catch {
-      showNotice(`复制失败，微信号：${AUTHOR_WECHAT}`);
-    }
-  };
-
-  return (
-    <div className="feedback-contact">
-      <button
-        className="author-contact press-feedback"
-        type="button"
-        onClick={copyWechat}
-        aria-label="联系作者反馈意见，复制微信号"
-      >
-        <ChatCircleDots size={16} weight="bold" />
-        <span>联系作者反馈意见</span>
-      </button>
-      {notice && <div className="feedback-notice" role="status" aria-live="polite">{notice}</div>}
-    </div>
+function Brand({ label, href }: { label: string; href?: string }) {
+  const content = (
+    <>
+      {/* 与浏览器页签复用同一份本地图标，避免品牌图形分叉。 */}
+      <img className="brand-mark" src={`${publicAssetUrl("favicon.webp")}?v=2`} alt="" />
+      <span className="brand-title">{label}</span>
+      <small className="brand-signature">for JOJO</small>
+    </>
   );
+  if (href) {
+    return <a className="brand brand-link" href={href} title="返回文件列表">{content}</a>;
+  }
+  return <div className="brand">{content}</div>;
+}
+
+function FeedbackContact() {
+  return <p className="feedback-credit">反馈意见：杨皓棱</p>;
 }
 
 function MiniProgramEntry() {
@@ -993,15 +2222,14 @@ function MiniProgramEntry() {
         aria-label="查看 Rive 预览台小程序码"
         onClick={() => setOpen((current) => !current)}
       >
-        <WechatLogo size={16} weight="bold" />
+        <Icon name="wechat-logo" size={16} />
         <span>小程序</span>
       </button>
       <div id="mini-program-card" className="mini-program-popover" role="group" aria-label="Rive 预览台小程序码">
         <strong>Rive 预览台</strong>
         <span>微信扫码打开小程序</span>
         {/* 小程序码由杨总提供，转为本地 WebP 后随静态站点发布。 */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/rive-viewer/mini-program-code.webp" alt="Rive 预览台小程序码" />
+        <img src={publicAssetUrl("mini-program-code.webp")} alt="Rive 预览台小程序码" />
       </div>
     </div>
   );
@@ -1009,40 +2237,52 @@ function MiniProgramEntry() {
 
 function ShortcutHelp() {
   const [open, setOpen] = useState(false);
+  const popoverId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
+      buttonRef.current?.blur();
+    };
     document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
   }, [open]);
 
   return (
-    <div ref={rootRef} className="shortcut-help">
+    <div ref={rootRef} className={`shortcut-help ${open ? "is-open" : ""}`}>
       <button
+        ref={buttonRef}
         className={`shortcut-button ${open ? "is-active" : ""}`}
         onClick={() => setOpen((current) => !current)}
         aria-label="查看快捷键"
         aria-expanded={open}
         aria-haspopup="dialog"
-        title="查看快捷键"
+        aria-controls={popoverId}
       >
-        <Keyboard size={19} weight="bold" />
+        <Icon name="keyboard" size={19} />
       </button>
-      {open && (
-        <div className="shortcut-popover" role="dialog" aria-label="快捷键说明">
-          <strong>快捷键</strong>
-          <div><span>重播</span><kbd>R</kbd></div>
-          <div><span>播放 / 暂停</span><kbd>空格</kbd></div>
-          <div><span>上一个文件</span><span className="key-group"><kbd>↑</kbd><kbd>←</kbd></span></div>
-          <div><span>下一个文件</span><span className="key-group"><kbd>↓</kbd><kbd>→</kbd></span></div>
-          <div><span>播放速度</span><span className="key-group"><kbd>-</kbd><kbd>+</kbd></span></div>
-          <div><span>关闭文件</span><kbd>Esc</kbd></div>
-        </div>
-      )}
+      <div id={popoverId} className="shortcut-popover" role="dialog" aria-label="快捷键说明">
+        <strong>快捷键</strong>
+        <div><span>重播</span><kbd>R</kbd></div>
+        <div><span>播放 / 暂停</span><kbd>空格</kbd></div>
+        <div><span>上一个文件</span><span className="key-group"><kbd>↑</kbd><kbd>←</kbd></span></div>
+        <div><span>下一个文件</span><span className="key-group"><kbd>↓</kbd><kbd>→</kbd></span></div>
+        <div><span>播放速度</span><span className="key-group"><kbd>-</kbd><kbd>+</kbd></span></div>
+        <div><span>返回文件列表</span><kbd>Esc</kbd></div>
+      </div>
     </div>
   );
 }
@@ -1057,29 +2297,20 @@ function ParameterRow({ label, children }: { label: string; children: React.Reac
 }
 
 function Tag({
-  className = "",
   selected,
-  active,
-  progress,
   children,
   onClick,
 }: {
-  className?: string;
   selected?: boolean;
-  active?: boolean;
-  progress?: string;
   children: React.ReactNode;
   onClick: () => void;
 }) {
   return (
     <button
-      className={`parameter-tag press-feedback ${className} ${selected ? "is-selected" : ""} ${active ? "is-playing" : ""}`}
+      className={`parameter-tag press-feedback ${selected ? "is-selected" : ""}`}
       aria-pressed={selected}
       onClick={onClick}
     >
-      {progress !== undefined && (
-        <i className="timeline-progress" style={{ width: progress }} aria-hidden="true" />
-      )}
       <span>{children}</span>
     </button>
   );
@@ -1089,71 +2320,320 @@ function EmptyTag({ children }: { children: React.ReactNode }) {
   return <span className="empty-tag">{children}</span>;
 }
 
-function LibraryList({
-  files,
-  coverUrls,
-  expandedFileId,
-  activeFileId,
-  compact,
-  onOpen,
-  onShare,
-  onRemove,
-  onToggleMenu,
+function isCurrentItem(item: UnifiedFileItem, activeFile: ActiveFile | null): boolean {
+  return Boolean(
+    activeFile
+    && (
+      item.localFile?.id === activeFile.file.id
+      || item.file.id === activeFile.file.id
+      || (activeFile.hostedShare?.code && item.hostedCode === activeFile.hostedShare.code)
+    )
+  );
+}
+
+function FileUploadStatusButton({
+  state,
+  expanded,
+  onToggle,
 }: {
-  files: LibraryFile[];
+  state: FileUploadState;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const title = state.phase === "ready"
+    ? "已上传到云端"
+    : state.phase === "uploading"
+      ? `正在上传 ${state.progress}%`
+      : state.phase === "error"
+        ? "上传失败，查看详情"
+        : "只保存在本机";
+  const icon: IconName = state.phase === "ready"
+    ? "cloud-check"
+    : state.phase === "uploading"
+      ? "cloud-arrow-up"
+      : state.phase === "error"
+        ? "cloud-x"
+        : "desktop";
+  const detailVisible = expanded || state.phase === "uploading" || state.phase === "error";
+  return (
+    <button
+      type="button"
+      className={`file-sync-toggle is-${state.phase}`}
+      onClick={onToggle}
+      aria-label={title}
+      aria-expanded={detailVisible}
+      title={title}
+    >
+      <Icon name={icon} size={13} />
+    </button>
+  );
+}
+
+function FileUploadDetail({
+  state,
+  hostedCode,
+  visible,
+  retryDisabled,
+  onRetry,
+}: {
+  state: FileUploadState;
+  hostedCode?: string;
+  visible: boolean;
+  retryDisabled: boolean;
+  onRetry: () => void;
+}) {
+  if (!visible) return null;
+  if (state.phase === "ready") {
+    return (
+      <div className="file-upload-detail is-ready" role="status">
+        <span>云端已就绪{hostedCode ? ` / ${hostedCode}` : ""}</span>
+      </div>
+    );
+  }
+  if (state.phase === "local") {
+    return (
+      <div className="file-upload-detail is-local" role="status">
+        <span>只保存在当前浏览器</span>
+      </div>
+    );
+  }
+  const failed = state.phase === "error";
+  return (
+    <div className={`file-upload-detail ${failed ? "is-error" : "is-uploading"}`} aria-live="polite">
+      <div className="file-upload-detail-heading">
+        <span>{failed ? state.error || "上传失败" : "正在上传到云端"}</span>
+        <b>{state.progress}%</b>
+      </div>
+      <div className="file-upload-progress-row">
+        <span
+          className="file-upload-progress"
+          role="progressbar"
+          aria-label={failed ? "上传失败，等待重试" : "上传进度"}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={state.progress}
+        >
+          <i style={{ width: `${state.progress}%` }} />
+        </span>
+        {failed && state.retryable && (
+          <button type="button" onClick={onRetry} disabled={retryDisabled}>重试</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PreviewFileRail({
+  items,
+  activeFile,
+  coverUrls,
+  uploadStates,
+  expandedUploadFileId,
+  uploadBusy,
+  importError,
+  onAdd,
+  onOpen,
+  onToggleUpload,
+  onRetry,
+}: {
+  items: UnifiedFileItem[];
+  activeFile: ActiveFile;
   coverUrls: Map<string, string>;
-  expandedFileId: string;
-  activeFileId?: string;
-  compact?: boolean;
-  onOpen: (file: LibraryFile) => void;
-  onShare: (file: LibraryFile) => void;
-  onRemove: (file: LibraryFile) => void;
-  onToggleMenu: (id: string) => void;
+  uploadStates: Record<string, FileUploadState>;
+  expandedUploadFileId: string;
+  uploadBusy: boolean;
+  importError: string;
+  onAdd: () => void;
+  onOpen: (item: UnifiedFileItem) => void;
+  onToggleUpload: (fileId: string) => void;
+  onRetry: (fileId: string) => void;
 }) {
   return (
-    <div className={`file-list ${compact ? "is-compact" : ""}`}>
-      {files.map((file) => (
-        <article className={`file-row ${activeFileId === file.id ? "is-current" : ""} ${expandedFileId === file.id ? "is-menu-open" : ""}`} key={file.id}>
-          <button className="file-open press-feedback-large" onClick={() => onOpen(file)}>
-            <span className={`file-cover ${coverUrls.has(file.id) ? "has-image" : ""}`} aria-hidden="true">
-              {coverUrls.has(file.id)
-                ? <LocalCoverImage src={coverUrls.get(file.id)!} />
-                : "RIV"}
-            </span>
-            <span className="file-copy">
-              <span className="file-title-line">
-                <strong>{file.name}</strong>
-                {file.builtin && <span className="file-badge">示例</span>}
+    <aside className="preview-file-rail" aria-label="平台文件">
+      <header className="preview-file-rail-header">
+        <div><strong>最近文件</strong><span>{items.length}</span></div>
+        <button
+          type="button"
+          className="preview-file-add press-feedback"
+          onClick={onAdd}
+          disabled={uploadBusy}
+          aria-label="选择并上传 Rive 文件"
+          title="选择并上传 Rive 文件"
+        >
+          <Icon name="plus" size={18} />
+        </button>
+      </header>
+      {importError && <div className="rail-import-error" role="alert">{importError}</div>}
+      <div className="preview-file-rail-list">
+        {items.map((item) => {
+          const fileId = item.localFile?.id || item.file.id;
+          const state = uploadStateForItem(item, uploadStates);
+          const detailVisible = expandedUploadFileId === fileId
+            || state.phase === "uploading"
+            || state.phase === "error";
+          const current = isCurrentItem(item, activeFile);
+          return (
+            <article
+              key={item.key}
+              className={`preview-file-rail-row ${current ? "is-current" : ""}`}
+              aria-current={current ? "true" : undefined}
+            >
+              <button className="preview-file-cover-trigger" onClick={() => onOpen(item)} aria-label={`打开 ${item.file.name}`}>
+                <span className={`preview-file-cover ${coverUrls.has(item.file.id) ? "has-image" : ""}`} aria-hidden="true">
+                  {coverUrls.has(item.file.id)
+                    ? <LocalCoverImage src={coverUrls.get(item.file.id)!} />
+                    : "RIV"}
+                </span>
+              </button>
+              <div className="preview-file-rail-copy">
+                <button className="preview-file-title" onClick={() => onOpen(item)}>{item.file.name}</button>
+                <div className="preview-file-meta">
+                  <span>{formatBytes(item.file.size)}</span>
+                  <FileUploadStatusButton
+                    state={state}
+                    expanded={detailVisible}
+                    onToggle={() => onToggleUpload(fileId)}
+                  />
+                </div>
+              </div>
+              <FileUploadDetail
+                state={state}
+                hostedCode={item.hostedCode}
+                visible={detailVisible}
+                retryDisabled={uploadBusy}
+                onRetry={() => onRetry(fileId)}
+              />
+            </article>
+          );
+        })}
+        {!items.length && <span className="preview-file-rail-empty">还没有文件</span>}
+      </div>
+    </aside>
+  );
+}
+
+function LibraryList({
+  items,
+  coverUrls,
+  expandedFileId,
+  activeFile,
+  hostedMode,
+  uploadStates,
+  expandedUploadFileId,
+  uploadBusy,
+  onOpen,
+  onShare,
+  onPublish,
+  onArchive,
+  onToggleUpload,
+  onRetry,
+  onToggleMenu,
+}: {
+  items: UnifiedFileItem[];
+  coverUrls: Map<string, string>;
+  expandedFileId: string;
+  activeFile: ActiveFile | null;
+  hostedMode: boolean;
+  uploadStates: Record<string, FileUploadState>;
+  expandedUploadFileId: string;
+  uploadBusy: boolean;
+  onOpen: (item: UnifiedFileItem) => void;
+  onShare: (file: LibraryFile, hostedCode?: string) => void;
+  onPublish: (file: LibraryFile) => void;
+  onArchive: (share: HostedShare) => void;
+  onToggleUpload: (fileId: string) => void;
+  onRetry: (fileId: string) => void;
+  onToggleMenu: (id: string) => void;
+}) {
+  if (!items.length) {
+    return (
+      <div className="file-list recent-files-empty">
+        <Icon name="link-simple" size={21} />
+        <strong>还没有最近文件</strong>
+        <span>查看公开链接或导入文件后会显示在这里。</span>
+      </div>
+    );
+  }
+  return (
+    <div className="file-list">
+      {items.map((item) => {
+        const file = item.file;
+        const fileId = item.localFile?.id || file.id;
+        const state = uploadStateForItem(item, uploadStates);
+        const detailVisible = expandedUploadFileId === fileId
+          || state.phase === "uploading"
+          || state.phase === "error";
+        const current = isCurrentItem(item, activeFile);
+        return <article
+          className={`file-row ${current ? "is-current" : ""} ${expandedFileId === item.key ? "is-menu-open" : ""}`}
+          key={item.key}
+          aria-current={current ? "true" : undefined}
+        >
+          <div className="file-open">
+            <button className="file-cover-trigger press-feedback-large" onClick={() => onOpen(item)} aria-label={`打开 ${file.name}`}>
+              <span className={`file-cover ${coverUrls.has(file.id) ? "has-image" : ""}`} aria-hidden="true">
+                {coverUrls.has(file.id)
+                  ? <LocalCoverImage src={coverUrls.get(file.id)!} />
+                  : "RIV"}
               </span>
-              {!compact && <span>{file.builtin ? "内置测试文件" : "本机导入文件"}</span>}
-              <small>{formatBytes(file.size)} / {formatDate(file.updatedAt)}</small>
+            </button>
+            <span className="file-copy">
+              <button className="file-title-line" onClick={() => onOpen(item)}><strong>{file.name}</strong></button>
+              <small className="file-meta-line">
+                <span>{formatBytes(file.size)}</span>
+                <FileUploadStatusButton
+                  state={state}
+                  expanded={detailVisible}
+                  onToggle={() => onToggleUpload(fileId)}
+                />
+                <span>/ {formatDate(item.activityAt)}</span>
+              </small>
             </span>
-          </button>
+          </div>
           <div className="file-action">
             <button
-              className={`square-button press-feedback ${expandedFileId === file.id ? "is-active" : ""}`}
+              className={`square-button press-feedback ${expandedFileId === item.key ? "is-active" : ""}`}
               aria-label={`操作 ${file.name}`}
-              onClick={() => onToggleMenu(file.id)}
+              onClick={() => onToggleMenu(item.key)}
             >
-              <CaretDown size={18} weight="bold" />
+              <Icon name="caret-down" size={18} />
             </button>
           </div>
-          {expandedFileId === file.id && (
+          {detailVisible && (
+            <FileUploadDetail
+              state={state}
+              hostedCode={item.hostedCode}
+              visible
+              retryDisabled={uploadBusy}
+              onRetry={() => onRetry(fileId)}
+            />
+          )}
+          {expandedFileId === item.key && (
             <div className="file-menu">
-              <button className="press-feedback" onClick={() => onShare(file)}><ShareNetwork size={17} weight="bold" />发送文件</button>
-              <button className="danger press-feedback" onClick={() => onRemove(file)}>
-                <Trash size={17} weight="bold" />删除文件
+              {hostedMode && (
+                <button className="press-feedback" onClick={() => onPublish(item.localFile || file)} disabled={uploadBusy}>
+                  <Icon name="link-simple" size={17} />
+                  {item.hostedCode ? "复制公开链接" : "上传并生成链接"}
+                </button>
+              )}
+              <button className="press-feedback" onClick={() => onShare(item.localFile || file, item.hostedCode)}>
+                <Icon name={item.hostedCode ? "download-simple" : "share-network"} size={17} />
+                {item.hostedCode ? "下载文件" : "发送文件"}
               </button>
+              {item.share?.status === "active" && (
+                <button className="press-feedback hosted-archive" onClick={() => onArchive(item.share!)}>
+                  <Icon name="archive" size={17} />归档文件
+                </button>
+              )}
             </div>
           )}
-        </article>
-      ))}
+        </article>;
+      })}
     </div>
   );
 }
 
 function LocalCoverImage({ src }: { src: string }) {
   // Blob 地址完全在本机生成，不能交给远程图片优化服务处理。
-  // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt="" />;
 }

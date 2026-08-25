@@ -1,14 +1,17 @@
-import RiveFactory, {
-  type Artboard,
-  type File as RiveFile,
-  type LinearAnimationInstance,
-  type Mat2D,
-  type RiveCanvas,
-  type StateMachineInstance,
-  type ViewModelInstance,
-  type WrappedRenderer,
+import type {
+  Artboard,
+  File as RiveFile,
+  LinearAnimationInstance,
+  Mat2D,
+  RiveCanvas,
+  StateMachineInstance,
+  ViewModelInstance,
+  WrappedRenderer,
 } from "@rive-app/canvas-advanced";
+import policy from "../../shared/rive-policy.json";
 import { backingPointToArtboard, canvasPointToBacking } from "./canvas-space";
+import { publicAssetUrl } from "./public-base";
+import type { RiveRuntimeEvent } from "./runtime-event-log";
 
 export type RiveInput = {
   index: number;
@@ -16,6 +19,16 @@ export type RiveInput = {
   type: "boolean" | "number" | "trigger";
   value: boolean | number | null;
 };
+
+export type RenderEngine = "webgl2" | "canvas2d";
+
+export const DEFAULT_RENDER_ENGINE: RenderEngine = "webgl2";
+
+export function runtimeWasmFile(renderEngine: RenderEngine): string {
+  return renderEngine === "webgl2"
+    ? "rive-webgl2-2.39.1.wasm"
+    : "rive-2.39.1.wasm";
+}
 
 export type RiveMetadata = {
   artboardNames: string[];
@@ -45,7 +58,74 @@ export type PlayerCallbacks = {
   onPlayback: (playing: boolean, label: string) => void;
   onProgress: (progress: TimelineProgress) => void;
   onPerformance: (fps: number) => void;
+  onEvent?: (event: RiveRuntimeEvent) => void;
+  onRuntimeFailure?: (error: Error) => void;
 };
+
+type RuntimeEventDraft = Omit<RiveRuntimeEvent, "id">;
+type StateMachineReportSource = Pick<
+  StateMachineInstance,
+  "reportedEventAt" | "reportedEventCount" | "stateChangedCount" | "stateChangedNameByIndex"
+>;
+type StateMachineAdvanceSource = StateMachineReportSource & Pick<StateMachineInstance, "advance">;
+
+function clippedText(value: unknown, maximum: number): string {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
+}
+
+function formatReportedEventDetail(event: ReturnType<StateMachineInstance["reportedEventAt"]>): string {
+  if (!event) return "";
+  const details: string[] = [];
+  if (typeof event.type === "number") details.push(`type=${event.type}`);
+  if (typeof event.delay === "number") details.push(`delay=${event.delay}s`);
+  if ("url" in event && event.url) details.push(`url=${clippedText(event.url, 240)}`);
+  if ("target" in event && event.target) details.push(`target=${clippedText(event.target, 40)}`);
+  if (event.properties) {
+    Object.entries(event.properties).forEach(([key, value]) => {
+      const formatted = typeof value === "string" ? JSON.stringify(value) : String(value);
+      details.push(`${clippedText(key, 80)}=${clippedText(formatted, 240)}`);
+    });
+  }
+  return clippedText(details.join("  "), 720);
+}
+
+export function readStateMachineReports(
+  stateMachine: StateMachineReportSource,
+  elapsedMs: number,
+): RuntimeEventDraft[] {
+  const reports: RuntimeEventDraft[] = [];
+  const stateCount = Math.max(0, Number(stateMachine.stateChangedCount()) || 0);
+  for (let index = 0; index < stateCount; index += 1) {
+    reports.push({
+      elapsedMs,
+      kind: "state",
+      label: clippedText(stateMachine.stateChangedNameByIndex(index) || "未命名状态", 180),
+      detail: "",
+    });
+  }
+  const eventCount = Math.max(0, Number(stateMachine.reportedEventCount()) || 0);
+  for (let index = 0; index < eventCount; index += 1) {
+    const event = stateMachine.reportedEventAt(index);
+    if (!event) continue;
+    reports.push({
+      elapsedMs,
+      kind: "event",
+      label: clippedText(event.name || "未命名事件", 180),
+      detail: formatReportedEventDetail(event),
+    });
+  }
+  return reports;
+}
+
+export function advanceStateMachineAndReadReports(
+  stateMachine: StateMachineAdvanceSource,
+  seconds: number,
+  elapsedMs: number,
+): RuntimeEventDraft[] {
+  stateMachine.advance(seconds);
+  return readStateMachineReports(stateMachine, elapsedMs);
+}
 
 type ArtboardMetadata = {
   name: string;
@@ -55,18 +135,25 @@ type ArtboardMetadata = {
   stateMachines: string[];
 };
 
-let runtimePromise: Promise<RiveCanvas> | null = null;
+const runtimePromises: Partial<Record<RenderEngine, Promise<RiveCanvas>>> = {};
 
-function getRuntime(): Promise<RiveCanvas> {
-  if (!runtimePromise) {
-    runtimePromise = RiveFactory({
-      locateFile: () => "/rive-viewer/rive.wasm",
-    }).catch((error) => {
-      runtimePromise = null;
+async function createRuntime(renderEngine: RenderEngine): Promise<RiveCanvas> {
+  const runtimeModule = renderEngine === "webgl2"
+    ? await import("@rive-app/webgl2-advanced")
+    : await import("@rive-app/canvas-advanced");
+  return runtimeModule.default({
+    locateFile: () => publicAssetUrl(runtimeWasmFile(renderEngine)),
+  });
+}
+
+function getRuntime(renderEngine: RenderEngine): Promise<RiveCanvas> {
+  if (!runtimePromises[renderEngine]) {
+    runtimePromises[renderEngine] = createRuntime(renderEngine).catch((error) => {
+      delete runtimePromises[renderEngine];
       throw error;
     });
   }
-  return runtimePromise;
+  return runtimePromises[renderEngine]!;
 }
 
 function yieldToBrowser(): Promise<void> {
@@ -190,18 +277,38 @@ export class WebRivePlayer {
   private lastProgressAt = 0;
   private performanceStartedAt = 0;
   private performanceFrames = 0;
+  private lastMetadataAt = 0;
   private lastMetadataKey = "";
+  private lastMetadataValue: RiveMetadata | null = null;
   private disposed = false;
+  private eventStartedAt = performance.now();
+  private nextEventId = 1;
+  private runtimeFailureReported = false;
+  private readonly contextLostHandler: (event: Event) => void;
 
-  constructor(canvas: HTMLCanvasElement, callbacks: PlayerCallbacks) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    callbacks: PlayerCallbacks,
+    readonly renderEngine: RenderEngine = DEFAULT_RENDER_ENGINE,
+  ) {
     this.canvas = canvas;
     this.callbacks = callbacks;
+    this.contextLostHandler = (event) => {
+      event.preventDefault();
+      this.reportRuntimeFailure(new Error("WebGL2 渲染上下文已丢失"));
+    };
+    if (renderEngine === "webgl2") {
+      this.canvas.addEventListener?.("webglcontextlost", this.contextLostHandler);
+    }
   }
 
   async load(source: ArrayBuffer): Promise<RiveMetadata> {
     this.disposeFile();
     this.disposed = false;
-    this.runtime = await getRuntime();
+    this.runtimeFailureReported = false;
+    this.eventStartedAt = performance.now();
+    this.nextEventId = 1;
+    this.runtime = await getRuntime(this.renderEngine);
     this.renderer = this.runtime.makeRenderer(this.canvas);
     this.sourceSize = source.byteLength;
     this.file = await this.runtime.load(new Uint8Array(source));
@@ -211,10 +318,10 @@ export class WebRivePlayer {
     this.artboardMetadata.set(metadata.name, metadata);
     this.catalogNames = [metadata.name];
     this.catalogLoaded = this.file.artboardCount() <= 1;
-    this.complexFile = this.sourceSize >= 2 * 1024 * 1024
-      || this.file.artboardCount() >= 24
-      || metadata.animations.length >= 48
-      || metadata.stateMachines.length >= 24;
+    this.complexFile = this.sourceSize >= policy.complexity.sourceBytes
+      || this.file.artboardCount() >= policy.complexity.web.artboards
+      || metadata.animations.length >= policy.complexity.web.animations
+      || metadata.stateMachines.length >= policy.complexity.web.stateMachines;
     this.configurePerformanceProfile();
     this.activateArtboard(metadata.name, undefined, defaultArtboard);
     if (!this.activeStateMachineHasListeners()) this.playDefaultSequence(metadata.animations);
@@ -286,10 +393,20 @@ export class WebRivePlayer {
         (_, index) => this.stateMachine!.input(index),
       );
       this.bindDefaultViewModels(this.stateMachine);
-      this.stateMachine.advance(0);
+      this.emitRuntimeEvent({
+        kind: "info",
+        label: "已绑定",
+        detail: `画板=${clippedText(this.activeArtboardName, 180)}  状态机=${clippedText(selectedMachine, 180)}  渲染器=${this.renderEngine === "webgl2" ? "WebGL2" : "Canvas2D"}`,
+      });
+      this.advanceStateMachine(0);
       this.artboard.advance(0);
     } else {
       this.bindDefaultViewModels(this.artboard);
+      this.emitRuntimeEvent({
+        kind: "info",
+        label: "已绑定",
+        detail: `画板=${clippedText(this.activeArtboardName, 180)}  状态机=无  渲染器=${this.renderEngine === "webgl2" ? "WebGL2" : "Canvas2D"}`,
+      });
       if (!this.playDefaultSequence(metadata.animations)) {
         this.activeAnimationName = "";
       }
@@ -298,7 +415,7 @@ export class WebRivePlayer {
     this.playing = true;
     this.lastTimestamp = 0;
     this.updateViewMatrix();
-    this.callbacks.onPlayback(true, selectedMachine ? `状态机 ${selectedMachine}` : "正在播放");
+    this.emitPlayback(true, selectedMachine ? `状态机 ${selectedMachine}` : "正在播放");
     this.emitMetadata(true);
     this.requestFrame();
   }
@@ -306,13 +423,18 @@ export class WebRivePlayer {
   private bindDefaultViewModels(target: StateMachineInstance | Artboard): void {
     if (!this.file || !this.artboard || !("bind" in target)) return;
     try {
-      const viewModel = this.file.defaultArtboardViewModel(this.artboard);
+      const viewModelCount = Number(this.file.viewModelCount?.() || 0);
+      const globalNames = this.file.globalViewModelNames?.() || [];
+      if (viewModelCount <= 0 && !globalNames.length) return;
+      const viewModel = viewModelCount > 0
+        ? this.file.defaultArtboardViewModel(this.artboard)
+        : null;
       const instance = viewModel?.defaultInstance?.();
       if (instance) {
         this.boundViewModels.push(instance);
         target.setViewModelInstance(instance);
       }
-      for (const name of this.file.globalViewModelNames?.() || []) {
+      for (const name of globalNames) {
         const globalInstance = this.file.viewModelByName(name)?.defaultInstance?.();
         if (!globalInstance) continue;
         this.boundViewModels.push(globalInstance);
@@ -373,7 +495,7 @@ export class WebRivePlayer {
     this.lastTimestamp = 0;
     this.updateViewMatrix();
     this.publishProgress();
-    this.callbacks.onPlayback(true, `播放 ${name}`);
+    this.emitPlayback(true, `播放 ${name}`);
     this.emitMetadata(true);
     this.requestFrame();
   }
@@ -398,7 +520,7 @@ export class WebRivePlayer {
     }
     this.playing = false;
     this.publishProgress(true);
-    this.callbacks.onPlayback(false, `${currentName} 播放完成`);
+    this.emitPlayback(false, `${currentName} 播放完成`);
     return true;
   }
 
@@ -408,38 +530,50 @@ export class WebRivePlayer {
   }
 
   private frame(timestamp: number): void {
-    this.frameRequest = 0;
-    if (this.disposed || !this.runtime || !this.artboard || !this.renderer) return;
-    if (
-      this.playing
-      && this.lastRenderedAt
-      && timestamp - this.lastRenderedAt < this.frameInterval
-    ) {
-      this.requestFrame();
-      return;
-    }
-    this.lastRenderedAt = timestamp;
-    const rawDelta = this.lastTimestamp ? (timestamp - this.lastTimestamp) / 1000 : 0;
-    this.lastTimestamp = timestamp;
-    const delta = Math.min(0.064, Math.max(0, rawDelta)) * this.speed;
-    let sequenceCompleted = false;
-    if (this.playing) {
-      if (this.stateMachine) {
-        this.stateMachine.advance(delta);
-        this.artboard.advance(delta);
-      } else if (this.animation) {
-        this.animation.advance(delta);
-        this.animation.apply(1);
-        this.animationElapsed += delta;
-        this.artboard.advance(delta);
-        sequenceCompleted = this.advanceSequence(delta);
+    try {
+      this.frameRequest = 0;
+      if (this.disposed || !this.runtime || !this.artboard || !this.renderer) return;
+      if (
+        this.playing
+        && this.lastRenderedAt
+        && timestamp - this.lastRenderedAt < this.frameInterval
+      ) {
+        this.requestFrame();
+        return;
       }
+      this.lastRenderedAt = timestamp;
+      const rawDelta = this.lastTimestamp ? (timestamp - this.lastTimestamp) / 1000 : 0;
+      this.lastTimestamp = timestamp;
+      const delta = Math.min(0.064, Math.max(0, rawDelta)) * this.speed;
+      let sequenceCompleted = false;
+      if (this.playing) {
+        if (this.stateMachine) {
+          this.advanceStateMachine(delta);
+          this.artboard.advance(delta);
+        } else if (this.animation) {
+          this.animation.advance(delta);
+          this.animation.apply(1);
+          this.animationElapsed += delta;
+          this.artboard.advance(delta);
+          sequenceCompleted = this.advanceSequence(delta);
+        }
+      }
+      this.draw();
+      if (!sequenceCompleted) this.emitProgress(timestamp);
+      this.emitPerformance(timestamp);
+      this.emitMetadata(false, timestamp);
+      if (this.playing) this.requestFrame();
+    } catch (error) {
+      this.reportRuntimeFailure(error);
     }
-    this.draw();
-    if (!sequenceCompleted) this.emitProgress(timestamp);
-    this.emitPerformance(timestamp);
-    this.emitMetadata(false);
-    if (this.playing) this.requestFrame();
+  }
+
+  private reportRuntimeFailure(value: unknown): void {
+    if (this.runtimeFailureReported || this.disposed) return;
+    this.runtimeFailureReported = true;
+    this.playing = false;
+    const error = value instanceof Error ? value : new Error("渲染引擎运行失败");
+    this.callbacks.onRuntimeFailure?.(error);
   }
 
   private draw(): void {
@@ -454,10 +588,11 @@ export class WebRivePlayer {
     );
     this.artboard.draw(this.renderer);
     this.renderer.restore();
+    this.renderer.flush();
   }
 
   private emitProgress(timestamp: number): void {
-    if (!this.animation || timestamp - this.lastProgressAt < 100) return;
+    if (!this.animation || timestamp - this.lastProgressAt < policy.telemetry.webProgressMs) return;
     this.lastProgressAt = timestamp;
     this.publishProgress();
   }
@@ -483,10 +618,41 @@ export class WebRivePlayer {
     if (!this.performanceStartedAt) this.performanceStartedAt = timestamp;
     this.performanceFrames += 1;
     const elapsed = timestamp - this.performanceStartedAt;
-    if (elapsed < 700) return;
+    if (elapsed < policy.telemetry.fpsMs) return;
     this.callbacks.onPerformance(Math.round((this.performanceFrames * 1000) / elapsed));
     this.performanceStartedAt = timestamp;
     this.performanceFrames = 0;
+  }
+
+  private elapsedEventMs(): number {
+    return Math.max(0, performance.now() - this.eventStartedAt);
+  }
+
+  private emitRuntimeEvent(event: Omit<RuntimeEventDraft, "elapsedMs">): void {
+    this.callbacks.onEvent?.({
+      id: this.nextEventId,
+      elapsedMs: this.elapsedEventMs(),
+      ...event,
+    });
+    this.nextEventId += 1;
+  }
+
+  private emitPlayback(playing: boolean, label: string): void {
+    this.callbacks.onPlayback(playing, label);
+    this.emitRuntimeEvent({ kind: "play", label: clippedText(label, 180), detail: "" });
+  }
+
+  private advanceStateMachine(seconds: number): void {
+    if (!this.stateMachine) return;
+    const reports = advanceStateMachineAndReadReports(
+      this.stateMachine,
+      seconds,
+      this.elapsedEventMs(),
+    );
+    reports.forEach((report) => {
+      this.callbacks.onEvent?.({ id: this.nextEventId, ...report });
+      this.nextEventId += 1;
+    });
   }
 
   private describeInputs(): RiveInput[] {
@@ -508,7 +674,15 @@ export class WebRivePlayer {
     return this.artboardMetadata.get(this.activeArtboardName);
   }
 
-  private emitMetadata(force: boolean): RiveMetadata {
+  private emitMetadata(force: boolean, timestamp = performance.now()): RiveMetadata {
+    if (
+      !force
+      && this.lastMetadataValue
+      && timestamp - this.lastMetadataAt < policy.telemetry.webMetadataMs
+    ) {
+      return this.lastMetadataValue;
+    }
+    this.lastMetadataAt = timestamp;
     const metadata = this.currentMetadata() || {
       name: this.activeArtboardName,
       width: 1,
@@ -543,6 +717,7 @@ export class WebRivePlayer {
       this.lastMetadataKey = key;
       this.callbacks.onMetadata(value);
     }
+    this.lastMetadataValue = value;
     return value;
   }
 
@@ -635,7 +810,7 @@ export class WebRivePlayer {
     }
     this.playing = true;
     this.lastTimestamp = 0;
-    this.callbacks.onPlayback(true, this.activeAnimationName ? `播放 ${this.activeAnimationName}` : "正在播放");
+    this.emitPlayback(true, this.activeAnimationName ? `播放 ${this.activeAnimationName}` : "正在播放");
     this.requestFrame();
   }
 
@@ -644,7 +819,7 @@ export class WebRivePlayer {
     this.lastTimestamp = 0;
     if (this.runtime && this.frameRequest) this.runtime.cancelAnimationFrame(this.frameRequest);
     this.frameRequest = 0;
-    this.callbacks.onPlayback(false, "已暂停");
+    this.emitPlayback(false, "已暂停");
   }
 
   reset(): void {
@@ -670,7 +845,7 @@ export class WebRivePlayer {
     const input = this.inputRefs[index];
     if (!input) return;
     input.value = value;
-    this.stateMachine?.advance(0);
+    this.advanceStateMachine(0);
     this.artboard?.advance(0);
     this.draw();
     this.emitMetadata(true);
@@ -682,7 +857,7 @@ export class WebRivePlayer {
     const input = this.inputRefs[index];
     if (!input) return;
     input.fire();
-    this.stateMachine?.advance(0);
+    this.advanceStateMachine(0);
     this.artboard?.advance(0);
     this.draw();
     this.play();
@@ -708,10 +883,10 @@ export class WebRivePlayer {
       exit: "pointerExit",
     }[type] as "pointerDown" | "pointerMove" | "pointerUp" | "pointerExit";
     this.stateMachine[method](artboardPoint.x, artboardPoint.y, id);
-    this.stateMachine.advance(0);
+    this.advanceStateMachine(0);
     this.artboard?.advance(0);
     this.draw();
-    this.emitMetadata(true);
+    this.emitMetadata(false);
     if (!this.playing) this.play();
   }
 
@@ -757,6 +932,8 @@ export class WebRivePlayer {
     this.catalogLoaded = false;
     this.selectedStateMachineName = "";
     this.lastMetadataKey = "";
+    this.lastMetadataValue = null;
+    this.lastMetadataAt = 0;
     this.lastRenderedAt = 0;
     this.performanceStartedAt = 0;
     this.performanceFrames = 0;
@@ -764,6 +941,9 @@ export class WebRivePlayer {
 
   dispose(): void {
     this.disposed = true;
+    if (this.renderEngine === "webgl2") {
+      this.canvas.removeEventListener?.("webglcontextlost", this.contextLostHandler);
+    }
     this.disposeFile();
   }
 }
