@@ -163,15 +163,20 @@
 | 侧栏保持顺序 | Stable detail rail selection | `ActivityPolicy = "record" | "preserve"`、`RAIL_ACTIVITY_STATE_KEY`、`openHostedShareWithActivity`、`preserveExistingActivity`；跨三位路由切换也只更新选中态 |
 | 公开缩略图缓存 | Hosted local cover cache | `hosted-<code>`、IndexedDB `covers`、`saveLibraryCover`；只缓存元信息与 WebP，不缓存远端 `.riv` |
 | 托管平台域名 | Hosted platform domain | `rive.mikeywa.site`、A 记录 `115.159.25.169`、TTL 600、独立 Nginx 与 Let's Encrypt、根路径 `/` |
-| 详情文件窄栏 | Desktop preview file rail | `PreviewFileRail`、`.preview-file-rail`、`184px`、桌面 `min-width: 860px`；显示统一文件列表与顶部加号 |
+| 详情文件窄栏 | Desktop preview file rail | `PreviewFileRail`、`.preview-file-rail`、`FILE_RAIL_DEFAULT_WIDTH`、`FILE_RAIL_MIN_WIDTH`、`FILE_RAIL_MAX_WIDTH`、桌面 `min-width: 860px`；默认 `184px`，可在 `160–360px` 间调整，显示统一文件列表与顶部加号 |
+| 文件栏调整线 | Accessible file rail separator | `.preview-file-rail-resizer`、`applyFileRailWidth`、`role="separator"`；支持指针拖动、方向键、Home 和 End，Hover/聚焦/拖动时变黄 |
+| 完整文件名浮层 | File name hover tooltip | `.preview-file-rail-name-tooltip`、`data-full-name`；文件名 Hover 或聚焦时在文件栏外显示完整名称 |
 | 当前文件黄线 | Rounded current-file marker | `.preview-file-rail-row.is-current::before`、`3px`、`border-radius: 999px`、`aria-current`；独立竖线，不使用黄色内阴影 |
 | 公开评论栏 | File-scoped forest comment thread | `ShareCommentsPanel`、`CommentThreadState.code`、`targetCode`、`.public-comments-inline`、`GET/POST /api/v1/shares/:code/comments`；按三位短码隔离，切换文件不显示上一线程，事件控制台后的唯一正文输入区，无姓名控件 |
-| JOJO 可调工作台 | Resizable preview workbench | `.preview-workbench`、`.preview-main-column`、`.is-stage-height-customized`、`--manual-stage-height`、`.stage-resizer`、`.preview-inspector`、`1194px`；左画布默认满高且保留手柄，拖动后使用手动高度；右栏默认 `390px`、最小 `360px` |
+| JOJO 可调工作台 | Resizable preview workbench | `.preview-workbench`、`.preview-main-column`、`.is-stage-height-customized`、`--manual-stage-height`、`.stage-resizer`、`.preview-inspector`、`1194px`；左画布默认满高、保持文件原比例且保留手柄；桌面优先给预览约 `800px`，右栏最小 `360px` |
 | 可调中缝 | Accessible column separator | `.preview-column-resizer`、`WIDE_COLUMN_RESIZER_WIDTH`、`applyInspectorWidth`、`role="separator"`；支持拖动、方向键、Home 和 End |
+| 时间轴整理 | Grouped timeline organizer | `TimelineControl`、`timelineDisplayMode`、`timelineGroups`、`.timeline-group-title`；无一级前缀项目排最前，按第一个下划线分组，标签显示后缀但评论引用完整名 |
+| 时间轴三层置顶 | Stacked timeline sticky headers | `.inspector-section-events`、`.timeline-section-header`、`.timeline-group-title`、`0 / 56 / 88px`；滚动时依次固定，Hover 标签高亮对应组标题 |
 | 评论时间轴引用 | Inline comment timeline link | `CommentTimelineInsertion`、`formatCommentTimelineMarker`、`parseCommentTimelineSegments`、`serializeCommentDraft`、`CommentBody`、`.comment-draft-timeline`、`.comment-timeline-link`、`selectTimelineFromControl`；点击时间轴按光标插入，同一评论可含多个标记；底层仍以 `【时间轴：idol】` 纯文本存储，发布前后只内联显示下划线名称；Hover 变黄，点击切换后不保留选中色 |
 | 评论相对时间 | Relative comment timestamp | `formatCommentDate`、`formatCommentAbsoluteDate`、`.comment-meta-row time`；一周内显示刚刚、几分钟前、几小时前或几天前，满一周显示绝对日期 |
 | 紧凑评论列表 | Compact comment list | `article.comment-item`、`.comment-avatar`、`.comment-content`、`.comment-nickname`；头像左列，昵称和正文右列紧凑对齐 |
 | 紧凑评论输入 | Inline compact comment composer | `.comment-form`、`.comment-editor[contentEditable]`、`.comment-submit-row`；默认 `46px` 单行高度，按钮内置，不显示可见标题与字数 |
+| 评论动画占位 | Animated comment placeholder | `Calligraph`、`COMMENT_PROMPT_LINES`、`.comment-placeholder-calligraph`；输入为空时轮换评论提示，减少动态模式下退化为静态文字 |
 | 评论归档操作 | Hover archive action | `.comment-archive-action`；无边框无背景，Hover/聚焦显示，触屏常驻 |
 | 萌萌森林身份 | Stable pseudonymous commenter identity | `getCommentVisitorId`、`rive-host-comment-visitor-v1`、`pickForestIdentity`、`FOREST_IDENTITIES`；浏览器随机标识优先，IP 与 User-Agent 哈希仅兜底，不保存原始 IP |
 | 评论动物头像 | Circular forest comment avatar | `h5/assets/forest-avatars-master-4k.png`、`h5/scripts/build-forest-avatars.py`、`public/rive-viewer/avatars/*.webp`、`.comment-author img`；源资源为不透明正方形，展示层使用 `32×32px`、`border-radius: 50%`、`object-fit: cover` 圆形裁切 |
@@ -182,7 +187,8 @@
 | 已归档入口 | Archived library trigger | `.archived-library-trigger`、`.archived-library-count`、`archivedDialogOpen`、`aria-controls="archived-library-dialog"`；位于首页“最近文件”标题右侧，数量是无底色的普通灰字 |
 | 已归档文件 | Archived file dialog | `ArchivedLibraryDialog`、`.archived-library-dialog`、`.archived-dialog-body`、`ArchiveConfirmDialog`；默认不占首页高度，弹窗内复制、恢复、刷新 |
 | 恢复文件 | Restore archived file | `restoreHostedShare`、`X-Rive-Action: restore`、清空 `archivedAt`、保留原短码和评论 |
-| 播放速度图标 | Bounded speed gauge icon | `.speed-select`、`.speed-gauge`、`18×18px`、`overflow: hidden`、`transform: none` |
+| 播放速度菜单 | Custom playback speed listbox | `.speed-select`、`.speed-menu`、`.speed-option`、`speedMenuOpen`；向上展开的自定义 `listbox`，不使用浏览器原生下拉控件 |
+| Rive 音频暂停 | Synchronized Rive audio suspension | `suspendRiveAudio`、`resumeRiveAudio`、`AudioContext.suspend/resume`；暂停画面时同步暂停内部声音 |
 | 托管 API 服务 | Rive host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |
 | 托管原子发布 | Hosted atomic release | `/opt/rive-host/releases/<时间戳>`、`/var/www/rive-host/releases/<时间戳>`、两个 `current` 软链接 |
-| 当前 JOJO 前端 | Active hosted frontend release | `/var/www/rive-host/releases/20260825-201557`；WebGL2、可手调满高画布与多时间轴评论正式版，`20260825-192225` 为直接回滚点，`20260824-163850` 为更早稳定版 |
+| 当前 JOJO 前端 | Active hosted frontend release | `/var/www/rive-host/releases/20260825-215521`；时间轴整理、详情控制与可调文件栏正式版，WebGL2/Canvas2D 双引擎保留；`20260825-211519` 为直接回滚点 |
