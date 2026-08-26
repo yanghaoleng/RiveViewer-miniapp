@@ -210,8 +210,10 @@
 | 托管格式筛选 | Hosted format filter | `GET /api/v1/shares?formats=rive,lottie,pag`；未传参数时兼容正式旧前端，仅返回 Rive |
 | 托管 API 服务 | Animation host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |
 | 托管原子发布 | Hosted atomic release | `/opt/rive-host/releases/<时间戳>`、`/var/www/rive-host/releases/<时间戳>`、两个 `current` 软链接 |
-| 当前正式 JOJO 前端 | Active formal frontend | `/var/www/rive-host/releases/20260826-111929`；正式根路径保持 Rive 版 |
-| 当前 Beta 前后端 | Active Beta release | `/var/www/rive-host-beta/releases/20260826-132255`、`/opt/rive-host/releases/20260826-132255`；Beta 支持 Rive、Lottie、PAG，后端兼容正式 Rive 列表 |
+| 当前正式 JOJO 前端 | Active formal frontend | `/var/www/rive-host/releases/20260826-151015`；正式根路径保持 Rive 版 |
+| 当前 Beta 前端 | Active Beta frontend | `/var/www/rive-host-beta/releases/20260826-151015`；支持 Rive、Lottie、PAG |
+| 当前数据后台 | Active analytics frontend | `/var/www/rive-data/releases/20260826-151015`、`/data/` |
+| 当前托管后端 | Active host backend | `/opt/rive-host/releases/20260826-151015`；同时服务正式、Beta 与体验数据接口 |
 # 体验数据后台元素映射
 
 | 俗称 | 学名 | 变量名 / 选择器 |
