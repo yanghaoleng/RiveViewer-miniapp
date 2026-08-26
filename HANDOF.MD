@@ -2,6 +2,13 @@
 
 更新日期：2026-08-26
 
+## 2026-08-26 Safari 跨格式 Canvas 修复（已正式发布）
+
+- 根因是详情页复用同一个 Canvas：Rive 先创建 WebGL2 后，PAG 在 Safari 再请求 WebGL1 会得到空上下文并报 `Canvas context is not WebGL!`。Canvas 的 React Key 现绑定“文件格式 + 渲染代次”，跨格式时创建新节点，同格式切换和 Rive 自动降级逻辑不变。
+- 新增静态回归契约，正式根路径 H5 lint、TypeScript、构建、`47/47` 测试和 `npm audit = 0` 均通过。本地 Safari 已验证 `叫叫.riv → pag-official-like.pag → 叫叫.riv` 双向切换。
+- 修复提交 `2182370` 已推送 `main`；正式前端已原子切换到 `/var/www/rive-host/releases/20260826-170259`，直接回滚点为 `20260826-151015`。HTML、入口 JS、CSS、PAG 运行时/WASM 与 WebGL2 WASM 均和本地构建逐字节一致。
+- 正式 Safari 验收中 Rive 约 `22 FPS`，页内切到 `lOF` 后 PAG 约 `25.5 FPS`，再切回 Rive 约 `23 FPS`，未再出现上下文错误。后端仍为 `/opt/rive-host/releases/20260826-151015`，未重启、未修改托管数据。
+
 ## 2026-08-26 Lottie / PAG 画布修复与正式推广（已发布）
 
 - Lottie 官方 `1820×275` 样例原先因非 Rive 也复用比例外框，桌面画布被压为约 `683×103px`；拖动开始时 `applyStageHeight` 又会把高度改回 `auto`。现仅 Rive 的“完整”外框锁源比例，Lottie/PAG 使用可调预览窗口，内部播放器继续按源比例完整居中。

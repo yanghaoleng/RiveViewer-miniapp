@@ -118,6 +118,10 @@ H5 本地版与 JOJO 版共用完整 Rive Web 播放能力，支持画板、状�
 
 微信小程序真机无法正常加载 WebGL2 试验包，现已恢复 `<canvas type="2d">`、完整 `@rive-app/canvas-advanced@2.39.1` 与 `WXWebAssembly`。包内重新保留主版和兼容版两份 Canvas WASM，不包含 WebGL2 小程序运行时，也不提供小程序端引擎切换。微信开发者工具普通编译后，真实 `引导页动画750_1160.riv` 的画面、FPS、画板、状态机和时间轴均可见；H5 与 JOJO 版继续默认 WebGL2，不受本次回滚影响。
 
+### 2026-08-26 Safari 跨格式 Canvas 修复
+
+JOJO 版切换 Rive、Lottie、PAG 时会按文件格式重建浏览器 Canvas，避免 Safari 复用已经初始化为 WebGL2 的 Rive Canvas 后，PAG 再申请 WebGL1 上下文而报 `Canvas context is not WebGL!`。同格式切换继续沿用原画布策略，Rive WebGL2 自动降级仍通过渲染代次独立重建。
+
 ### 2026-08-25 普通 H5 默认高清与 WebGL2 正式发布
 
 - 普通 H5 渲染质量默认值已改为高清；普通素材最高约 `60fps + DPR 2.0`，复杂文件仍由现有阈值自动限制到最高 `30fps + DPR 1.25`。
