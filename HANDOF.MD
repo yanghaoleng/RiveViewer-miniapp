@@ -2,6 +2,12 @@
 
 更新日期：2026-08-26
 
+## 2026-08-26 JOJO 文件行整块打开（已本地验收，待发布）
+
+- 首页 `.file-open` 与详情侧栏 `.preview-file-row-open` 现在各自是覆盖完整文件主区域的单一按钮；封面、文件名、空白和云状态图标都统一执行选中并打开文件，文件菜单与上传失败重试仍保持独立操作。
+- 云状态由可点击的 `FileUploadStatusButton / .file-sync-toggle` 改为纯展示的 `FileUploadStatus / .file-sync-status`，不再点击展开“云端已就绪 / 只保存在当前浏览器”反馈；上传中和失败详情仍自动显示。
+- H5 lint、TypeScript、根路径生产构建和 `41/41` 测试通过，`npm audit` 为 0。应用内浏览器通过 SSH 只读转发正式 API，在 `http://127.0.0.1:4176/` 实测：首页点击云图标打开 `vGd`，详情侧栏点击云图标切到 `O1H`，两处旧 `.file-sync-toggle` 均为 0，控制台无错误和警告。
+
 ## 2026-08-26 JOJO 评论提交与页内加载修复（已正式发布）
 
 - “发表评论”按钮无法点击的原因是 `.comment-editor` 的层级覆盖了按钮区域；`.comment-submit-row` 现提升到 `z-index: 2`，按钮整块可点。普通 Enter 通过原表单 `requestSubmit()` 发表，Shift / Command + Enter 换行，IME 组字的 Enter 不误发。

@@ -154,7 +154,7 @@
 | 生成公开链接 | Publish hosted share | `requestPublishFile`、`uploadSavedFiles`、`createHostedShare`、`XMLHttpRequest.upload.onprogress`、`POST /api/v1/shares`；自动上传和历史本地文件补传共用同一链路 |
 | 托管上传框 | Hosted upload dropzone | `.import-dropzone`、`handleIncomingFiles`、`enterDropTarget`、`showDropTarget`、`dropFiles`；整页接收拖入，首文件本地打开与上传并行，旧入口仅本地保存 |
 | 侧栏加号 | Detail file picker | `.preview-file-add`、`fileInputRef`、`aria-label="选择并上传 Rive 文件"`；黄色按钮内图标为 `#0b0f14` 近黑色，首页上传框和详情侧栏共用隐藏文件输入 |
-| 文件上云图标 | Per-file cloud state icon | `FileUploadStatusButton`、`.file-sync-toggle`、`cloud-check / desktop / cloud-arrow-up / cloud-x`；位于文件体积之后 |
+| 文件上云图标 | Non-interactive per-file cloud state | `FileUploadStatus`、`.file-sync-status`、`cloud-check / desktop / cloud-arrow-up / cloud-x`；位于文件体积之后，只展示状态，点击由外层 `.file-open` / `.preview-file-row-open` 统一打开文件 |
 | 行内上传状态栏 | Per-file upload detail | `uploadStates: Record<fileId, FileUploadState>`、`FileUploadDetail`、`.file-upload-progress`、`uploadRetryFilesRef`；逐文件百分比、失败和重试，不再使用独立完成卡片 |
 | 上传完成链接 | Per-file hosted result | `PUBLISHED_CODES_STORAGE_KEY`、`HostedShare.code`、`ShareActionsDialog`；完成后文件行只留云勾，菜单打开统一分享弹层 |
 | H5 运行模式 | Hosted versus local build mode | `ViewerMode`、`mode: hosted/local`、`import.meta.env.BASE_URL`；仅根路径构建启用托管 API、托管列表和公开链接入口 |

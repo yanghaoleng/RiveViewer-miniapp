@@ -546,6 +546,7 @@ button:disabled {
 }
 
 .file-open {
+  width: 100%;
   min-width: 0;
   padding: 13px 4px 13px 12px;
   display: grid;
@@ -630,8 +631,8 @@ button:disabled {
   gap: 8px;
 }
 
-.file-title-line:hover strong,
-.file-title-line:focus-visible strong {
+.file-open:hover .file-title-line strong,
+.file-open:focus-visible .file-title-line strong {
   color: var(--accent);
 }
 
@@ -652,32 +653,23 @@ button:disabled {
   gap: 5px;
 }
 
-.file-sync-toggle {
+.file-sync-status {
   width: 20px;
   height: 20px;
   display: inline-grid;
   place-items: center;
   color: var(--quiet);
-  background: transparent;
-  border-radius: 6px;
-  transition: color 140ms ease, background-color 140ms ease;
 }
 
-.file-sync-toggle:hover,
-.file-sync-toggle:focus-visible {
-  color: var(--text);
-  background: rgb(255 255 255 / .05);
-}
-
-.file-sync-toggle.is-ready {
+.file-sync-status.is-ready {
   color: var(--quiet);
 }
 
-.file-sync-toggle.is-uploading {
+.file-sync-status.is-uploading {
   color: var(--accent);
 }
 
-.file-sync-toggle.is-error {
+.file-sync-status.is-error {
   color: var(--danger);
 }
 
@@ -1050,6 +1042,21 @@ button:disabled {
   inset-inline-start: 4px;
   background: var(--accent);
   border-radius: 999px;
+  pointer-events: none;
+}
+
+.preview-file-row-open {
+  width: 100%;
+  min-width: 0;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border-radius: 7px;
 }
 
 .preview-file-cover-trigger,
@@ -1112,7 +1119,7 @@ button:disabled {
 }
 
 .preview-file-title:hover,
-.preview-file-title:focus-visible {
+.preview-file-row-open:focus-visible .preview-file-title {
   color: var(--accent);
 }
 
@@ -1150,7 +1157,7 @@ button:disabled {
   font-size: 9px;
 }
 
-.preview-file-meta .file-sync-toggle {
+.preview-file-meta .file-sync-status {
   width: 18px;
   height: 18px;
 }
@@ -3319,7 +3326,7 @@ article.comment-item:focus-within .comment-meta-row time {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .file-sync-toggle.is-uploading .app-icon {
+  .file-sync-status.is-uploading .app-icon {
     animation: cloud-upload-pulse 1.2s ease-in-out infinite;
   }
 }

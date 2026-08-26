@@ -172,7 +172,11 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(styleSource, /\.preview-main-column\.is-stage-height-customized \.canvas-card:not\(\.is-proportional\)[\s\S]{0,220}height: var\(--manual-stage-height\) !important;/);
   assert.match(appSource, /stageSizingHeight[\s\S]{0,300}width: `min\(100%, \$\{Math\.round\(stageSizingHeight \* stageAspect\)\}px\)`/);
   assert.match(styleSource, /\.comment-item p\s*\{[\s\S]{0,120}margin: 8px 0 0 40px;[\s\S]{0,120}font-size: 14px;/);
-  assert.match(styleSource, /\.file-sync-toggle\.is-ready\s*\{\s*color: var\(--quiet\);/);
+  assert.match(styleSource, /\.file-sync-status\.is-ready\s*\{\s*color: var\(--quiet\);/);
+  assert.match(appSource, /className="file-open press-feedback-large"[\s\S]{0,120}onClick=\{\(\) => onOpen\(item\)\}/);
+  assert.match(appSource, /className="preview-file-row-open press-feedback-large"[\s\S]{0,120}onClick=\{\(\) => onOpen\(item\)\}/);
+  assert.match(appSource, /className=\{`file-sync-status is-\$\{state\.phase\}`\}/);
+  assert.doesNotMatch(appSource, /file-sync-toggle|onToggleUpload|FileUploadStatusButton/);
   assert.match(appSource, /<Icon name=\{icon\} size=\{13\} \/>/);
   assert.doesNotMatch(appSource, /Rive 公开预览/);
   assert.match(appSource, /aria-label="关闭文件详情"[\s\S]{0,150}<Icon name="x" size=\{21\}/);

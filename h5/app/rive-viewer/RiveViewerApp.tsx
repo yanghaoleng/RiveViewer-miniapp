@@ -268,7 +268,6 @@ export function RiveViewerApp({
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState("");
   const [uploadStates, setUploadStates] = useState<Record<string, FileUploadState>>({});
-  const [expandedUploadFileId, setExpandedUploadFileId] = useState("");
   const [pendingArchiveShare, setPendingArchiveShare] = useState<HostedShare | null>(null);
   const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
   const [publishedCodes, setPublishedCodes] = useState<Record<string, string>>(readPublishedCodes);
@@ -978,7 +977,6 @@ export function RiveViewerApp({
             updatedAt: Date.now(),
           },
         }));
-        setExpandedUploadFileId((current) => current === file.id ? "" : current);
       } catch (uploadError) {
         const retryable = !(uploadError instanceof HostedApiError
           && uploadError.status >= 400
@@ -986,7 +984,6 @@ export function RiveViewerApp({
           && uploadError.status !== 429);
         if (retryable) uploadRetryFilesRef.current.set(file.id, file);
         else uploadRetryFilesRef.current.delete(file.id);
-        setExpandedUploadFileId(file.id);
         setUploadStates((current) => ({
           ...current,
           [file.id]: {
@@ -1048,7 +1045,6 @@ export function RiveViewerApp({
             setCommentsLoadError("");
             setCommentSubmitError("");
           }
-          setExpandedUploadFileId(savedFile.id);
           openPromise = openFile(savedFile);
         }
       }
@@ -1172,7 +1168,6 @@ export function RiveViewerApp({
     }
     setExpandedFileId("");
     setHostingError("");
-    setExpandedUploadFileId(file.id);
     cloudUploadBusyRef.current = true;
     setImportBusy(true);
     try {
@@ -1902,14 +1897,10 @@ export function RiveViewerApp({
               activeFile={activeFile}
               coverUrls={coverUrls}
               uploadStates={uploadStates}
-              expandedUploadFileId={expandedUploadFileId}
               uploadBusy={uploadBusy}
               importError={importError}
               onAdd={() => fileInputRef.current?.click()}
               onOpen={(item) => openUnifiedFile(item, "preserve")}
-              onToggleUpload={(fileId) => setExpandedUploadFileId(
-                expandedUploadFileId === fileId ? "" : fileId,
-              )}
               onRetry={(fileId) => void retryFileUpload(fileId)}
             />
           ) : <section className="library-page">
@@ -1961,15 +1952,11 @@ export function RiveViewerApp({
               activeFile={activeFile}
               hostedMode={isHostedPlatform}
               uploadStates={uploadStates}
-              expandedUploadFileId={expandedUploadFileId}
               uploadBusy={uploadBusy}
               onOpen={openUnifiedFile}
               onShare={shareFile}
               onPublish={requestPublishFile}
               onArchive={setPendingArchiveShare}
-              onToggleUpload={(fileId) => setExpandedUploadFileId(
-                expandedUploadFileId === fileId ? "" : fileId,
-              )}
               onRetry={(fileId) => void retryFileUpload(fileId)}
               onToggleMenu={(id) => setExpandedFileId(expandedFileId === id ? "" : id)}
             />
@@ -2545,14 +2532,10 @@ function isCurrentItem(item: UnifiedFileItem, activeFile: ActiveFile | null): bo
   );
 }
 
-function FileUploadStatusButton({
+function FileUploadStatus({
   state,
-  expanded,
-  onToggle,
 }: {
   state: FileUploadState;
-  expanded: boolean;
-  onToggle: () => void;
 }) {
   const title = state.phase === "ready"
     ? "已上传到云端"
@@ -2568,18 +2551,15 @@ function FileUploadStatusButton({
       : state.phase === "error"
         ? "cloud-x"
         : "desktop";
-  const detailVisible = expanded || state.phase === "uploading" || state.phase === "error";
   return (
-    <button
-      type="button"
-      className={`file-sync-toggle is-${state.phase}`}
-      onClick={onToggle}
+    <span
+      className={`file-sync-status is-${state.phase}`}
+      role="img"
       aria-label={title}
-      aria-expanded={detailVisible}
       title={title}
     >
       <Icon name={icon} size={13} />
-    </button>
+    </span>
   );
 }
 
@@ -2642,24 +2622,20 @@ function PreviewFileRail({
   activeFile,
   coverUrls,
   uploadStates,
-  expandedUploadFileId,
   uploadBusy,
   importError,
   onAdd,
   onOpen,
-  onToggleUpload,
   onRetry,
 }: {
   items: UnifiedFileItem[];
   activeFile: ActiveFile;
   coverUrls: Map<string, string>;
   uploadStates: Record<string, FileUploadState>;
-  expandedUploadFileId: string;
   uploadBusy: boolean;
   importError: string;
   onAdd: () => void;
   onOpen: (item: UnifiedFileItem) => void;
-  onToggleUpload: (fileId: string) => void;
   onRetry: (fileId: string) => void;
 }) {
   const railRef = useRef<HTMLElement>(null);
@@ -2767,9 +2743,7 @@ function PreviewFileRail({
         {items.map((item) => {
           const fileId = item.localFile?.id || item.file.id;
           const state = uploadStateForItem(item, uploadStates);
-          const detailVisible = expandedUploadFileId === fileId
-            || state.phase === "uploading"
-            || state.phase === "error";
+          const detailVisible = state.phase === "uploading" || state.phase === "error";
           const current = isCurrentItem(item, activeFile);
           return (
             <article
@@ -2777,34 +2751,37 @@ function PreviewFileRail({
               className={`preview-file-rail-row ${current ? "is-current" : ""}`}
               aria-current={current ? "true" : undefined}
             >
-              <button className="preview-file-cover-trigger" onClick={() => onOpen(item)} aria-label={`打开 ${item.file.name}`}>
-                <span className={`preview-file-cover ${coverUrls.has(item.file.id) ? "has-image" : ""}`} aria-hidden="true">
-                  {coverUrls.has(item.file.id)
-                    ? <LocalCoverImage src={coverUrls.get(item.file.id)!} />
-                    : "RIV"}
+              <button
+                className="preview-file-row-open press-feedback-large"
+                onClick={() => onOpen(item)}
+                onFocus={(event) => {
+                  const title = event.currentTarget.querySelector<HTMLElement>(".preview-file-title");
+                  if (title) showFileNameTooltip(item.file.name, title);
+                }}
+                onBlur={() => setFileNameTooltip(null)}
+                aria-label={`打开 ${item.file.name}`}
+              >
+                <span className="preview-file-cover-trigger">
+                  <span className={`preview-file-cover ${coverUrls.has(item.file.id) ? "has-image" : ""}`} aria-hidden="true">
+                    {coverUrls.has(item.file.id)
+                      ? <LocalCoverImage src={coverUrls.get(item.file.id)!} />
+                      : "RIV"}
+                  </span>
+                </span>
+                <span className="preview-file-rail-copy">
+                  <span
+                    className="preview-file-title"
+                    onPointerEnter={(event) => showFileNameTooltip(item.file.name, event.currentTarget)}
+                    onPointerLeave={() => setFileNameTooltip(null)}
+                  >
+                    {item.file.name}
+                  </span>
+                  <span className="preview-file-meta">
+                    <span>{formatBytes(item.file.size)}</span>
+                    <FileUploadStatus state={state} />
+                  </span>
                 </span>
               </button>
-              <div className="preview-file-rail-copy">
-                <button
-                  className="preview-file-title"
-                  onClick={() => onOpen(item)}
-                  onPointerEnter={(event) => showFileNameTooltip(item.file.name, event.currentTarget)}
-                  onPointerLeave={() => setFileNameTooltip(null)}
-                  onFocus={(event) => showFileNameTooltip(item.file.name, event.currentTarget)}
-                  onBlur={() => setFileNameTooltip(null)}
-                  aria-label={`打开 ${item.file.name}`}
-                >
-                  {item.file.name}
-                </button>
-                <div className="preview-file-meta">
-                  <span>{formatBytes(item.file.size)}</span>
-                  <FileUploadStatusButton
-                    state={state}
-                    expanded={detailVisible}
-                    onToggle={() => onToggleUpload(fileId)}
-                  />
-                </div>
-              </div>
               <FileUploadDetail
                 state={state}
                 hostedCode={item.hostedCode}
@@ -2860,13 +2837,11 @@ function LibraryList({
   activeFile,
   hostedMode,
   uploadStates,
-  expandedUploadFileId,
   uploadBusy,
   onOpen,
   onShare,
   onPublish,
   onArchive,
-  onToggleUpload,
   onRetry,
   onToggleMenu,
 }: {
@@ -2876,13 +2851,11 @@ function LibraryList({
   activeFile: ActiveFile | null;
   hostedMode: boolean;
   uploadStates: Record<string, FileUploadState>;
-  expandedUploadFileId: string;
   uploadBusy: boolean;
   onOpen: (item: UnifiedFileItem) => void;
   onShare: (file: LibraryFile, hostedCode?: string) => void;
   onPublish: (file: LibraryFile) => void;
   onArchive: (share: HostedShare) => void;
-  onToggleUpload: (fileId: string) => void;
   onRetry: (fileId: string) => void;
   onToggleMenu: (id: string) => void;
 }) {
@@ -2901,36 +2874,30 @@ function LibraryList({
         const file = item.file;
         const fileId = item.localFile?.id || file.id;
         const state = uploadStateForItem(item, uploadStates);
-        const detailVisible = expandedUploadFileId === fileId
-          || state.phase === "uploading"
-          || state.phase === "error";
+        const detailVisible = state.phase === "uploading" || state.phase === "error";
         const current = isCurrentItem(item, activeFile);
         return <article
           className={`file-row ${current ? "is-current" : ""} ${expandedFileId === item.key ? "is-menu-open" : ""}`}
           key={item.key}
           aria-current={current ? "true" : undefined}
         >
-          <div className="file-open">
-            <button className="file-cover-trigger press-feedback-large" onClick={() => onOpen(item)} aria-label={`打开 ${file.name}`}>
+          <button className="file-open press-feedback-large" onClick={() => onOpen(item)} aria-label={`打开 ${file.name}`}>
+            <span className="file-cover-trigger">
               <span className={`file-cover ${coverUrls.has(file.id) ? "has-image" : ""}`} aria-hidden="true">
-                {coverUrls.has(file.id)
-                  ? <LocalCoverImage src={coverUrls.get(file.id)!} />
-                  : "RIV"}
+                  {coverUrls.has(file.id)
+                    ? <LocalCoverImage src={coverUrls.get(file.id)!} />
+                    : "RIV"}
               </span>
-            </button>
+            </span>
             <span className="file-copy">
-              <button className="file-title-line" onClick={() => onOpen(item)}><strong>{file.name}</strong></button>
+              <span className="file-title-line"><strong>{file.name}</strong></span>
               <small className="file-meta-line">
                 <span>{formatBytes(file.size)}</span>
-                <FileUploadStatusButton
-                  state={state}
-                  expanded={detailVisible}
-                  onToggle={() => onToggleUpload(fileId)}
-                />
+                <FileUploadStatus state={state} />
                 <span>/ {formatDate(item.activityAt)}</span>
               </small>
             </span>
-          </div>
+          </button>
           <div className="file-action">
             <button
               className={`square-button press-feedback ${expandedFileId === item.key ? "is-active" : ""}`}
