@@ -247,6 +247,14 @@ JOJO 托管版在浏览器宽度达到 `1194px`（iPad Pro 11 寸横屏）时使
 - 真实展示样例为 <https://rive.mikeywa.site/vGd>；宣传只描述“适合在钉钉会话中分享的 H5”，不声称钉钉原生登录、机器人或微应用能力。
 - 6 张 `1536×1024`、`3:2` 宣传封面位于 `h5/assets/hackathon/posters/`，均基于 `vGd` 真实桌面/手机页面与绿豆角色生成；`h5/assets/hackathon/validation/` 保留安全区和 `390×260` 手机缩略检查图。
 
+## Beta 文件版本
+
+Beta 入口为 <https://rive.mikeywa.site/beta/>，正式根路径继续使用原静态版本。详情页下载按钮左侧可“上传新版本”，新版本沿用原三位短码并默认打开；文件名下拉可切换历史版本并显示上传日期。评论携带 `versionId`，按“版本 N”分组，当前版本展开、旧版本折叠，点击分组标题同时切换预览版本。
+
+- `POST /api/v1/shares/:code/versions` 上传并设为当前版本；`GET /api/v1/shares/:code/file?versionId=<UUID>` 下载指定版本。
+- 分享元数据新增 `versions`、`currentVersionId` 和 `versionCount`；旧数据启动时自动补为“版本 1”，原文件、评论和根路径接口保持兼容。
+- Beta 前端发布目录为 `/var/www/rive-host-beta/releases/20260826-120610`，后端为 `/opt/rive-host/releases/20260826-120610`；正式前端仍为 `/var/www/rive-host/releases/20260826-111929`。
+
 ## 许可证
 
 本项目中由仓库作者原创的源代码依据 [PolyForm Noncommercial License 1.0.0](LICENSE) 提供。你可以为非商业目的使用、修改和分发；任何商业用途均须事先取得版权方的单独书面授权。具体权利和义务以 `LICENSE` 正文为准。

@@ -161,6 +161,12 @@
 | 已生成入口 | Remembered publish action | `PUBLISHED_CODES_STORAGE_KEY`、`publishedCodes`、可见文案“复制公开链接” |
 | 复制公开链接 | Copy hosted share URL | `copyActiveHostedLink`、`ShareActionsDialog`、`ArchivedLibraryDialog.copyShare`、`copyText(hostedShareUrl(code))`；详情原位反馈，结果弹层保留可选中链接 |
 | Rive 分享页 | Hosted Rive share page | `/:code`、旧 `/s/:code` 308 跳转、3 位 Base62 大小写敏感短码、保留码 `api`、`shareCodeFromPath`、`getHostedShare`、`getHostedFile` |
+| Beta 版 | Versioning preview deployment | `/beta/`、`RIVE_VIEWER_BASE=/beta/`、`/var/www/rive-host-beta/current`；正式根路径静态版本不变 |
+| 上传新版本 | Append hosted file version | `versionInputRef`、`updateHostedVersion`、`createHostedVersion`、`POST /api/v1/shares/:code/versions` |
+| 文件版本下拉 | Hosted version listbox | `.file-version-picker`、`.file-version-menu`、`activeHostedVersion`；按新到旧显示版本名、文件名和上传日期 |
+| 指定版本下载 | Version-scoped Rive download | `hostedFileUrl(code, versionId)`、`GET /api/v1/shares/:code/file?versionId=<UUID>` |
+| 版本评论分组 | Version-scoped comment groups | `HostedComment.versionId`、`.comment-version-heading`、`.comment-version-group`；当前版本展开，标题点击切换预览 |
+| 低亮参数选中态 | Subtle parameter selection | `Tag.subtleSelected`、`.parameter-tag.is-selected.is-subtle-selected`；与时间轴深底淡黄边框一致 |
 | 公开最近文件 | Browser recent hosted library | IndexedDB `recent-hosted`、`listRecentHostedFiles`、`rememberRecentHostedFile`、`RECENT_HOSTED_LIMIT = 20`、按短码去重 |
 | 统一最近文件 | Unified recent and hosted list | `mergeUnifiedFiles`、`UnifiedFileItem`、`unifiedFiles`；服务端公开中、本机与最近公开按短码 / 本地映射去重，按最近打开、评论或上传时间倒序 |
 | 最近交互时间 | Last file activity timestamp | `ActivityPolicy`、`touchLocalFile`、`rememberRecentHostedFile`、`FileUploadState.updatedAt`；首页打开、评论和上传推动排序，详情侧栏使用 `preserve` |
