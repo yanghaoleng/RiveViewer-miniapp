@@ -160,6 +160,16 @@ test("batches stage resizing and delays backing-canvas allocation", async () => 
   assert.match(styleSource, /\.canvas-card canvas\s*\{[\s\S]{0,100}width:\s*100% !important;[\s\S]{0,100}height:\s*100% !important;/);
 });
 
+test("recreates the canvas when switching animation formats", async () => {
+  const appSource = await readFile(
+    new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(appSource, /key=\{`\$\{activeFile\.file\.format\}-\$\{canvasGeneration\}`\}/);
+  assert.doesNotMatch(appSource, /<canvas\s+key=\{canvasGeneration\}/);
+});
+
 test("uses a resizable inspector from iPad Pro landscape width", async () => {
   const [appSource, hostedPanelsSource, timelineSource, timelineHintSource, styleSource, packageJson] = await Promise.all([
     readFile(new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url), "utf8"),

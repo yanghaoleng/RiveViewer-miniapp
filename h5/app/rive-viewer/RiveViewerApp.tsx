@@ -2232,7 +2232,7 @@ export function RiveViewerApp({
               style={stageStyle}
             >
               <canvas
-                key={canvasGeneration}
+                key={`${activeFile.file.format}-${canvasGeneration}`}
                 ref={canvasRef}
                 className={activeFile.file.format === "lottie" ? "is-surface-hidden" : ""}
                 aria-label={`${animationFormatLabel(activeFile.file.format)} 动效画布`}
