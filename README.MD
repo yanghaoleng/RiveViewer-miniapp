@@ -253,7 +253,7 @@ Beta 入口为 <https://rive.mikeywa.site/beta/>，正式根路径继续使用�
 
 - `POST /api/v1/shares/:code/versions` 上传并设为当前版本；`GET /api/v1/shares/:code/file?versionId=<UUID>` 下载指定版本。
 - 分享元数据新增 `versions`、`currentVersionId` 和 `versionCount`；旧数据启动时自动补为“版本 1”，原文件、评论和根路径接口保持兼容。
-- Beta 前端发布目录为 `/var/www/rive-host-beta/releases/20260826-120610`，后端为 `/opt/rive-host/releases/20260826-120610`；正式前端仍为 `/var/www/rive-host/releases/20260826-111929`。
+- Beta 前端发布目录为 `/var/www/rive-host-beta/releases/20260826-124647`，后端仍为 `/opt/rive-host/releases/20260826-120610`；正式前端仍为 `/var/www/rive-host/releases/20260826-111929`。
 
 ## 许可证
 
