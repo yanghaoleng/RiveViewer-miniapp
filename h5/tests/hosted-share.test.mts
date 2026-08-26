@@ -352,6 +352,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /"上传新版本"/);
   assert.match(appSource, /subtleSelected selected=\{quality === 1\}/);
   assert.match(panelSource, /className="comment-version-heading"/);
+  assert.match(panelSource, /loadError \? null : versions\.length > 1/);
   assert.match(styleSource, /\.file-heading-version-update\s*\{[\s\S]{0,180}min-width:\s*118px/);
   assert.match(styleSource, /\.parameter-tag\.is-selected\.is-subtle-selected\s*\{[\s\S]{0,160}border-color:\s*#735f26/);
   assert.match(panelSource, /role={kind === "error" \? "alert" : "status"}/);

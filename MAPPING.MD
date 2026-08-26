@@ -165,7 +165,7 @@
 | 上传新版本 | Append hosted file version | `versionInputRef`、`updateHostedVersion`、`createHostedVersion`、`POST /api/v1/shares/:code/versions` |
 | 文件版本下拉 | Hosted version listbox | `.file-version-picker`、`.file-version-menu`、`activeHostedVersion`；按新到旧显示版本名、文件名和上传日期 |
 | 指定版本下载 | Version-scoped Rive download | `hostedFileUrl(code, versionId)`、`GET /api/v1/shares/:code/file?versionId=<UUID>` |
-| 版本评论分组 | Version-scoped comment groups | `HostedComment.versionId`、`.comment-version-heading`、`.comment-version-group`；当前版本展开，标题点击切换预览 |
+| 版本评论分组 | Version-scoped comment groups | `HostedComment.versionId`、`.comment-version-heading`、`.comment-version-group`；仅两个及以上版本启用，单版本仍为普通评论列表；当前版本展开，标题点击切换预览 |
 | 低亮参数选中态 | Subtle parameter selection | `Tag.subtleSelected`、`.parameter-tag.is-selected.is-subtle-selected`；与时间轴深底淡黄边框一致 |
 | 公开最近文件 | Browser recent hosted library | IndexedDB `recent-hosted`、`listRecentHostedFiles`、`rememberRecentHostedFile`、`RECENT_HOSTED_LIMIT = 20`、按短码去重 |
 | 统一最近文件 | Unified recent and hosted list | `mergeUnifiedFiles`、`UnifiedFileItem`、`unifiedFiles`；服务端公开中、本机与最近公开按短码 / 本地映射去重，按最近打开、评论或上传时间倒序 |

@@ -881,7 +881,7 @@ export function ShareCommentsPanel({
 
       {loading ? (
         <div className="comments-skeleton" role="status" aria-label="正在读取评论"><span /><span /></div>
-      ) : loadError ? null : versions.length ? (
+      ) : loadError ? null : versions.length > 1 ? (
           <div className="comment-version-list">
             {versions.slice().reverse().map((version) => {
               const versionComments = comments.filter((comment) => (

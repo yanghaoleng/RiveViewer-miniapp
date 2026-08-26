@@ -249,7 +249,7 @@ JOJO 托管版在浏览器宽度达到 `1194px`（iPad Pro 11 寸横屏）时使
 
 ## Beta 文件版本
 
-Beta 入口为 <https://rive.mikeywa.site/beta/>，正式根路径继续使用原静态版本。详情页下载按钮左侧可“上传新版本”，新版本沿用原三位短码并默认打开；文件名下拉可切换历史版本并显示上传日期。评论携带 `versionId`，按“版本 N”分组，当前版本展开、旧版本折叠，点击分组标题同时切换预览版本。
+Beta 入口为 <https://rive.mikeywa.site/beta/>，正式根路径继续使用原静态版本。详情页下载按钮左侧可“上传新版本”，新版本沿用原三位短码并默认打开；文件名下拉可切换历史版本并显示上传日期。评论携带 `versionId`；只有两个及以上版本时才按“版本 N”分组，单版本沿用普通评论列表，不展示版本概念。
 
 - `POST /api/v1/shares/:code/versions` 上传并设为当前版本；`GET /api/v1/shares/:code/file?versionId=<UUID>` 下载指定版本。
 - 分享元数据新增 `versions`、`currentVersionId` 和 `versionCount`；旧数据启动时自动补为“版本 1”，原文件、评论和根路径接口保持兼容。
