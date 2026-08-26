@@ -92,7 +92,7 @@
 | H5 点击坐标换算 | Canvas-to-artboard pointer mapping | `canvasPointToBacking`、`backingPointToArtboard`、`canvas-space.ts` |
 | H5 点击优先级 | Interaction-first state restore | `ensureStateMachine`、`selectedStateMachineName`、`pointerDown` |
 | H5 性能数据 | Runtime FPS metric | `fps`、`onPerformance`、`.file-fps` |
-| H5 渲染质量 | Browser quality profile | `DEFAULT_RENDER_QUALITY = 2`、`quality`、`requestedQuality`、`effectiveQuality`、`frameInterval`；默认高清，复杂文件仍自动限为最高 DPR `1.25` / `30fps` |
+| H5 渲染质量 | Browser quality profile | `DEFAULT_RENDER_QUALITY = 2`、`DEFAULT_HOSTED_RENDER_QUALITY = 1`、`quality`、`requestedQuality`、`effectiveQuality`、`frameInterval`；普通 H5 默认高清，JOJO 保持平衡，复杂文件仍自动限为最高 DPR `1.25` / `30fps` |
 | H5 默认渲染器 | Browser WebGL2 Rive Renderer | `renderEngine = "webgl2"`、`@rive-app/webgl2-advanced@2.39.1`、`runtime.makeRenderer(canvas)`、`renderer.flush()`；支持 Vector Feathering |
 | H5 兼容模式 | Browser Canvas2D fallback renderer | `renderEngine = "canvas2d"`、`@rive-app/canvas-advanced@2.39.1`；保留播放与交互，不保证 Vector Feathering |
 | 普通 H5 正式渲染器 | Legacy H5 production renderer | `mikeywa.site/rive-viewer/` 默认 WebGL2，HTML 预加载 `rive-webgl2-2.39.1.wasm`；失败时保留 Canvas2D 兼容模式 |

@@ -397,7 +397,7 @@ test("uses a bounded custom speed menu instead of a native select", async () => 
   assert.doesNotMatch(appSource, /<select value=\{speed\}/);
 });
 
-test("defaults browser previews to high quality before loading the Rive file", async () => {
+test("defaults local previews to high quality while hosted previews stay balanced", async () => {
   const [appSource, playerSource] = await Promise.all([
     readFile(new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/rive-player.ts", import.meta.url), "utf8"),
@@ -408,7 +408,8 @@ test("defaults browser previews to high quality before loading the Rive file", a
   );
 
   assert.match(appSource, /const DEFAULT_RENDER_QUALITY = 2;/);
-  assert.match(appSource, /const \[quality, setQuality\] = useState\(DEFAULT_RENDER_QUALITY\);/);
+  assert.match(appSource, /const DEFAULT_HOSTED_RENDER_QUALITY = 1;/);
+  assert.match(appSource, /isHostedPlatform \? DEFAULT_HOSTED_RENDER_QUALITY : DEFAULT_RENDER_QUALITY/);
   assert.match(playerCreation, /player\.setQuality\(qualityRef\.current\);/);
   assert.match(playerSource, /safetyPixelRatio = this\.complexFile \? 1\.25 : 2;/);
   assert.match(playerSource, /safetyFps = this\.complexFile \? 30 : 60;/);

@@ -98,6 +98,7 @@ const EMPTY_METADATA: RiveMetadata = {
 const SPEEDS = policy.speeds;
 const CANVAS_TONES = policy.canvasTones;
 const DEFAULT_RENDER_QUALITY = 2;
+const DEFAULT_HOSTED_RENDER_QUALITY = 1;
 const PUBLISHED_CODES_STORAGE_KEY = "rive-host-published-codes-v1";
 const MAX_HOSTED_FILE_BYTES = 64 * 1024 * 1024;
 const FILE_RAIL_MIN_WIDTH = 160;
@@ -239,7 +240,9 @@ export function RiveViewerApp({
   const [fit, setFit] = useState<"contain" | "cover">(() => (
     isHostedPlatform ? "contain" : "cover"
   ));
-  const [quality, setQuality] = useState(DEFAULT_RENDER_QUALITY);
+  const [quality, setQuality] = useState(
+    isHostedPlatform ? DEFAULT_HOSTED_RENDER_QUALITY : DEFAULT_RENDER_QUALITY,
+  );
   const [renderEngine, setRenderEngine] = useState<RenderEngine>("webgl2");
   const [canvasGeneration, setCanvasGeneration] = useState(0);
   const [engineToast, setEngineToast] = useState("");
