@@ -618,6 +618,7 @@ export function RiveViewerApp({
             outcome: "failure",
             durationMs: performance.now() - openedAt,
             errorCategory: analyticsErrorCategory(loadError),
+            fileCode: shareCode,
           },
         });
       }
@@ -860,6 +861,9 @@ export function RiveViewerApp({
             durationMs: performance.now() - activeFile.openedAt,
             errorCategory: analyticsErrorCategory(loadError),
             renderer: analyticsRenderer(activeFile.file.format, renderEngineRef.current),
+            ...(activeFile.file.hostedCode ? {
+              fileCode: activeFile.file.hostedCode,
+            } : {}),
           },
         });
       } finally {

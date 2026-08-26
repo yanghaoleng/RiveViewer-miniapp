@@ -31,6 +31,7 @@ export type AnalyticsProperties = {
   quality?: number;
   fit?: "contain" | "cover";
   trigger?: "automatic" | "manual";
+  fileCode?: string;
 };
 
 type AnalyticsEventInput = {

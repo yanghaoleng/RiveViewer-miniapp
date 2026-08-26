@@ -27,6 +27,8 @@ export type AnalyticsSummary = {
     sessions: number;
     visitors: number;
     previews: number;
+    previewAttempts: number;
+    previewFailures: number;
     activationRate: number;
     previewSuccessRate: number;
     p50LoadMs: number;
@@ -44,6 +46,21 @@ export type AnalyticsSummary = {
     previews: number;
     errors: number;
     averageLoadMs: number;
+  }>;
+  audiencePeriods: Array<{
+    days: 7 | 30 | 90;
+    visitors: number;
+    visits: number;
+  }>;
+  failedFiles: Array<{
+    code: string;
+    name: string;
+    surface: "jojo" | "beta";
+    format: "rive" | "lottie" | "pag";
+    errorCategory: string;
+    errorLabel: string;
+    attempts: number;
+    lastFailedAt: string;
   }>;
   funnel: Array<{
     key: string;

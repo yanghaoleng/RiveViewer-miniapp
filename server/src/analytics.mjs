@@ -222,6 +222,7 @@ function normalizeEvent(raw, context) {
   const sourceHost = safeString(properties.sourceHost, 120).toLowerCase();
   const utmSource = safeString(properties.utmSource, 64);
   const utmCampaign = safeString(properties.utmCampaign, 64);
+  const fileCode = safeString(properties.fileCode, 8);
 
   if (format) event.format = format;
   if (fileSizeBucket) event.fileSizeBucket = fileSizeBucket;
@@ -240,6 +241,14 @@ function normalizeEvent(raw, context) {
   if (sourceHost && /^(?:[a-z0-9-]+\.)*[a-z0-9-]+$/i.test(sourceHost)) event.sourceHost = sourceHost;
   if (utmSource) event.utmSource = utmSource;
   if (utmCampaign) event.utmCampaign = utmCampaign;
+  if (
+    name === "preview_result"
+    && outcome === "failure"
+    && context.surface !== "generic"
+    && /^[0-9A-Za-z]{3}$/.test(fileCode)
+  ) {
+    event.fileCode = fileCode;
+  }
   if (properties.fit === "contain" || properties.fit === "cover") event.fit = properties.fit;
   if (properties.trigger === "automatic" || properties.trigger === "manual") event.trigger = properties.trigger;
   return event;
@@ -305,8 +314,7 @@ function simpleCountRows(events, keyName, labelGroup, predicate = () => true) {
   })).sort((left, right) => right.events - left.events);
 }
 
-export function summarizeAnalytics(events, { days, surface = "all", format = "all", now }) {
-  const end = new Date(now);
+function selectAnalyticsEvents(events, { days, surface, format, end }) {
   const start = new Date(end.getTime() - (days - 1) * DAY_MS);
   start.setUTCHours(0, 0, 0, 0);
   const timeAndSurface = events.filter((event) => (
@@ -320,6 +328,48 @@ export function summarizeAnalytics(events, { days, surface = "all", format = "al
   const selected = formatSessions
     ? timeAndSurface.filter((event) => event.format === format || (!event.format && formatSessions.has(event.sessionHash)))
     : timeAndSurface;
+  return { selected, start };
+}
+
+function audiencePeriod(events, { days, surface, format, end }) {
+  const { selected } = selectAnalyticsEvents(events, { days, surface, format, end });
+  const pageViews = selected.filter((event) => event.name === "page_view");
+  const rows = pageViews.length ? pageViews : selected;
+  return {
+    days,
+    visitors: new Set(rows.map((event) => event.visitorHash)).size,
+    visits: new Set(rows.map((event) => event.sessionHash)).size,
+  };
+}
+
+function failedFileRows(events) {
+  const files = new Map();
+  for (const event of events) {
+    if (event.name !== "preview_result" || event.outcome !== "failure" || !event.fileCode) continue;
+    const key = `${event.surface}:${event.fileCode}`;
+    const current = files.get(key) || {
+      code: event.fileCode,
+      surface: event.surface,
+      errorCategory: event.errorCategory || "unknown",
+      attempts: 0,
+      lastFailedAt: event.at,
+    };
+    current.attempts += 1;
+    if (event.at >= current.lastFailedAt) {
+      current.lastFailedAt = event.at;
+      current.errorCategory = event.errorCategory || current.errorCategory;
+    }
+    files.set(key, current);
+  }
+  return [...files.values()]
+    .sort((left, right) => right.lastFailedAt.localeCompare(left.lastFailedAt))
+    .slice(0, 20)
+    .map((row) => ({ ...row, errorLabel: labelFor("errors", row.errorCategory) }));
+}
+
+export function summarizeAnalytics(events, { days, surface = "all", format = "all", now }) {
+  const end = new Date(now);
+  const { selected, start } = selectAnalyticsEvents(events, { days, surface, format, end });
   const sessionIds = new Set(selected.map((event) => event.sessionHash));
   const visitorIds = new Set(selected.map((event) => event.visitorHash));
   const activatedSessions = new Set(selected
@@ -333,8 +383,10 @@ export function summarizeAnalytics(events, { days, surface = "all", format = "al
     .map((event) => event.sessionHash));
   const activatedEngagedSessions = new Set([...engagedSessions].filter((id) => activatedSessions.has(id)));
   const activatedCollaborationSessions = new Set([...collaborationSessions].filter((id) => activatedSessions.has(id)));
-  const previewAttempts = selected.filter((event) => event.name === "preview_result");
-  const previewSuccesses = previewAttempts.filter((event) => event.outcome === "success");
+  const previewResults = selected.filter((event) => event.name === "preview_result");
+  const previewSuccesses = previewResults.filter((event) => event.outcome === "success");
+  const previewFailures = previewResults.filter((event) => event.outcome === "failure");
+  const previewAttempts = [...previewSuccesses, ...previewFailures];
   const resultEvents = selected.filter((event) => event.name.endsWith("_result"));
   const failedResults = resultEvents.filter((event) => event.outcome === "failure");
   const performance = selected.filter((event) => event.name === "performance_sample" && Number.isFinite(event.fps));
@@ -386,6 +438,8 @@ export function summarizeAnalytics(events, { days, surface = "all", format = "al
       sessions: sessionIds.size,
       visitors: visitorIds.size,
       previews: previewSuccesses.length,
+      previewAttempts: previewAttempts.length,
+      previewFailures: previewFailures.length,
       activationRate: ratio(activatedSessions.size, visitCount),
       previewSuccessRate: ratio(previewSuccesses.length, previewAttempts.length),
       p50LoadMs: percentile(loadDurations, 0.5),
@@ -404,6 +458,13 @@ export function summarizeAnalytics(events, { days, surface = "all", format = "al
       errors: row.errors,
       averageLoadMs: row.load.length ? Math.round(row.load.reduce((sum, value) => sum + value, 0) / row.load.length) : 0,
     })),
+    audiencePeriods: [7, 30, RETENTION_DAYS].map((periodDays) => audiencePeriod(events, {
+      days: periodDays,
+      surface,
+      format,
+      end,
+    })),
+    failedFiles: failedFileRows(selected),
     funnel: [
       { key: "visit", label: "进入工具", sessions: visitCount, rateFromVisit: ratio(visitCount, visitCount) },
       { key: "preview", label: "成功看到首帧", sessions: activatedSessions.size, rateFromVisit: ratio(activatedSessions.size, visitCount) },
@@ -501,7 +562,7 @@ export class AnalyticsStore {
     await this.writeQueue;
     const end = new Date(this.currentIso());
     const names = [];
-    for (let offset = 0; offset < days; offset += 1) {
+    for (let offset = 0; offset < RETENTION_DAYS; offset += 1) {
       names.push(`${new Date(end.getTime() - offset * DAY_MS).toISOString().slice(0, 10)}.ndjson`);
     }
     const events = [];

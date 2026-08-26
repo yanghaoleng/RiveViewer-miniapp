@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   AnalyticsAuthRequiredError,
   authenticateAnalytics,
@@ -16,6 +16,23 @@ type AccessState = "checking" | "locked" | "unlocked";
 
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 const compactFormatter = new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 });
+const DAY_OPTIONS = [
+  { value: 7 as const, label: "近 7 天" },
+  { value: 30 as const, label: "近 30 天" },
+  { value: 90 as const, label: "全部" },
+];
+const SURFACE_OPTIONS = [
+  { value: "jojo" as const, label: "叫叫正式版" },
+  { value: "beta" as const, label: "叫叫测试版" },
+  { value: "generic" as const, label: "H5 通用版" },
+  { value: "all" as const, label: "全部版本" },
+];
+const FORMAT_OPTIONS = [
+  { value: "all" as const, label: "全部格式" },
+  { value: "rive" as const, label: "Rive" },
+  { value: "lottie" as const, label: "Lottie" },
+  { value: "pag" as const, label: "PAG" },
+];
 
 function formatNumber(value: number): string {
   return value >= 10_000 ? compactFormatter.format(value) : numberFormatter.format(value);
@@ -42,22 +59,142 @@ function formatFreshness(value: string | null): string {
   }).format(new Date(value));
 }
 
-function MetricCard({ label, value, note, tone = "default" }: {
+function DataSelect<T extends string | number>({ label, value, options, onChange }: {
+  label: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  const menuId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+  const selected = options[selectedIndex];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+
+  const focusOption = (index: number) => {
+    setActiveIndex(index);
+    window.requestAnimationFrame(() => optionRefs.current[index]?.focus());
+  };
+
+  const openMenu = (index = selectedIndex) => {
+    setOpen(true);
+    focusOption(index);
+  };
+
+  const closeMenu = () => {
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  const moveOption = (event: KeyboardEvent, direction: number) => {
+    event.preventDefault();
+    const next = (activeIndex + direction + options.length) % options.length;
+    focusOption(next);
+  };
+
+  return (
+    <div className="data-select" ref={rootRef}>
+      <span className="data-select-label">{label}</span>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="data-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => open ? setOpen(false) : openMenu()}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") { event.preventDefault(); openMenu(Math.min(options.length - 1, selectedIndex + 1)); }
+          if (event.key === "ArrowUp") { event.preventDefault(); openMenu(Math.max(0, selectedIndex - 1)); }
+          if (event.key === "Escape") setOpen(false);
+        }}
+      >
+        <span>{selected.label}</span><i aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="data-select-menu" id={menuId} role="listbox" aria-label={`${label}选项`}>
+          {options.map((option, index) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={option.value === value ? "is-selected" : ""}
+              key={String(option.value)}
+              ref={(node) => { optionRefs.current[index] = node; }}
+              onClick={() => {
+                onChange(option.value);
+                closeMenu();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") moveOption(event, 1);
+                if (event.key === "ArrowUp") moveOption(event, -1);
+                if (event.key === "Home") { event.preventDefault(); focusOption(0); }
+                if (event.key === "End") { event.preventDefault(); focusOption(options.length - 1); }
+                if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onChange(option.value);
+                  closeMenu();
+                }
+              }}
+            >
+              <span>{option.label}</span><i aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, note, tone = "default", action }: {
   label: string;
   value: string;
   note: string;
   tone?: "default" | "accent" | "risk";
+  action?: { label: string; expanded: boolean; onClick: () => void };
 }) {
   return (
     <article className={`data-metric data-metric-${tone}`}>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{note}</small>
+      {action ? (
+        <button type="button" aria-expanded={action.expanded} aria-controls="data-failed-files" onClick={action.onClick}>
+          {action.label}<i aria-hidden="true" />
+        </button>
+      ) : null}
     </article>
   );
 }
 
-function TrendChart({ rows }: { rows: AnalyticsSummary["trends"] }) {
+function AudiencePeriods({ rows }: { rows: AnalyticsSummary["audiencePeriods"] }) {
+  return (
+    <div className="data-audience-periods" aria-label="不同周期的独立用户数和访问次数">
+      <div className="data-audience-periods-head"><span /><span>近 7 天</span><span>近 30 天</span><span>全部</span></div>
+      <div><span>独立用户数</span>{rows.map((row) => <strong key={`visitor-${row.days}`}>{formatNumber(row.visitors)}</strong>)}</div>
+      <div><span>访问次数</span>{rows.map((row) => <strong key={`visit-${row.days}`}>{formatNumber(row.visits)}</strong>)}</div>
+      <small>“全部”按当前 90 天留存范围统计</small>
+    </div>
+  );
+}
+
+function TrendChart({ rows, audiencePeriods }: {
+  rows: AnalyticsSummary["trends"];
+  audiencePeriods: AnalyticsSummary["audiencePeriods"];
+}) {
   const width = 720;
   const height = 220;
   const pad = 22;
@@ -73,14 +210,15 @@ function TrendChart({ rows }: { rows: AnalyticsSummary["trends"] }) {
     <section className="data-panel data-trend-panel">
       <div className="data-panel-heading">
         <div>
-          <h2>访问与成功预览趋势</h2>
-          <p>会话上升但成功预览不跟随时，优先检查导入和首帧链路。</p>
+          <h2>访问趋势</h2>
+          <p>按天查看访问次数与成功预览。</p>
         </div>
         <div className="data-chart-legend" aria-label="图例">
-          <span className="is-session">会话</span>
+          <span className="is-session">访问次数</span>
           <span className="is-preview">成功预览</span>
         </div>
       </div>
+      <AudiencePeriods rows={audiencePeriods} />
       <div className="data-chart-wrap">
         <svg className="data-trend-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="trend-title trend-desc">
           <title id="trend-title">每日访问与成功预览趋势</title>
@@ -104,6 +242,36 @@ function TrendChart({ rows }: { rows: AnalyticsSummary["trends"] }) {
         <thead><tr><th>日期</th><th>会话</th><th>成功预览</th><th>错误</th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.date}><td>{row.date}</td><td>{row.sessions}</td><td>{row.previews}</td><td>{row.errors}</td></tr>)}</tbody>
       </table>
+    </section>
+  );
+}
+
+function failedFileUrl(row: AnalyticsSummary["failedFiles"][number]): string {
+  return row.surface === "beta"
+    ? `https://rive.mikeywa.site/beta/${row.code}`
+    : `https://rive.mikeywa.site/${row.code}`;
+}
+
+function FailedFilesPanel({ rows, failures }: {
+  rows: AnalyticsSummary["failedFiles"];
+  failures: number;
+}) {
+  return (
+    <section className="data-failed-files" id="data-failed-files">
+      <div className="data-failed-files-heading">
+        <div><h2>加载失败文件</h2><p>当前筛选范围共 {formatNumber(failures)} 次失败，仅列出可以直接打开复测的托管文件。</p></div>
+      </div>
+      {rows.length ? (
+        <div className="data-failed-file-list">
+          {rows.map((row) => (
+            <article key={`${row.surface}-${row.code}`}>
+              <div><strong>{row.name}</strong><span>{row.surface === "beta" ? "叫叫测试版" : "叫叫正式版"} / {row.format.toUpperCase()}</span></div>
+              <div><span>{row.errorLabel}</span><span>{formatNumber(row.attempts)} 次</span><span>{formatFreshness(row.lastFailedAt)}</span></div>
+              <a href={failedFileUrl(row)} target="_blank" rel="noreferrer">打开测试</a>
+            </article>
+          ))}
+        </div>
+      ) : <p className="data-failed-files-empty">失败来自本地文件，或发生在新版埋点上线前，暂时没有可直接打开的托管文件。</p>}
     </section>
   );
 }
@@ -150,36 +318,6 @@ function RankedList({ title, rows, emptyLabel }: {
           ))}
         </ol>
       ) : <p className="data-empty-inline">{emptyLabel}</p>}
-    </section>
-  );
-}
-
-function SurfaceTable({ rows }: { rows: AnalyticsDimensionRow[] }) {
-  return (
-    <section className="data-panel data-table-panel">
-      <div className="data-panel-heading">
-        <div>
-          <h2>版本体验对比</h2>
-          <p>同一口径比较三套 H5，避免总量掩盖某个版本的故障。</p>
-        </div>
-      </div>
-      <div className="data-table-scroll">
-        <table className="data-table">
-          <thead><tr><th>版本</th><th>会话</th><th>成功预览</th><th>加载成功率</th><th>P95 首帧</th><th>低帧率</th></tr></thead>
-          <tbody>
-            {rows.length ? rows.map((row) => (
-              <tr key={row.key}>
-                <th>{row.label}</th>
-                <td>{formatNumber(row.sessions)}</td>
-                <td>{formatNumber(row.previews || 0)}</td>
-                <td>{formatPercent(row.successRate || 0)}</td>
-                <td>{formatDuration(row.p95LoadMs || 0)}</td>
-                <td>{formatPercent(row.lowFpsRate || 0)}</td>
-              </tr>
-            )) : <tr><td colSpan={6}>有真实访问后显示版本对比。</td></tr>}
-          </tbody>
-        </table>
-      </div>
     </section>
   );
 }
@@ -296,7 +434,7 @@ function DataAccessGate({ checking, onUnlocked }: {
 
 export function AnalyticsDashboard() {
   const [days, setDays] = useState<Days>(30);
-  const [surface, setSurface] = useState<Surface>("all");
+  const [surface, setSurface] = useState<Surface>("jojo");
   const [format, setFormat] = useState<Format>("all");
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -304,6 +442,7 @@ export function AnalyticsDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [accessState, setAccessState] = useState<AccessState>("checking");
   const [locking, setLocking] = useState(false);
+  const [failedFilesOpen, setFailedFilesOpen] = useState(false);
 
   const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
 
@@ -364,11 +503,23 @@ export function AnalyticsDashboard() {
     { label: "独立会话", value: formatNumber(summary.kpis.sessions), note: `${days} 天内访问工具的浏览器会话`, tone: "default" as const },
     { label: "成功预览", value: formatNumber(summary.kpis.previews), note: "完成解析并绘制首帧", tone: "accent" as const },
     { label: "预览激活率", value: formatPercent(summary.kpis.activationRate), note: "成功预览会话 / 进入工具会话", tone: "accent" as const },
-    { label: "加载成功率", value: formatPercent(summary.kpis.previewSuccessRate), note: "成功首帧 / 全部预览尝试", tone: summary.kpis.previewSuccessRate < 0.95 && summary.kpis.sessions ? "risk" as const : "default" as const },
+    {
+      label: "加载成功率",
+      value: formatPercent(summary.kpis.previewSuccessRate),
+      note: "成功首帧 / 全部预览尝试",
+      tone: summary.kpis.previewSuccessRate < 0.95 && summary.kpis.sessions ? "risk" as const : "default" as const,
+      ...(summary.kpis.previewFailures ? {
+        action: {
+          label: `查看 ${formatNumber(summary.kpis.previewFailures)} 次失败`,
+          expanded: failedFilesOpen,
+          onClick: () => setFailedFilesOpen((value) => !value),
+        },
+      } : {}),
+    },
     { label: "P95 首帧时间", value: formatDuration(summary.kpis.p95LoadMs), note: "95% 成功预览不超过该时长", tone: summary.kpis.p95LoadMs > 5000 ? "risk" as const : "default" as const },
     { label: "深度使用率", value: formatPercent(summary.kpis.engagementRate), note: "激活后使用播放或检查控件", tone: "default" as const },
     { label: "错误率", value: formatPercent(summary.kpis.errorRate), note: "上传、预览、评论与版本操作失败", tone: summary.kpis.errorRate > 0.05 ? "risk" as const : "default" as const },
-  ] : [], [days, summary]);
+  ] : [], [days, failedFilesOpen, summary]);
 
   if (accessState !== "unlocked") {
     return <DataAccessGate checking={accessState === "checking"} onUnlocked={handleUnlocked} />;
@@ -381,14 +532,10 @@ export function AnalyticsDashboard() {
           <span>Rive 预览台</span>
           <strong>体验数据</strong>
         </div>
-        <div className="data-header-copy">
-          <h1>看清用户卡在哪里</h1>
-          <p>三个 H5 版本共用一套匿名指标，优先修复首帧、稳定性和关键协作路径。</p>
-        </div>
         <div className="data-filters" aria-label="数据筛选">
-          <label>周期<select value={days} onChange={(event) => setDays(Number(event.target.value) as Days)}><option value={7}>近 7 天</option><option value={30}>近 30 天</option><option value={90}>近 90 天</option></select></label>
-          <label>版本<select value={surface} onChange={(event) => setSurface(event.target.value as Surface)}><option value="all">全部版本</option><option value="generic">H5 通用版</option><option value="jojo">叫叫正式版</option><option value="beta">叫叫测试版</option></select></label>
-          <label>格式<select value={format} onChange={(event) => setFormat(event.target.value as Format)}><option value="all">全部格式</option><option value="rive">Rive</option><option value="lottie">Lottie</option><option value="pag">PAG</option></select></label>
+          <DataSelect label="周期" value={days} options={DAY_OPTIONS} onChange={setDays} />
+          <DataSelect label="版本" value={surface} options={SURFACE_OPTIONS} onChange={setSurface} />
+          <DataSelect label="格式" value={format} options={FORMAT_OPTIONS} onChange={setFormat} />
           <button type="button" onClick={refresh} disabled={loading}>刷新数据</button>
           <button type="button" className="data-lock-button" onClick={() => void lockDashboard()} disabled={locking}>
             {locking ? "锁定中" : "锁定后台"}
@@ -427,18 +574,19 @@ export function AnalyticsDashboard() {
               {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
             </section>
 
+            {failedFilesOpen && summary.kpis.previewFailures ? (
+              <FailedFilesPanel rows={summary.failedFiles} failures={summary.kpis.previewFailures} />
+            ) : null}
+
             <div className="data-primary-grid">
-              <TrendChart rows={summary.trends} />
+              <TrendChart rows={summary.trends} audiencePeriods={summary.audiencePeriods} />
               <Funnel rows={summary.funnel} />
             </div>
-
-            <SurfaceTable rows={summary.breakdowns.surfaces} />
 
             <section className="data-panel data-diagnostics">
               <div className="data-panel-heading">
                 <div>
-                  <h2>问题从哪个维度发生</h2>
-                  <p>先看来源和设备，再对照格式、文件体积、错误与功能使用。</p>
+                  <h2>访问来源</h2>
                 </div>
               </div>
               <div className="data-breakdown-grid">
@@ -462,7 +610,7 @@ export function AnalyticsDashboard() {
               </div>
               <div>
                 <h2>隐私与边界</h2>
-                <p>只保存随机标识的服务端哈希、粗粒度设备和行为结果。不保存 IP、完整 User-Agent、文件名、文件内容、分享码或评论正文；保留 90 天，并尊重 DNT 与 GPC。</p>
+                <p>只保存随机标识的服务端哈希、粗粒度设备和行为结果。托管文件加载失败时仅保存公开短码，文件名由现有托管目录核验后展示；不保存 IP、完整 User-Agent、文件内容或评论正文。数据保留 90 天，并尊重 DNT 与 GPC。</p>
               </div>
             </section>
           </>

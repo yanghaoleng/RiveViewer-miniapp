@@ -221,12 +221,13 @@
 | 六个密码格 | 掩码密码输入 | `.data-password-field`、`.data-password-cells` |
 | 虚拟键盘、数字盘 | 屏幕数字键盘 | `.data-keypad`、`pressKey` |
 | 锁定后台 | 主动注销当前登录态 | `lockDashboard`、`POST /api/v1/analytics/logout` |
-| 三个筛选 | 周期、版本、格式筛选器 | `days`、`surface`、`format`、`.data-filters` |
+| 三个精致下拉、三个筛选 | 自绘周期、版本、格式选择器 | `DataSelect`、`days`、`surface`、`format`、`.data-select`、`.data-filters` |
 | 顶部数据卡 | 核心 KPI 指标组 | `metrics`、`.data-metric-grid` |
-| 趋势图 | 会话与成功预览时间序列 | `TrendChart`、`.data-trend-chart` |
+| 三档访问数 | 7 天、30 天、全部的独立用户与访问次数 | `AudiencePeriods`、`audiencePeriods`、`.data-audience-periods` |
+| 趋势图 | 访问次数与成功预览时间序列 | `TrendChart`、`.data-trend-chart` |
 | 漏斗 | 访问到协作的会话漏斗 | `Funnel`、`.data-funnel` |
-| 版本对比 | 三套 H5 质量对比表 | `SurfaceTable`、`.data-table` |
-| 问题维度 | 来源、设备、格式、体积、控件与错误排行 | `RankedList`、`.data-breakdown-grid` |
+| 加载失败文件 | 可展开的托管失败文件复测列表 | `FailedFilesPanel`、`failedFiles`、`.data-failed-files` |
+| 访问来源板块 | 来源、设备、格式、体积、控件与错误排行 | `RankedList`、`.data-diagnostics`、`.data-breakdown-grid` |
 | 埋点队列 | 浏览器匿名事件批次 | `trackAnalytics`、`flushAnalytics` |
 | 数据汇总接口 | 受保护的实时汇总 API | `GET /api/v1/analytics/summary` |
 | 密码验证接口 | 六位密码登录与签名 Cookie 签发 | `POST /api/v1/analytics/auth`、`AnalyticsAccess` |

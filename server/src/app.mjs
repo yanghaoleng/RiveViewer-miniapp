@@ -397,9 +397,13 @@ export async function createRiveHostApp({
         const days = Number(url.searchParams.get("days") || 30);
         const surface = url.searchParams.get("surface") || "all";
         const format = url.searchParams.get("format") || "all";
-        sendJson(response, 200, {
-          item: await analyticsStore.summary({ days, surface, format }),
+        const item = await analyticsStore.summary({ days, surface, format });
+        item.failedFiles = item.failedFiles.flatMap((row) => {
+          const share = store.get(row.code);
+          if (!share || share.status !== "active") return [];
+          return [{ ...row, name: share.filename, format: share.format }];
         });
+        sendJson(response, 200, { item });
         return;
       }
 

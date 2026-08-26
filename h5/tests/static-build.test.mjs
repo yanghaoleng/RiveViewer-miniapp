@@ -67,6 +67,17 @@ test("keeps the analytics dashboard separate from animation runtimes", async (co
   assert.ok(!assetNames.some((name) => /^rive-player-.*\.js$/.test(name)), "数据后台不应包含 Rive 播放器");
   assert.ok(!assetNames.some((name) => /^pag-player-.*\.js$/.test(name)), "数据后台不应包含 PAG 播放器");
   assert.ok(!assetNames.some((name) => /^lottie_light_canvas-.*\.js$/.test(name)), "数据后台不应包含 Lottie 播放器");
+
+  const dashboardSource = await readFile(new URL("../app/analytics/AnalyticsDashboard.tsx", import.meta.url), "utf8");
+  assert.match(dashboardSource, /function DataSelect/);
+  assert.doesNotMatch(dashboardSource, /<select/);
+  assert.match(dashboardSource, /event\.key === "Enter" \|\| event\.key === " "/);
+  assert.match(dashboardSource, /useState<Surface>\("jojo"\)/);
+  assert.doesNotMatch(dashboardSource, /function SurfaceTable/);
+  assert.doesNotMatch(dashboardSource, /看清用户卡在哪里|三个 H5 版本共用/);
+  assert.match(dashboardSource, /<h2>访问来源<\/h2>/);
+  assert.match(dashboardSource, /<AudiencePeriods rows=\{audiencePeriods\}/);
+  assert.match(dashboardSource, /<FailedFilesPanel rows=\{summary\.failedFiles\}/);
 });
 
 test("splits Rive, Lottie, and PAG runtimes from the initial application chunk", async (context) => {

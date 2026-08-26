@@ -906,10 +906,14 @@ test("collects privacy-safe analytics and returns filterable dashboard metrics",
   await withTempDir(async (dataDir) => {
     const instance = await listenApp(dataDir, {
       now: () => "2026-08-26T06:00:00.000Z",
+      codeGenerator: sequenceGenerator(["Ab1"]),
     });
+    let response = await upload(instance.port, "损坏动效.riv", makeRive("broken-preview-fixture"));
+    assert.equal(response.status, 201);
+    assert.equal(response.json.item.code, "Ab1");
     const baseBatch = {
       version: 1,
-      surface: "generic",
+      surface: "jojo",
       visitorId: "visitor-analytics-0001",
       sessionId: "session-analytics-0001",
       events: [
@@ -938,6 +942,20 @@ test("collects privacy-safe analytics and returns filterable dashboard metrics",
           properties: { control: "speed", speed: 2 },
         },
         {
+          id: "event-preview-fail-0001",
+          name: "preview_result",
+          at: "2026-08-26T05:59:12.000Z",
+          page: "preview",
+          format: "rive",
+          fileSizeBucket: "1m_5m",
+          properties: {
+            outcome: "failure",
+            durationMs: 900,
+            errorCategory: "invalid_file",
+            fileCode: "Ab1",
+          },
+        },
+        {
           id: "event-fps-sample-0001",
           name: "performance_sample",
           at: "2026-08-26T05:59:15.000Z",
@@ -948,7 +966,7 @@ test("collects privacy-safe analytics and returns filterable dashboard metrics",
         },
       ],
     };
-    let response = await call(instance.port, {
+    response = await call(instance.port, {
       method: "OPTIONS",
       pathname: "/api/v1/analytics/events",
       headers: { Origin: "https://mikeywa.site" },
@@ -968,7 +986,7 @@ test("collects privacy-safe analytics and returns filterable dashboard metrics",
       body: baseBatch,
     });
     assert.equal(response.status, 202);
-    assert.deepEqual(response.json, { accepted: 4 });
+    assert.deepEqual(response.json, { accepted: 5 });
     assert.equal(response.headers["access-control-allow-origin"], "https://mikeywa.site");
 
     response = await call(instance.port, {
@@ -989,7 +1007,7 @@ test("collects privacy-safe analytics and returns filterable dashboard metrics",
     assert.equal(response.status, 202);
 
     response = await call(instance.port, {
-      pathname: "/api/v1/analytics/summary?days=7&surface=generic&format=rive",
+      pathname: "/api/v1/analytics/summary?days=7&surface=jojo&format=rive",
     });
     assert.equal(response.status, 401);
     assert.equal(response.json.error.code, "analytics_auth_required");
@@ -1014,28 +1032,47 @@ test("collects privacy-safe analytics and returns filterable dashboard metrics",
     assert.match(response.headers["set-cookie"][0], /HttpOnly; Secure; SameSite=Strict/);
 
     response = await call(instance.port, {
-      pathname: "/api/v1/analytics/summary?days=7&surface=generic&format=rive",
+      pathname: "/api/v1/analytics/summary?days=7&surface=jojo&format=rive",
       headers: { Cookie: sessionCookie },
     });
     assert.equal(response.status, 200);
-    assert.equal(response.json.item.freshness.eventCount, 4, "重复 event id 应在汇总时去重");
+    assert.equal(response.json.item.freshness.eventCount, 5, "重复 event id 应在汇总时去重");
     assert.equal(response.json.item.kpis.sessions, 1);
     assert.equal(response.json.item.kpis.visitors, 1);
     assert.equal(response.json.item.kpis.previews, 1);
+    assert.equal(response.json.item.kpis.previewAttempts, 2);
+    assert.equal(response.json.item.kpis.previewFailures, 1);
     assert.equal(response.json.item.kpis.activationRate, 1);
-    assert.equal(response.json.item.kpis.previewSuccessRate, 1);
+    assert.equal(response.json.item.kpis.previewSuccessRate, 0.5);
     assert.equal(response.json.item.kpis.p95LoadMs, 1200);
     assert.equal(response.json.item.kpis.lowFpsRate, 0);
     assert.equal(response.json.item.breakdowns.sources[0].key, "campaign");
     assert.equal(response.json.item.breakdowns.referrers[0].key, "baidu.com");
     assert.equal(response.json.item.breakdowns.campaigns[0].key, "pag-launch");
     assert.equal(response.json.item.breakdowns.controls[0].key, "speed");
+    assert.deepEqual(response.json.item.audiencePeriods, [
+      { days: 7, visitors: 1, visits: 1 },
+      { days: 30, visitors: 1, visits: 1 },
+      { days: 90, visitors: 1, visits: 1 },
+    ]);
+    assert.deepEqual(response.json.item.failedFiles[0], {
+      code: "Ab1",
+      name: "损坏动效.riv",
+      surface: "jojo",
+      format: "rive",
+      errorCategory: "invalid_file",
+      attempts: 1,
+      lastFailedAt: "2026-08-26T05:59:12.000Z",
+      errorLabel: "文件无效或损坏",
+    });
 
     const analyticsFile = await readFile(path.join(dataDir, "analytics", "2026-08-26.ndjson"), "utf8");
     assert.doesNotMatch(analyticsFile, /203\.0\.113\.42|Mozilla\/5\.0|visitor-analytics|session-analytics/);
     assert.match(analyticsFile, /"browser":"Safari"/);
     assert.match(analyticsFile, /"os":"macOS"/);
     assert.match(analyticsFile, /"visitorHash":"[0-9a-f]{24}"/);
+    assert.match(analyticsFile, /"fileCode":"Ab1"/);
+    assert.doesNotMatch(analyticsFile, /损坏动效|fileName/);
     await instance.close();
   });
 });
