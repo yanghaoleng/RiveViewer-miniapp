@@ -63,8 +63,9 @@ const requiredFiles = [
 if (
   packageManifest.dependencies?.['@rive-app/canvas-advanced'] !== '2.39.1'
   || packageManifest.dependencies?.['@rive-app/canvas-advanced-lite']
+  || packageManifest.dependencies?.['@rive-app/webgl2-advanced']
 ) {
-  throw new Error('必须使用完整 Canvas 运行时，Lite 缺少 Rive Layout 等能力')
+  throw new Error('微信小程序必须只使用完整 Canvas 运行时，Lite 缺少 Rive Layout 等能力')
 }
 
 for (const relativePath of requiredFiles) {
@@ -647,9 +648,10 @@ if (
 }
 if (
   !/rive_fallback\.wasm\.br/.test(nativeRuntime)
+  || !/type="2d"/.test(previewMarkup)
   || !/loadPlayerWithTimeout/.test(previewLogic)
 ) {
-  throw new Error('真机 WASM 或加载超时回退不完整')
+  throw new Error('小程序 Canvas、真机 WASM 或加载超时回退不完整')
 }
 if (
   !/prewarmRuntime/.test(homeLogic)

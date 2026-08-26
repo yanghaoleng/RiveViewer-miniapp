@@ -1,6 +1,28 @@
 # 当前交接
 
-更新日期：2026-08-25
+更新日期：2026-08-26
+
+## 2026-08-25 JOJO 评论提交与页内加载修复（已本地验收，未发布）
+
+- “发表评论”按钮无法点击的原因是 `.comment-editor` 的层级覆盖了按钮区域；`.comment-submit-row` 现提升到 `z-index: 2`，按钮整块可点。普通 Enter 通过原表单 `requestSubmit()` 发表，Shift / Command + Enter 换行，IME 组字的 Enter 不误发。
+- 侧栏切换云端文件改为 `history.pushState + React 路由状态`，不再使用 `location.reload()`。旧播放先暂停，详情布局保持；目标文件元数据返回后，文件名先更新，下载和解析进度只在预览画布内显示。
+- 线上评论数据只读核对无丢失：活跃文件 `vGd / 点击反馈.riv` 仍有 2 条，已归档文件 `mIY / ai叫叫学伴.riv` 仍有 2 条；当前 `O1H` 是独立短码线程，评论数为 0。本轮未迁移、恢复或写入任何线上评论。
+- H5 lint、TypeScript、生产构建和 `41/41` 测试通过，`npm audit` 为 0。应用内浏览器已在 `http://127.0.0.1:4176/` 验收：按钮启用后的可点性检查通过；从 `vGd` 切到 `O1H` 时保留详情结构且无全屏 Loading。本地验收未提交测试评论。
+
+## 2026-08-26 小程序回滚 Canvas（已完成）
+
+- 真机确认 WebGL2 试验包无法正常加载后，微信小程序已恢复 `<canvas type="2d">` 和完整 `@rive-app/canvas-advanced@2.39.1`；H5 与 JOJO 版继续默认 WebGL2，不受影响。
+- 小程序重新保留 `canvas_advanced.js`、`rive.wasm.br` 与 `rive_fallback.wasm.br`，主 WASM 失败时仍可尝试兼容 WASM；不包含 WebGL2 小程序运行时。试验产物已移到 `dist/mini-webgl2-experiment-archive-20260825/`，不会进入上传包。
+- `npm run check`、`npm run verify:interactions`、Guide / Question 解析与 12 份真实文件基准通过；上传源包 `1,666,466 B / 1,700,000 B`，依赖审计为 0。
+- 微信开发者工具 RC `2.02.2607271`、基础库 `3.17.0` 普通编译通过；真实 `引导页动画750_1160.riv` 的画面、画板 `叫叫`、状态机 `jojo-machine`、时间轴与约 `21–23 FPS` 均可见。未上传版本、未提审。
+
+## 2026-08-25 普通 H5 默认高清与 WebGL2（已正式发布）
+
+- H5 渲染质量默认值由性能改为高清，并在载入 `.riv` 前写入播放器，避免首帧先按性能档初始化；性能、平衡、高清仍可随时手动切换。
+- 默认值没有新增 CPU 型号或内存猜测。普通素材高清档最高约为 `60fps + DPR 2.0`；超过 `2 MiB`、画板不少于 `24`、默认画板动画不少于 `48` 或状态机不少于 `24` 时，现有保护仍自动限制在最高 `30fps + DPR 1.25`。
+- 微信小程序继续默认性能，并保留 `riveQualityMode` 本地记忆，不受本次电脑端调整影响。
+- H5 lint、TypeScript、生产构建与 `38/38` 测试通过，`npm audit` 为 `0`。普通 H5 已原子切换到 `/var/www/rive-viewer/releases/20260825-230508`，直接回滚点为 `20260818-093940`。
+- 公网 HTML、入口 JS 和 CSS 与本地生产构建 SHA-256 一致；HTML 预加载 WebGL2 WASM，两份 WASM 均为 `application/wasm + gzip + immutable`。内置浏览器桌面与 `360×800` 首页正常、无控制台错误。本轮未上传小程序、未提审。
 
 ## 2026-08-25 JOJO WebGL2 默认渲染与兼容降级（已正式发布）
 

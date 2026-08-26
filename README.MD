@@ -16,7 +16,7 @@
 
 <img src="./h5/public/rive-viewer/mini-program-code.webp" alt="Rive 预览台微信小程序码" width="240" />
 
-H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机、时间轴、输入、声音、事件控制台、缩放、背景、渲染质量和渲染引擎检查。当前 H5 默认使用 WebGL2 / Rive Renderer，以呈现 Vector Feathering 制作的柔和内阴影、虚化边缘和光晕；初始化或运行失败时自动切到 Canvas2D 兼容模式并显示 Toast，也可在参数区最后一项手动切换。H5 本地版不生成分享链接；JOJO 版是在 H5 预览器基础上增加的轻量托管版本，标题带有 `for JOJO` 标识，文件上传后生成根路径三位短链接，任何拿到链接的人都可预览、下载、评论、归档或恢复文件，无需注册和登录。公开链接可以被继续转发，不应当作私密访问凭证。
+H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机、时间轴、输入、声音、事件控制台、缩放、背景、渲染质量和渲染引擎检查。两个正式入口均默认使用 WebGL2 / Rive Renderer，以呈现 Vector Feathering 制作的柔和内阴影、虚化边缘和光晕；初始化或运行失败时自动切到 Canvas2D 兼容模式并显示 Toast，也可在参数区最后一项手动切换。H5 本地版不生成分享链接；JOJO 版是在 H5 预览器基础上增加的轻量托管版本，标题带有 `for JOJO` 标识，文件上传后生成根路径三位短链接，任何拿到链接的人都可预览、下载、评论、归档或恢复文件，无需注册和登录。公开链接可以被继续转发，不应当作私密访问凭证。
 
 微信平台当前上传并提审版本：`1.0.7`，更新类型：`修订补丁`，备注：`优化渲染性能与体验`。本版统一小程序/H5 的画布手柄、缩放快捷项和 Gentle 弹簧反馈；复杂文件继续自动限制 DPR 与帧率，实时 FPS 仅显示在播放时间右侧。
 
@@ -26,7 +26,7 @@ H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机�
 - 在同一屏内查看画布、时间轴、状态机和输入反馈。
 - 大文件加载期间保持页面可返回，并提供阶段与百分比反馈。
 - 小程序与旧 H5 只在本地保存；新托管域名按文件展示仅本机、上传中、已上云或失败状态，成功后从文件菜单复制公开链接。
-- 用独立 H5 与微信原生 Canvas 做同一真机性能对照，为后续是否重新嵌入 H5 提供数据。
+- 浏览器 H5 以 WebGL2 保证视觉还原；微信小程序使用原生 Canvas2D，以加载稳定性、交互和性能为准分别验收。
 
 ## 核心功能
 
@@ -65,7 +65,7 @@ H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机�
 | `pages/index` | 导入、本地文件库、文件操作与空闲 WASM 预热；不在后台解析文件或渲染缩略图 |
 | `pages/preview` | 路由、分享和预览配置；全页与桌面分栏共用 `components/preview-panel` 模板 |
 | `utils/library.js` | 本地文件、示例隐藏记录、元数据、封面缓存和分块读取 |
-| `utils/rive-native.js` | 双 WASM 初始化与复用、资源兼容、渲染、状态机、Listener、View Model、WebAudio 桥接和 iOS Piano 短音播放 |
+| `utils/rive-native.js` | 微信 Canvas2D 双 WASM 初始化与复用、资源兼容、渲染、状态机、Listener、View Model、WebAudio 桥接和 iOS Piano 短音播放 |
 | `utils/rive-performance.js` | 小程序渲染质量、复杂度阈值和音频保护纯函数 |
 | `utils/file-actions.js` | 发送文件与桌面端保存 |
 | `components/parameter-tag` | 画板、状态机、时间轴和输入的统一标签 |
@@ -73,7 +73,7 @@ H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机�
 | `assets/icons` | 从 `@phosphor-icons/core` 固化到包内的 Phosphor Bold SVG；由 `npm run vendor:icons` 统一生成颜色与来源标记 |
 | `components/preview-panel` | 原生预览的唯一视图模板，同时服务手机全页与桌面宽屏分栏 |
 | `utils/desktop-split.js` | 桌面端 `960px` 分栏阈值、平台判断和独立详情页回流首页的路由 |
-| `vendor/rive` | 适配微信运行环境的完整 Rive Canvas 运行时、SIMD 与兼容版 Brotli WASM |
+| `vendor/rive` | 适配微信运行环境的完整 Rive Canvas 运行时、主版与兼容版两份 Brotli WASM |
 | `h5/` | 独立浏览器 H5；默认使用 `@rive-app/webgl2-advanced@2.39.1`，失败时降级 `@rive-app/canvas-advanced@2.39.1`；以 IndexedDB 保存用户文件、输出实时 FPS 与当前会话事件，渲染和点击共用同一 Fit 矩阵 |
 | `h5/lib/runtime-event-log.ts` | 当前文件事件的定长内存日志；微任务批量通知独立事件控制台，不上传、不持久化，也不推动根组件逐帧更新 |
 | `shared/rive-policy.json` | 双端倍速、手势、遥测节流和复杂文件阈值的唯一真源；脚本生成微信可加载的 `rive-policy.js` |
@@ -111,7 +111,15 @@ H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机�
 - WebGL2 初始化、逐帧运行或上下文失败会重建 Canvas、自动切换兼容模式，并显示约 `4.2s` 的“WebGL2 不可用，已切换到兼容模式”Toast。参数面板最后新增“渲染引擎”，可手动选择 WebGL2 或兼容模式。
 - 本机真实绿豆文件已完成 WebGL2 / Canvas2D 双向切换和缺失 WebGL2 WASM 的失败注入；柔化光影仅在 WebGL2 恢复，兼容模式保持可播放。当前 JOJO 前端为 `/var/www/rive-host/releases/20260825-201557`，上一版 `20260825-192225` 与更早稳定版 `20260824-163850` 均保留回滚；线上双引擎分包、双 WASM 与本地产物逐字节一致。
 
-渲染链路使用微信 `<canvas type="2d">`、`@rive-app/canvas-advanced@2.39.1` 和 `WXWebAssembly`。完整运行时用于保留 Rive Layout、嵌套画板、Listener 与 Data Binding 能力。
+### 2026-08-26 小程序回滚 Canvas
+
+微信小程序真机无法正常加载 WebGL2 试验包，现已恢复 `<canvas type="2d">`、完整 `@rive-app/canvas-advanced@2.39.1` 与 `WXWebAssembly`。包内重新保留主版和兼容版两份 Canvas WASM，不包含 WebGL2 小程序运行时，也不提供小程序端引擎切换。微信开发者工具普通编译后，真实 `引导页动画750_1160.riv` 的画面、FPS、画板、状态机和时间轴均可见；H5 与 JOJO 版继续默认 WebGL2，不受本次回滚影响。
+
+### 2026-08-25 普通 H5 默认高清与 WebGL2 正式发布
+
+- 普通 H5 渲染质量默认值已改为高清；普通素材最高约 `60fps + DPR 2.0`，复杂文件仍由现有阈值自动限制到最高 `30fps + DPR 1.25`。
+- <https://mikeywa.site/rive-viewer/> 已原子切换到 `/var/www/rive-viewer/releases/20260825-230508`，直接回滚点为 `20260818-093940`；HTML 预加载 `rive-webgl2-2.39.1.wasm`，浏览器仍保留 Canvas2D 兼容模式。
+- 公网 HTML、入口 JS 和 CSS 的 SHA-256 与本地 `dist-static` 一致；WebGL2 与 Canvas2D 两份 WASM 均返回 `application/wasm + gzip + immutable`。内置浏览器桌面和 `360×800` 页面正常、无控制台错误。
 
 ### 复杂文件性能边界
 
@@ -119,7 +127,7 @@ H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机�
 - Animojis 测试文件为 `2.33 MiB`，但包含 `89` 个画板、`422` 条动画和 `86` 个状态机；默认 `3000 × 3000` 总览画板聚合整页表情，是当前真机性能样本。
 - 首帧只解析并复用默认画板；其余画板由用户展开时分批读取，选中后才检查完整参数，避免首次进入同步创建大量运行时对象和标签。
 - iOS 复杂无音频文件使用约 `24fps`、DPR 上限 `1.25`；暂停后停止持续绘制，交互、画布尺寸或参数变化时再按需重绘。
-- 预览页提供性能、平衡、高清三档；性能档默认约 `30fps + DPR 1.0`，复杂素材即使选择高清也保留自动安全上限。
+- 预览页提供性能、平衡、高清三档；H5 默认高清（最高约 `60fps + DPR 2.0`），微信小程序继续默认性能（约 `30fps + DPR 1.0`）并记住用户选择。复杂素材即使选择高清也保留自动安全上限。
 - 微信未公开固定 CPU 或 iOS 内存配额，性能判断以目标真机分阶段计时、帧耗时和内存告警为准，不能用开发者工具流畅度代替。
 
 Rive Web 运行时的通用音频链路通过兼容构造器桥接到 `wx.createWebAudioContext`。iOS Piano 使用专用资源加载器和 `BufferSource`，先显示首帧再按琴键优先顺序解码；单个解码超时会继续下一个，缺少琴键或解码失败时显式标记不可用，绝不回退到高负载混音。静音或离开预览会停止并释放音频；运行时只保留播放链路，不使用录音入口。
@@ -142,7 +150,7 @@ Rive Web 运行时的通用音频链路通过兼容构造器桥接到 `wx.create
 
 微信小程序不调用 `wx.getClipboardData`，也不读取剪贴板已有内容；仅在用户点击网址旁复制图标后调用一次 `wx.setClipboardData`。公众平台用途统一填写：“用于用户主动复制网页版预览地址，方便在浏览器中打开复杂 Rive 文件；仅向剪切板写入固定网址，不读取剪切板已有内容。”项目检查会阻止剪贴板读取、后台写入和其他复制用途。独立 H5 只在用户主动点击底部反馈入口时调用浏览器 `navigator.clipboard.writeText` 写入作者微信号。聊天文件导入只处理用户主动选中的 `.riv` 文件，文件在设备本地解析、预览和保存，不上传业务服务器。
 
-当前按 `project.config.json` 忽略规则估算的小程序上传源包为 `1,658,042 B`（`1619.2 KB`），并由 `npm run check:package` 强制不超过 `1,700,000 B`。主要体积来自 SIMD 与兼容版两份 Rive WASM；H5、原始样例、测试、历史构建和依赖目录均已排除。
+当前按 `project.config.json` 忽略规则估算的小程序 Canvas 源包为 `1,666,466 B`，共 `66` 个文件，并由 `npm run check:package` 强制不超过 `1,700,000 B`。包内保留主版和兼容版两份 Rive Canvas WASM；H5、原始样例、测试、历史构建和依赖目录均已排除。
 
 首页和预览页均声明 `onShareAppMessage`、`onShareTimeline`，并在页面显示时调用 `wx.showShareMenu`。好友卡使用 `share-friend.jpg`（500×400，约 37 KB）；朋友圈使用 `share-timeline.png`（272×272，约 14 KB）。若运行时返回 `showShareMenu:fail no permission`，应在公众平台检查账号权限，代码不能绕过平台拒绝。
 

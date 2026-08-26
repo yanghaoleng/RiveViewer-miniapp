@@ -79,8 +79,8 @@
 | 音频生命周期 | Audio context lifecycle | `resumeRuntimeAudio`、`suspendRuntimeAudio`、`dispose` |
 | 剪贴板范围检查 | Clipboard privacy guard | `scripts/check-project.mjs`；禁止 `wx.getClipboardData`，仅允许首页用户点击后调用一次 `wx.setClipboardData` |
 | 剪贴板用途说明 | Clipboard privacy purpose | “用于用户主动复制网页版预览地址；仅向剪切板写入固定网址，不读取剪切板已有内容” |
-| 小程序上传包预算 | Mini Program source package budget | `scripts/check-package-budget.mjs`、`npm run check:package`；当前 `1,658,042 B`，上限 `1,700,000 B` |
-| 微信预览包 | DevTools preview build | `dist/wechat-preview-2026-08-17/preview-qr.png`、`preview-info.json`；短期开发版二维码，不等于正式上传或提审 |
+| 小程序上传包预算 | Mini Program source package budget | `scripts/check-package-budget.mjs`、`npm run check:package`；Canvas 源包 `1,666,466 B`，上限 `1,700,000 B` |
+| WebGL2 试验预览包（已停用） | Archived WebGL2 preview | `dist/wechat-preview-webgl2-2026-08-25/preview-qr.png`、`preview-info.json`；真机无法正常加载，不再作为测试或发布基线 |
 | 预览组件查询域 | Component-scoped SelectorQuery | `createPreviewSelectorQuery`、`query.in(this)`；手机全页与桌面分栏都必须绑定 `preview-panel` 实例 |
 | 预览组件样式域 | Component WXSS selector policy | `components/preview-panel/preview-panel.wxss`；只用 `:host` 与类选择器，原生标签补语义类 |
 | 发布版本号 | Release version | `1.0.7`、`package.json.version`、`package-lock.json.version`、开发者工具上传版本 |
@@ -92,9 +92,13 @@
 | H5 点击坐标换算 | Canvas-to-artboard pointer mapping | `canvasPointToBacking`、`backingPointToArtboard`、`canvas-space.ts` |
 | H5 点击优先级 | Interaction-first state restore | `ensureStateMachine`、`selectedStateMachineName`、`pointerDown` |
 | H5 性能数据 | Runtime FPS metric | `fps`、`onPerformance`、`.file-fps` |
-| H5 渲染质量 | Browser quality profile | `quality`、`requestedQuality`、`effectiveQuality`、`frameInterval` |
+| H5 渲染质量 | Browser quality profile | `DEFAULT_RENDER_QUALITY = 2`、`quality`、`requestedQuality`、`effectiveQuality`、`frameInterval`；默认高清，复杂文件仍自动限为最高 DPR `1.25` / `30fps` |
 | H5 默认渲染器 | Browser WebGL2 Rive Renderer | `renderEngine = "webgl2"`、`@rive-app/webgl2-advanced@2.39.1`、`runtime.makeRenderer(canvas)`、`renderer.flush()`；支持 Vector Feathering |
 | H5 兼容模式 | Browser Canvas2D fallback renderer | `renderEngine = "canvas2d"`、`@rive-app/canvas-advanced@2.39.1`；保留播放与交互，不保证 Vector Feathering |
+| 普通 H5 正式渲染器 | Legacy H5 production renderer | `mikeywa.site/rive-viewer/` 默认 WebGL2，HTML 预加载 `rive-webgl2-2.39.1.wasm`；失败时保留 Canvas2D 兼容模式 |
+| 小程序当前渲染器 | Mini Program Canvas2D renderer | `type="2d"`、`@rive-app/canvas-advanced@2.39.1`、`vendor/rive/canvas_advanced.js`、`WXWebAssembly` |
+| 小程序双 WASM 回退 | Mini Program Canvas WASM fallback | `vendor/rive/rive.wasm.br`、`vendor/rive/rive_fallback.wasm.br`、`RIVE_WASM_FILES`；主运行时失败后尝试兼容 WASM |
+| WebGL2 小程序试验（已停用） | Archived Mini Program WebGL2 experiment | `dist/mini-webgl2-experiment-archive-20260825/`；因真机无法正常加载，不进入小程序包 |
 | 渲染引擎选择 | Render engine selector | 参数区最后一项“渲染引擎”、`RenderEngine`、`selectRenderEngine`、`WebGL2`、`兼容模式` |
 | WebGL2 自动降级 | WebGL2 runtime fallback | `onRuntimeFailure`、`webglcontextlost`、`engineFallbackBusyRef`、`canvasGeneration`、`reloadActiveFileRef` |
 | 渲染降级提示 | Render fallback toast | `EngineToast`、`.engine-toast`、`engineToast`；“WebGL2 不可用，已切换到兼容模式” |
