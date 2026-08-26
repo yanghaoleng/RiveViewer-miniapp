@@ -9,7 +9,7 @@ if (!root) {
   throw new Error("缺少 H5 根节点");
 }
 
-const mode = import.meta.env.BASE_URL === "/" ? "hosted" : "local";
+const mode = ["/", "/beta/"].includes(import.meta.env.BASE_URL) ? "hosted" : "local";
 const shareCode = mode === "hosted"
   ? shareCodeFromPath(window.location.pathname, import.meta.env.BASE_URL)
   : null;

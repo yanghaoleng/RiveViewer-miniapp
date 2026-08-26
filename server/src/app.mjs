@@ -13,6 +13,7 @@ import { ShareStore } from "./store.mjs";
 const CODE_PATH = "([0-9A-Za-z]{3})";
 const SHARE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}$`);
 const FILE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/file$`);
+const VERSIONS_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/versions$`);
 const COMMENTS_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/comments$`);
 const COMMENT_ARCHIVE_PATTERN = new RegExp(
   `^/api/v1/shares/${CODE_PATH}/comments/([^/]+)/archive$`,
@@ -26,6 +27,7 @@ const RESTORE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/restore$`);
 const MAX_JSON_BYTES = 32 * 1024;
 const MAX_CUSTOM_AVATAR_BYTES = 12 * 1024;
 const WEBP_DATA_URL_PREFIX = "data:image/webp;base64,";
+const VERSION_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 function applyCommonHeaders(response) {
   response.setHeader("X-Content-Type-Options", "nosniff");
@@ -168,11 +170,16 @@ function normalizeComment(request, payload) {
   const identity = pickForestIdentity(commentIdentitySource(request, payload));
   const nickname = normalizeCustomNickname(payload.nickname);
   const avatarDataUrl = normalizeCustomAvatar(payload.avatarDataUrl);
+  const versionId = payload.versionId === undefined ? null : payload.versionId;
+  if (versionId !== null && (typeof versionId !== "string" || !VERSION_ID_PATTERN.test(versionId))) {
+    throw new AppError(422, "invalid_version", "评论对应的文件版本无效");
+  }
   return {
     ...identity,
     ...(nickname ? { nickname } : {}),
     ...(avatarDataUrl ? { avatarDataUrl } : {}),
     body,
+    ...(versionId ? { versionId } : {}),
   };
 }
 
@@ -346,12 +353,45 @@ export async function createRiveHostApp({
         if (!['GET', 'HEAD'].includes(request.method)) {
           throw new AppError(405, "method_not_allowed", "请求方法不支持");
         }
-        const file = store.getFile(match[1]);
-        if (!file) throw new AppError(404, "share_not_found", "分享不存在");
+        const versionId = url.searchParams.get("versionId");
+        if (versionId && !VERSION_ID_PATTERN.test(versionId)) {
+          throw new AppError(422, "invalid_version", "文件版本无效");
+        }
+        const share = store.get(match[1]);
+        if (!share) throw new AppError(404, "share_not_found", "分享不存在");
+        const file = store.getFile(match[1], versionId);
+        if (!file) throw new AppError(404, "version_not_found", "文件版本不存在");
         if (file.metadata.status === "archived") {
           throw new AppError(410, "share_archived", "分享已归档");
         }
         await sendFile(request, response, file);
+        return;
+      }
+
+      match = VERSIONS_PATTERN.exec(pathname);
+      if (match) {
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        const contentType = String(request.headers["content-type"] || "").split(";", 1)[0].trim().toLowerCase();
+        if (contentType !== "application/octet-stream") {
+          throw new AppError(415, "unsupported_media_type", "上传必须使用 application/octet-stream");
+        }
+        const filename = decodeFilenameHeader(request.headers["x-rive-filename"]);
+        const declaredLength = parseContentLength(request);
+        if (declaredLength !== null && declaredLength > MAX_FILE_BYTES) {
+          throw new AppError(413, "file_too_large", "Rive 文件不能超过 64 MiB");
+        }
+        await store.assertUploadAllowed(declaredLength || 0);
+
+        const staged = await stageRiveStream(request, store.tempDir);
+        try {
+          const item = await store.addVersionFromStaged(match[1], {
+            ...staged,
+            filename,
+          });
+          sendJson(response, 201, { item });
+        } finally {
+          await unlink(staged.tempPath).catch(() => {});
+        }
         return;
       }
 

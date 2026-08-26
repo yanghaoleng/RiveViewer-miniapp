@@ -16,10 +16,12 @@ import {
   parseCommentTimelineSegments,
 } from "../../lib/comment-timeline";
 import { formatBytes } from "../../lib/library";
+import { formatHostedVersionDate } from "../../lib/file-versions";
 import {
   getHostedCommentIdentity,
   type HostedComment,
   type HostedCommentIdentity,
+  type HostedFileVersion,
   type HostedShare,
 } from "../../lib/hosted-api";
 import { publicAssetUrl } from "../../lib/public-base";
@@ -156,7 +158,7 @@ export function ArchivedLibraryDialog({
 
   const copyShare = async (share: HostedShare) => {
     try {
-      await copyText(hostedShareUrl(share.code));
+      await copyText(hostedShareUrl(share.code, import.meta.env.BASE_URL));
       showCopyNotice(`链接 ${share.code} 已复制`);
     } catch {
       showCopyNotice("复制失败，请打开链接后手动复制地址");
@@ -217,7 +219,7 @@ export function ArchivedLibraryDialog({
             <div className="hosted-list">
               {archivedItems.map((share) => (
                 <article className="hosted-row" key={share.code}>
-                  <a className="hosted-open press-feedback-large" href={hostedSharePath(share.code)}>
+                  <a className="hosted-open press-feedback-large" href={hostedSharePath(share.code, import.meta.env.BASE_URL)}>
                     <span className="hosted-code">{share.code}</span>
                     <span className="hosted-copy">
                       <strong>{share.filename}</strong>
@@ -319,7 +321,7 @@ export function ShareActionsDialog({
   onDownload: () => void | Promise<void>;
   onClose: () => void;
 }) {
-  const url = useMemo(() => hostedShareUrl(share.code), [share.code]);
+  const url = useMemo(() => hostedShareUrl(share.code, import.meta.env.BASE_URL), [share.code]);
   const [notice, setNotice] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const copyButtonRef = useRef<HTMLButtonElement>(null);
@@ -480,6 +482,72 @@ export function PublishConfirmDialog({
   );
 }
 
+function CommentList({
+  comments,
+  timelines,
+  actionBusyId,
+  onArchive,
+  onRestore,
+  onSelectTimeline,
+}: {
+  comments: HostedComment[];
+  timelines: string[];
+  actionBusyId: string;
+  onArchive: (comment: HostedComment) => Promise<void>;
+  onRestore: (comment: HostedComment) => Promise<void>;
+  onSelectTimeline: (name: string) => void;
+}) {
+  return (
+    <div className="comment-list">
+      {comments.map((comment) => comment.status === "archived" ? (
+        <details className="comment-item comment-item-archived" key={comment.id}>
+          <summary>
+            <span className="comment-author">
+              <img src={commentAvatarUrl(comment)} width="32" height="32" alt="" />
+              <strong>{comment.nickname}</strong>
+            </span>
+            <span className="comment-archived-label">评论已归档</span>
+          </summary>
+          <div className="comment-archived-content">
+            <div className="comment-meta-row">
+              <time dateTime={comment.createdAt} title={formatCommentAbsoluteDate(comment.createdAt)}>
+                {formatCommentDate(comment.createdAt)}
+              </time>
+              <button type="button" disabled={Boolean(actionBusyId)} onClick={() => onRestore(comment)}>
+                {actionBusyId === comment.id ? "恢复中" : "恢复"}
+              </button>
+            </div>
+            <CommentBody body={comment.body} timelines={timelines} onSelectTimeline={onSelectTimeline} />
+          </div>
+        </details>
+      ) : (
+        <article className="comment-item" key={comment.id}>
+          <img className="comment-avatar" src={commentAvatarUrl(comment)} width="32" height="32" alt="" />
+          <div className="comment-content">
+            <header>
+              <strong className="comment-nickname">{comment.nickname}</strong>
+              <span className="comment-meta-row">
+                <time dateTime={comment.createdAt} title={formatCommentAbsoluteDate(comment.createdAt)}>
+                  {formatCommentDate(comment.createdAt)}
+                </time>
+                <button
+                  className="comment-archive-action"
+                  type="button"
+                  disabled={Boolean(actionBusyId)}
+                  onClick={() => onArchive(comment)}
+                >
+                  {actionBusyId === comment.id ? "归档中" : "归档"}
+                </button>
+              </span>
+            </header>
+            <CommentBody body={comment.body} timelines={timelines} onSelectTimeline={onSelectTimeline} />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export function ShareCommentsPanel({
   comments,
   loading,
@@ -490,11 +558,14 @@ export function ShareCommentsPanel({
   actionError,
   timelines,
   timelineInsertion,
+  versions,
+  activeVersionId,
   onRetry,
   onSubmit,
   onArchive,
   onRestore,
   onSelectTimeline,
+  onSelectVersion,
 }: {
   comments: HostedComment[];
   loading: boolean;
@@ -505,11 +576,14 @@ export function ShareCommentsPanel({
   actionError: string;
   timelines: string[];
   timelineInsertion: CommentTimelineInsertion | null;
+  versions: HostedFileVersion[];
+  activeVersionId: string;
   onRetry: () => void;
   onSubmit: (body: string, author: LocalCommentAuthor) => Promise<boolean>;
   onArchive: (comment: HostedComment) => Promise<void>;
   onRestore: (comment: HostedComment) => Promise<void>;
   onSelectTimeline: (name: string) => void;
+  onSelectVersion: (versionId: string) => void;
 }) {
   const [draftBody, setDraftBody] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
@@ -807,83 +881,48 @@ export function ShareCommentsPanel({
 
       {loading ? (
         <div className="comments-skeleton" role="status" aria-label="正在读取评论"><span /><span /></div>
-      ) : loadError ? null : comments.length ? (
-        <div className="comment-list">
-          {comments.map((comment) => comment.status === "archived" ? (
-            <details className="comment-item comment-item-archived" key={comment.id}>
-              <summary>
-                <span className="comment-author">
-                  <img
-                    src={commentAvatarUrl(comment)}
-                    width="32"
-                    height="32"
-                    alt=""
-                  />
-                  <strong>{comment.nickname}</strong>
-                </span>
-                <span className="comment-archived-label">评论已归档</span>
-              </summary>
-              <div className="comment-archived-content">
-                <div className="comment-meta-row">
-                  <time
-                    dateTime={comment.createdAt}
-                    title={formatCommentAbsoluteDate(comment.createdAt)}
-                  >
-                    {formatCommentDate(comment.createdAt)}
-                  </time>
+      ) : loadError ? null : versions.length ? (
+          <div className="comment-version-list">
+            {versions.slice().reverse().map((version) => {
+              const versionComments = comments.filter((comment) => (
+                (comment.versionId || versions[0]?.id) === version.id
+              ));
+              const active = version.id === activeVersionId;
+              return (
+                <section className={`comment-version-group ${active ? "is-active" : "is-collapsed"}`} key={version.id}>
                   <button
+                    className="comment-version-heading"
                     type="button"
-                    disabled={Boolean(actionBusyId)}
-                    onClick={() => onRestore(comment)}
+                    aria-expanded={active}
+                    onClick={() => onSelectVersion(version.id)}
                   >
-                    {actionBusyId === comment.id ? "恢复中" : "恢复"}
+                    <span><strong>{version.name}</strong><small>{formatHostedVersionDate(version.createdAt)}</small></span>
+                    <em>{versionComments.length} 条</em>
+                    <Icon name="caret-down" size={13} />
                   </button>
-                </div>
-                <CommentBody
-                  body={comment.body}
-                  timelines={timelines}
-                  onSelectTimeline={onSelectTimeline}
-                />
-              </div>
-            </details>
-          ) : (
-            <article className="comment-item" key={comment.id}>
-              <img
-                className="comment-avatar"
-                src={commentAvatarUrl(comment)}
-                width="32"
-                height="32"
-                alt=""
-              />
-              <div className="comment-content">
-                <header>
-                  <strong className="comment-nickname">{comment.nickname}</strong>
-                  <span className="comment-meta-row">
-                    <time
-                      dateTime={comment.createdAt}
-                      title={formatCommentAbsoluteDate(comment.createdAt)}
-                    >
-                      {formatCommentDate(comment.createdAt)}
-                    </time>
-                    <button
-                      className="comment-archive-action"
-                      type="button"
-                      disabled={Boolean(actionBusyId)}
-                      onClick={() => onArchive(comment)}
-                    >
-                      {actionBusyId === comment.id ? "归档中" : "归档"}
-                    </button>
-                  </span>
-                </header>
-                <CommentBody
-                  body={comment.body}
-                  timelines={timelines}
-                  onSelectTimeline={onSelectTimeline}
-                />
-              </div>
-            </article>
-          ))}
-        </div>
+                  {active && (versionComments.length ? (
+                    <CommentList
+                      comments={versionComments}
+                      timelines={timelines}
+                      actionBusyId={actionBusyId}
+                      onArchive={onArchive}
+                      onRestore={onRestore}
+                      onSelectTimeline={onSelectTimeline}
+                    />
+                  ) : <div className="comment-version-empty">这个版本还没有评论</div>)}
+                </section>
+              );
+            })}
+          </div>
+      ) : comments.length ? (
+          <CommentList
+            comments={comments}
+            timelines={timelines}
+            actionBusyId={actionBusyId}
+            onArchive={onArchive}
+            onRestore={onRestore}
+            onSelectTimeline={onSelectTimeline}
+          />
       ) : (
         <div className="comments-empty">
           <Icon name="chat-circle-dots" size={20} />

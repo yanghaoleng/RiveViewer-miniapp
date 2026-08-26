@@ -10,12 +10,14 @@ function normalizedBuildBase() {
 
 test("builds the viewer at the configured public base", async () => {
   const base = normalizedBuildBase();
+  const nginxConfig = base === "/"
+    ? "../deploy/nginx-rive-host.conf"
+    : base === "/beta/"
+      ? "../deploy/nginx-rive-host-beta.conf"
+      : "../deploy/nginx-rive-viewer.conf";
   const [html, nginx] = await Promise.all([
     readFile(new URL("../dist-static/index.html", import.meta.url), "utf8"),
-    readFile(new URL(
-      base === "/" ? "../deploy/nginx-rive-host.conf" : "../deploy/nginx-rive-viewer.conf",
-      import.meta.url,
-    ), "utf8"),
+    readFile(new URL(nginxConfig, import.meta.url), "utf8"),
   ]);
 
   assert.match(html, /<title>Rive 预览台 H5<\/title>/i);
@@ -30,6 +32,11 @@ test("builds the viewer at the configured public base", async () => {
     assert.match(nginx, /location ~ "\^\/\[0-9A-Za-z\]\{3\}\/\?\$"/);
     assert.match(nginx, /location \^~ \/samples\/\s*\{\s*return 404;/);
     assert.match(nginx, /location = \/samples\s*\{\s*return 404;/);
+  } else if (base === "/beta/") {
+    assert.match(nginx, /location = \/beta/);
+    assert.match(nginx, /\/var\/www\/rive-host-beta\/current/);
+    assert.match(nginx, /location \^~ \/beta\/assets\//);
+    assert.match(nginx, /try_files \$uri \$uri\/ \/beta\/index\.html/);
   } else {
     assert.match(nginx, /location = \/rive-viewer/);
     assert.match(nginx, /return 308 \/rive-viewer\//);
@@ -193,7 +200,7 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(styleSource, /comment-hover-caret-blink 900ms/);
   assert.match(hostedPanelsSource, /className="comment-identity-row"/);
   assert.match(appSource, /const navigateHostedShare = useCallback/);
-  assert.match(appSource, /window\.history\.pushState[\s\S]{0,500}setShareCode\(code\)/);
+  assert.match(appSource, /window\.history\.pushState[\s\S]{0,900}setShareCode\(code\)/);
   assert.doesNotMatch(appSource, /window\.location\.reload\(\)/);
   assert.match(appSource, /publicShareState !== "ready" && !activeFile/);
   assert.doesNotMatch(timelineSource, /TimelineHint/);

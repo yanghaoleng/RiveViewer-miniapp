@@ -13,6 +13,7 @@ import {
   HostedApiError,
 } from "../lib/hosted-api.ts";
 import { limitCommentNickname } from "../lib/comment-identity.ts";
+import { hostedVersions, selectedHostedVersion } from "../lib/file-versions.ts";
 import { mergeRecentHostedRecords } from "../lib/library.ts";
 import { mergeUnifiedFiles } from "../lib/unified-library.ts";
 
@@ -42,14 +43,33 @@ test("recognizes public share routes at both deployment bases", () => {
   assert.equal(shareCodeFromPath("/s/A1b", "/"), "A1b");
   assert.equal(shareCodeFromPath("/rive-viewer/7XZ", "/rive-viewer/"), "7XZ");
   assert.equal(shareCodeFromPath("/rive-viewer/s/7XZ", "/rive-viewer/"), "7XZ");
+  assert.equal(shareCodeFromPath("/beta/A1b", "/beta/"), "A1b");
   assert.equal(shareCodeFromPath("/s/too-long", "/"), null);
   assert.equal(shareCodeFromPath("/api", "/"), null);
   assert.equal(shareCodeFromPath("/API", "/"), null);
   assert.equal(shareCodeFromPath("/rive-viewer/", "/rive-viewer/"), null);
   assert.equal(hostedSharePath("A1b"), "/A1b");
+  assert.equal(hostedSharePath("A1b", "/beta/"), "/beta/A1b");
   assert.throws(() => hostedSharePath("api"), /保留码/);
   assert.throws(() => hostedSharePath("A 1"), /三位 Base62/);
   assert.equal(viewerHomePath("rive-viewer"), "/rive-viewer/");
+});
+
+test("版本目录默认选中最新版本并兼容单文件数据", () => {
+  const legacy = share("A1b", "legacy.riv", "2026-08-26T01:00:00.000Z");
+  assert.equal(hostedVersions(legacy).length, 1);
+  assert.equal(selectedHostedVersion(legacy)?.filename, "legacy.riv");
+
+  const versioned = {
+    ...legacy,
+    currentVersionId: "v2",
+    versions: [
+      { id: "v1", name: "版本 1", filename: "one.riv", size: 4, sha256: "1".repeat(64), etag: "one", createdAt: legacy.createdAt },
+      { id: "v2", name: "版本 2", filename: "two.riv", size: 8, sha256: "2".repeat(64), etag: "two", createdAt: "2026-08-26T02:00:00.000Z" },
+    ],
+  };
+  assert.equal(selectedHostedVersion(versioned)?.id, "v2");
+  assert.equal(selectedHostedVersion(versioned, "v1")?.filename, "one.riv");
 });
 
 test("keeps recently viewed hosted files deduplicated, ordered, and bounded", () => {
@@ -260,7 +280,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /PUBLISHED_CODES_STORAGE_KEY/);
   assert.doesNotMatch(appSource, /PublishConfirmDialog/);
   assert.match(appSource, /getHostedFile\(share\.code/);
-  assert.match(appSource, /expectedBytes: share\.size/);
+  assert.match(appSource, /expectedBytes: openedSize/);
   assert.match(appSource, /onProgress: \(progress\)/);
   assert.match(appSource, /setPublicShareState\("ready"\);[\s\S]{0,100}if \(!share\.isExample\)/);
   assert.match(appSource, /if \(!shareCode \|\| publicShare\?\.status !== "active"\) return/);
@@ -296,7 +316,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /if \(current\.code !== targetCode\) return current/);
   assert.equal((appSource.match(/"复制当前文件链接"/g) || []).length, 4);
   assert.match(appSource, /copyActiveHostedLink/);
-  assert.match(appSource, /copyText\(hostedShareUrl\(code\)\)/);
+  assert.match(appSource, /copyText\(hostedShareUrl\(code, import\.meta\.env\.BASE_URL\)\)/);
   assert.match(appSource, /detailCopyFeedback/);
   assert.match(appSource, /detailCopyIcon/);
   assert.match(appSource, /"check"/);
@@ -313,7 +333,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /aria-controls="archived-library-dialog"/);
   assert.match(appSource, /<ArchivedLibraryDialog/);
   assert.doesNotMatch(appSource, /<ArchivedLibrarySection/);
-  assert.match(mainSource, /const mode = import\.meta\.env\.BASE_URL === "\/" \? "hosted" : "local"/);
+  assert.match(mainSource, /\["\/", "\/beta\/"\]\.includes\(import\.meta\.env\.BASE_URL\) \? "hosted" : "local"/);
   assert.match(mainSource, /mode === "hosted"/);
   assert.match(panelSource, /已归档文件/);
   assert.match(panelSource, /复制 .*公开链接/);
@@ -326,9 +346,13 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(panelSource, /await onDownload\(\)/);
   assert.match(panelSource, /aria-label="复制公开链接"/);
   assert.match(panelSource, /className="public-download-progress"/);
+  assert.match(appSource, /createHostedVersion/);
+  assert.match(appSource, /className="file-version-menu"/);
+  assert.match(appSource, /className="file-heading-version-update press-feedback"/);
+  assert.match(panelSource, /className="comment-version-heading"/);
   assert.match(panelSource, /role={kind === "error" \? "alert" : "status"}/);
   const commentPanelSource = panelSource.slice(
-    panelSource.indexOf("export function ShareCommentsPanel"),
+    panelSource.indexOf("function CommentList"),
     panelSource.indexOf("export function PublicShareState"),
   );
   assert.equal((commentPanelSource.match(/className="comment-editor"/g) || []).length, 1);
@@ -340,12 +364,12 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(commentPanelSource, /compressCommentAvatar/);
   assert.match(commentPanelSource, /\{!draftBody && <TimelineHint \/>\}/);
   assert.doesNotMatch(commentPanelSource, /placeholder="写下评论或备注"/);
-  assert.match(commentPanelSource, /commentAvatarUrl\(comment\)/);
-  assert.match(commentPanelSource, /width="32"/);
+  assert.match(panelSource, /commentAvatarUrl\(comment\)/);
+  assert.match(panelSource, /width="32"/);
   assert.match(commentPanelSource, /评论已归档/);
   assert.match(commentPanelSource, /onArchive\(comment\)/);
   assert.match(commentPanelSource, /onRestore\(comment\)/);
-  assert.match(commentPanelSource, /loadError \? null : comments\.length/);
+  assert.match(commentPanelSource, /loadError \? null : versions\.length/);
   assert.doesNotMatch(commentPanelSource, /comments-share-card/);
   assert.equal((appSource.match(/className="public-comments-inline"/g) || []).length, 1);
   assert.match(

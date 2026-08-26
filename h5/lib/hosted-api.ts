@@ -1,5 +1,15 @@
 export type HostedShareStatus = "active" | "archived";
 
+export type HostedFileVersion = {
+  id: string;
+  name: string;
+  filename: string;
+  size: number;
+  sha256: string;
+  etag: string;
+  createdAt: string;
+};
+
 export type HostedShare = {
   code: string;
   filename: string;
@@ -11,6 +21,9 @@ export type HostedShare = {
   createdAt: string;
   archivedAt: string | null;
   commentCount: number;
+  versionCount?: number;
+  currentVersionId?: string;
+  versions?: HostedFileVersion[];
 };
 
 export type HostedComment = {
@@ -22,6 +35,7 @@ export type HostedComment = {
   createdAt: string;
   status: HostedShareStatus;
   archivedAt: string | null;
+  versionId?: string;
 };
 
 export type HostedCommentIdentity = Pick<HostedComment, "nickname" | "avatar">;
@@ -42,6 +56,7 @@ type HostedFileDownloadOptions = {
   signal?: AbortSignal;
   expectedBytes?: number;
   onProgress?: (percent: number) => void;
+  versionId?: string;
 };
 
 export class HostedApiError extends Error {
@@ -130,6 +145,32 @@ export async function createHostedShare(
   onProgress?: (percent: number) => void,
   signal?: AbortSignal,
 ): Promise<HostedShare> {
+  return uploadHostedBinary("/shares", data, filename, onProgress, signal);
+}
+
+export async function createHostedVersion(
+  code: string,
+  data: ArrayBuffer,
+  filename: string,
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<HostedShare> {
+  return uploadHostedBinary(
+    `/shares/${encodeURIComponent(code)}/versions`,
+    data,
+    filename,
+    onProgress,
+    signal,
+  );
+}
+
+function uploadHostedBinary(
+  path: string,
+  data: ArrayBuffer,
+  filename: string,
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<HostedShare> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     const abort = () => request.abort();
@@ -140,7 +181,7 @@ export async function createHostedShare(
       return;
     }
 
-    request.open("POST", `${API_ROOT}/shares`);
+    request.open("POST", `${API_ROOT}${path}`);
     request.timeout = 120_000;
     request.responseType = "json";
     request.setRequestHeader("Accept", "application/json");
@@ -189,8 +230,9 @@ export async function getHostedShare(code: string, signal?: AbortSignal): Promis
   return payload.item;
 }
 
-export function hostedFileUrl(code: string): string {
-  return `${API_ROOT}/shares/${encodeURIComponent(code)}/file`;
+export function hostedFileUrl(code: string, versionId?: string): string {
+  const base = `${API_ROOT}/shares/${encodeURIComponent(code)}/file`;
+  return versionId ? `${base}?versionId=${encodeURIComponent(versionId)}` : base;
 }
 
 function readChunkWithTimeout(
@@ -214,7 +256,7 @@ export async function getHostedFile(
 ): Promise<ArrayBuffer> {
   let response: Response;
   try {
-    response = await fetchResponse(hostedFileUrl(code), { signal: options.signal });
+    response = await fetchResponse(hostedFileUrl(code, options.versionId), { signal: options.signal });
   } catch (downloadError) {
     if (options.signal?.aborted || downloadError instanceof HostedApiError) throw downloadError;
     throw new HostedApiError("连接服务器失败，请检查网络后重试", 0, "download_network_error");
@@ -303,7 +345,7 @@ export async function getHostedCommentIdentity(
 
 export async function createHostedComment(
   code: string,
-  input: { visitorId: string; body: string } & HostedCommentAuthorInput,
+  input: { visitorId: string; body: string; versionId?: string } & HostedCommentAuthorInput,
   signal?: AbortSignal,
 ): Promise<HostedComment> {
   const payload = await requestJson<ItemEnvelope<HostedComment>>(

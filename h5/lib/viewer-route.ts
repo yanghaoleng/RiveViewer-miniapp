@@ -30,13 +30,13 @@ export function shareCodeFromPath(pathname: string, basePath = "/"): string | nu
   return codeFromCandidate(`/${pathname.slice(normalizedBase.length)}`);
 }
 
-export function hostedSharePath(code: string): string {
+export function hostedSharePath(code: string, basePath = "/"): string {
   if (!isHostedShareCode(code)) throw new Error("分享码必须是三位 Base62 且不能使用保留码");
-  return `/${code}`;
+  return `${normalizeBasePath(basePath)}${code}`;
 }
 
-export function hostedShareUrl(code: string): string {
-  const path = hostedSharePath(code);
+export function hostedShareUrl(code: string, basePath = "/"): string {
+  const path = hostedSharePath(code, basePath);
   if (typeof window === "undefined") return path;
   return new URL(path, window.location.origin).toString();
 }

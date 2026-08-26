@@ -109,6 +109,18 @@ async function upload(port, filename, bytes, extraHeaders = {}) {
   });
 }
 
+async function uploadVersion(port, code, filename, bytes) {
+  return call(port, {
+    method: "POST",
+    pathname: `/api/v1/shares/${code}/versions`,
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-Rive-Filename": encodeURIComponent(filename),
+    },
+    body: bytes,
+  });
+}
+
 async function withTempDir(run) {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "rive-host-test-"));
   try {
@@ -385,6 +397,80 @@ test("keeps one browser visitor on the same forest nickname and avatar", async (
   });
 });
 
+test("keeps file versions on one share and binds comments to the selected version", async () => {
+  await withTempDir(async (dataDir) => {
+    const timestamps = [
+      "2026-08-26T01:00:00.000Z",
+      "2026-08-26T01:01:00.000Z",
+      "2026-08-26T01:02:00.000Z",
+      "2026-08-26T01:03:00.000Z",
+    ];
+    let instance = await listenApp(dataDir, {
+      codeGenerator: sequenceGenerator(["V01"]),
+      now: () => timestamps.shift() || "2026-08-26T02:00:00.000Z",
+    });
+
+    const firstBytes = makeRive("version-one");
+    let response = await upload(instance.port, "demo-v1.riv", firstBytes);
+    assert.equal(response.status, 201);
+    response = await call(instance.port, { pathname: "/api/v1/shares/V01" });
+    assert.equal(response.json.item.versionCount, 1);
+    assert.equal(response.json.item.versions[0].name, "版本 1");
+    const firstVersionId = response.json.item.currentVersionId;
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares/V01/comments",
+      headers: { "Content-Type": "application/json" },
+      body: { body: "旧版本评论", versionId: firstVersionId },
+    });
+    assert.equal(response.status, 201);
+    assert.equal(response.json.item.versionId, firstVersionId);
+
+    const secondBytes = makeRive("version-two");
+    response = await uploadVersion(instance.port, "V01", "demo-v2.riv", secondBytes);
+    assert.equal(response.status, 201);
+    assert.equal(response.json.item.versionCount, 2);
+    assert.equal(response.json.item.filename, "demo-v2.riv");
+    assert.deepEqual(response.json.item.versions.map((item) => item.name), ["版本 1", "版本 2"]);
+    const secondVersionId = response.json.item.currentVersionId;
+    assert.notEqual(secondVersionId, firstVersionId);
+
+    response = await call(instance.port, { pathname: "/api/v1/shares/V01/file" });
+    assert.deepEqual(response.body, secondBytes);
+    response = await call(instance.port, {
+      pathname: `/api/v1/shares/V01/file?versionId=${firstVersionId}`,
+    });
+    assert.deepEqual(response.body, firstBytes);
+    response = await call(instance.port, {
+      pathname: "/api/v1/shares/V01/file?versionId=00000000-0000-0000-0000-000000000000",
+    });
+    assert.equal(response.status, 404);
+    assert.equal(response.json.error.code, "version_not_found");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares/V01/comments",
+      headers: { "Content-Type": "application/json" },
+      body: { body: "新版本评论", versionId: secondVersionId },
+    });
+    assert.equal(response.status, 201);
+    response = await call(instance.port, { pathname: "/api/v1/shares/V01/comments" });
+    assert.deepEqual(response.json.items.map((item) => item.versionId), [
+      firstVersionId,
+      secondVersionId,
+    ]);
+
+    await instance.close();
+    instance = await listenApp(dataDir);
+    response = await call(instance.port, { pathname: "/api/v1/shares/V01" });
+    assert.equal(response.json.item.versionCount, 2);
+    assert.equal(response.json.item.currentVersionId, secondVersionId);
+    assert.equal((await readdir(path.join(dataDir, "files"))).length, 2);
+    await instance.close();
+  });
+});
+
 test("archives and restores comments without deleting or reordering them", async () => {
   await withTempDir(async (dataDir) => {
     const timestamps = [
@@ -529,10 +615,13 @@ test("migrates legacy comments without status fields as active", async () => {
 
     const statePath = path.join(dataDir, "state.json");
     const legacyState = JSON.parse(await readFile(statePath, "utf8"));
+    delete legacyState.shares[0].versions;
+    delete legacyState.shares[0].currentVersionId;
     legacyState.shares[0].comments[0].nickname = "匿名";
     delete legacyState.shares[0].comments[0].avatar;
     delete legacyState.shares[0].comments[0].status;
     delete legacyState.shares[0].comments[0].archivedAt;
+    delete legacyState.shares[0].comments[0].versionId;
     await writeFile(statePath, `${JSON.stringify(legacyState, null, 2)}\n`);
 
     instance = await listenApp(dataDir);
@@ -548,6 +637,12 @@ test("migrates legacy comments without status fields as active", async () => {
     assert.equal(migratedState.shares[0].comments[0].status, "active");
     assert.equal(migratedState.shares[0].comments[0].archivedAt, null);
     assert.equal(typeof migratedState.shares[0].comments[0].avatar, "string");
+    assert.equal(migratedState.shares[0].versions.length, 1);
+    assert.equal(migratedState.shares[0].versions[0].name, "版本 1");
+    assert.equal(
+      migratedState.shares[0].comments[0].versionId,
+      migratedState.shares[0].currentVersionId,
+    );
     await instance.close();
   });
 });
