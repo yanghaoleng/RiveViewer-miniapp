@@ -233,7 +233,7 @@ export function RiveViewerApp({
   shareCode: string | null;
 }) {
   const isHostedPlatform = mode === "hosted";
-  const isBetaVersioning = isHostedPlatform && import.meta.env.BASE_URL === "/beta/";
+  const hostedVersioningEnabled = isHostedPlatform;
   const [shareCode, setShareCode] = useState(initialShareCode);
   const [preservePublicActivity, setPreservePublicActivity] = useState(
     () => hasRailActivityMarker(initialShareCode),
@@ -461,8 +461,8 @@ export function RiveViewerApp({
     setHostedLibrary((current) => ({ ...current, loading: true, error: "" }));
     try {
       const [activeItems, archivedItems] = await Promise.all([
-        listHostedShares("active", undefined, isBetaVersioning ? ["rive", "lottie", "pag"] : undefined),
-        listHostedShares("archived", undefined, isBetaVersioning ? ["rive", "lottie", "pag"] : undefined),
+        listHostedShares("active", undefined, hostedVersioningEnabled ? ["rive", "lottie", "pag"] : undefined),
+        listHostedShares("archived", undefined, hostedVersioningEnabled ? ["rive", "lottie", "pag"] : undefined),
       ]);
       if (requestId === hostedLibraryRequestRef.current) {
         setHostedLibrary({ activeItems, archivedItems, loading: false, error: "" });
@@ -475,7 +475,7 @@ export function RiveViewerApp({
         error: errorMessage(hostedError, "托管文件读取失败"),
       }));
     }
-  }, [isBetaVersioning, isHostedPlatform]);
+  }, [hostedVersioningEnabled, isHostedPlatform]);
 
   useEffect(() => {
     if (!isHostedPlatform) return;
@@ -503,7 +503,7 @@ export function RiveViewerApp({
       try {
         const share = await getHostedShare(shareCode, controller.signal);
         if (sessionId !== openRequestRef.current) return;
-        const selectedVersion = isBetaVersioning
+        const selectedVersion = hostedVersioningEnabled
           ? selectedHostedVersion(share, selectedVersionIdRef.current)
           : null;
         if (selectedVersion) {
@@ -595,7 +595,7 @@ export function RiveViewerApp({
         activeSourceRef.current = null;
       }
     };
-  }, [isBetaVersioning, preservePublicActivity, publicShareReload, refreshLibrary, runtimeEventLog, shareCode, telemetry]);
+  }, [hostedVersioningEnabled, preservePublicActivity, publicShareReload, refreshLibrary, runtimeEventLog, shareCode, telemetry]);
 
   useEffect(() => {
     if (!shareCode || publicShare?.status !== "active") return;
@@ -838,12 +838,12 @@ export function RiveViewerApp({
       || ""
     : "";
   const activeHostedVersions = useMemo(
-    () => isBetaVersioning ? hostedVersions(publicShare) : [],
-    [isBetaVersioning, publicShare],
+    () => hostedVersioningEnabled ? hostedVersions(publicShare) : [],
+    [hostedVersioningEnabled, publicShare],
   );
   const activeHostedVersion = useMemo(
-    () => isBetaVersioning ? selectedHostedVersion(publicShare, selectedVersionId) : null,
-    [isBetaVersioning, publicShare, selectedVersionId],
+    () => hostedVersioningEnabled ? selectedHostedVersion(publicShare, selectedVersionId) : null,
+    [hostedVersioningEnabled, publicShare, selectedVersionId],
   );
   const activeDetailCopyStatus = detailCopyFeedback?.code === activeHostedCode
     ? detailCopyFeedback.status
@@ -877,7 +877,7 @@ export function RiveViewerApp({
   }, [activeHostedCode]);
 
   const selectHostedVersion = useCallback((versionId: string) => {
-    if (!isBetaVersioning || versionId === selectedVersionIdRef.current) {
+    if (!hostedVersioningEnabled || versionId === selectedVersionIdRef.current) {
       setVersionMenuOpen(false);
       return;
     }
@@ -887,13 +887,13 @@ export function RiveViewerApp({
     setVersionMenuOpen(false);
     setVersionUploadError("");
     setPublicShareReload((current) => current + 1);
-  }, [isBetaVersioning, publicShare]);
+  }, [hostedVersioningEnabled, publicShare]);
 
   const updateHostedVersion = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
     input.value = "";
-    if (!file || !isBetaVersioning || !activeHostedCode || versionUploading) return;
+    if (!file || !hostedVersioningEnabled || !activeHostedCode || versionUploading) return;
     let format: AnimationFormat;
     try {
       format = validateAnimationFile(file);
@@ -929,7 +929,7 @@ export function RiveViewerApp({
     } finally {
       setVersionUploading(false);
     }
-  }, [activeHostedCode, isBetaVersioning, publicShare?.format, refreshHostedLibrary, versionUploading]);
+  }, [activeHostedCode, hostedVersioningEnabled, publicShare?.format, refreshHostedLibrary, versionUploading]);
   const coverUrls = useMemo(() => new Map(
     [...files, ...(activeFile?.file.cover ? [activeFile.file] : [])]
       .filter((file, index, values) => file.cover && values.findIndex((item) => item.id === file.id) === index)
@@ -1360,7 +1360,7 @@ export function RiveViewerApp({
       const comment = await createHostedComment(targetCode, {
         visitorId: getCommentVisitorId(),
         body,
-        ...(isBetaVersioning && selectedVersionIdRef.current
+        ...(hostedVersioningEnabled && selectedVersionIdRef.current
           ? { versionId: selectedVersionIdRef.current }
           : {}),
         ...author,
@@ -1400,7 +1400,7 @@ export function RiveViewerApp({
       commentSubmitBusyRef.current = false;
       setCommentSubmitting(false);
     }
-  }, [isBetaVersioning, publicShare, refreshLibrary, shareCode]);
+  }, [hostedVersioningEnabled, publicShare, refreshLibrary, shareCode]);
 
   const changeCommentStatus = useCallback(async (
     comment: HostedComment,
@@ -1610,9 +1610,13 @@ export function RiveViewerApp({
   const applyStageHeight = useCallback((height: number) => {
     const stage = stageRef.current;
     if (!stage) return;
+    const keepSourceAspect = activeFile?.file.format === "rive"
+      && fitRef.current === "contain"
+      && metadata.width > 0
+      && metadata.height > 0;
     if (window.innerWidth >= WIDE_LAYOUT_MIN_WIDTH) {
       stage.style.setProperty("--manual-stage-height", `${height}px`);
-      if (fitRef.current === "contain" && metadata.width > 0 && metadata.height > 0) {
+      if (keepSourceAspect) {
         stage.style.width = `min(100%, ${Math.round(height * (metadata.width / metadata.height))}px)`;
         stage.style.height = "";
         return;
@@ -1621,14 +1625,14 @@ export function RiveViewerApp({
       stage.style.height = `${height}px`;
       return;
     }
-    if (fitRef.current === "contain" && metadata.width > 0 && metadata.height > 0) {
+    if (keepSourceAspect) {
       stage.style.width = `min(100%, ${Math.round(height * (metadata.width / metadata.height))}px)`;
       stage.style.height = "";
       return;
     }
     stage.style.width = "100%";
     stage.style.height = `${height}px`;
-  }, [metadata.height, metadata.width]);
+  }, [activeFile?.file.format, metadata.height, metadata.width]);
 
   const beginStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest(".stage-resizer-mode")) return;
@@ -1863,6 +1867,7 @@ export function RiveViewerApp({
 
   const remainingArtboards = Math.max(0, metadata.artboardCount - metadata.artboardNames.length);
   const hasStageAspect = metadata.width > 0 && metadata.height > 0;
+  const stageKeepsSourceAspect = activeFile?.file.format === "rive" && fit === "contain" && hasStageAspect;
   const stageAspect = hasStageAspect ? metadata.width / metadata.height : 1;
   const stageSizingHeight = !stageHeightCustomized
     && typeof window !== "undefined"
@@ -1870,7 +1875,7 @@ export function RiveViewerApp({
     ? maximumStageHeight()
     : stageHeight;
   const stageStyle = {
-    ...(fit === "contain" && hasStageAspect ? {
+    ...(stageKeepsSourceAspect ? {
         width: `min(100%, ${Math.round(stageSizingHeight * stageAspect)}px)`,
         aspectRatio: `${metadata.width} / ${metadata.height}`,
       }
@@ -1957,7 +1962,7 @@ export function RiveViewerApp({
         disabled={uploadBusy}
         onChange={importFiles}
       />
-      {isBetaVersioning && (
+      {hostedVersioningEnabled && (
         <input
           ref={versionInputRef}
           className="sr-only"
@@ -1988,7 +1993,7 @@ export function RiveViewerApp({
             </button>
             <Brand label="Rive 预览台" />
             <div className="topbar-actions preview-actions">
-              {isBetaVersioning && activeHostedCode && (
+              {hostedVersioningEnabled && activeHostedCode && (
                 <button
                   className="topbar-action topbar-version-update press-feedback"
                   type="button"
@@ -2135,7 +2140,7 @@ export function RiveViewerApp({
               }}
             >
               <h1>
-                {isBetaVersioning && activeHostedVersions.length > 1 ? (
+                {hostedVersioningEnabled && activeHostedVersions.length > 1 ? (
                   <button
                     className="file-version-trigger"
                     type="button"
@@ -2148,7 +2153,7 @@ export function RiveViewerApp({
                   </button>
                 ) : activeFile.file.name}
               </h1>
-              {isBetaVersioning && versionMenuOpen && activeHostedVersions.length > 1 && (
+              {hostedVersioningEnabled && versionMenuOpen && activeHostedVersions.length > 1 && (
                 <div className="file-version-menu" role="listbox" aria-label="文件版本">
                   {activeHostedVersions.slice().reverse().map((version) => (
                     <button
@@ -2168,7 +2173,7 @@ export function RiveViewerApp({
             </div>
             <div className="file-heading-meta">
               <span>{formatBytes(activeFile.file.size)}</span>
-              {isBetaVersioning && activeHostedVersion && (
+              {hostedVersioningEnabled && activeHostedVersion && (
                 <span>{activeHostedVersion.name} · {formatHostedVersionDate(activeHostedVersion.createdAt)}</span>
               )}
               {metadata.width > 0 && <span>{Math.round(metadata.width)} × {Math.round(metadata.height)}</span>}
@@ -2180,7 +2185,7 @@ export function RiveViewerApp({
             {versionUploadError && <div className="version-upload-error" role="alert">{versionUploadError}</div>}
           </div>
           <div className="file-heading-actions">
-            {isBetaVersioning && activeHostedCode && (
+            {hostedVersioningEnabled && activeHostedCode && (
               <button
                 className="file-heading-version-update press-feedback"
                 type="button"
@@ -2223,7 +2228,7 @@ export function RiveViewerApp({
           <div className={`preview-main-column ${stageHeightCustomized ? "is-stage-height-customized" : ""}`}>
             <div
               ref={stageRef}
-              className={`canvas-card tone-${canvasTone} ${fit === "contain" && hasStageAspect ? "is-proportional" : ""}`}
+              className={`canvas-card tone-${canvasTone} ${stageKeepsSourceAspect ? "is-proportional" : ""}`}
               style={stageStyle}
             >
               <canvas

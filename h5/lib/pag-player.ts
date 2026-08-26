@@ -51,6 +51,7 @@ export class WebPagPlayer {
     const view = await this.runtime.PAGView.init(this.file, this.canvas, { useScale: true, firstFrame: true });
     if (!view) throw new Error("PAG 画布初始化失败");
     this.view = view;
+    this.resize(this.cssWidth, this.cssHeight);
     view.setRepeatCount(0);
     this.applyFit();
     this.updateListener = () => this.reportFrame();

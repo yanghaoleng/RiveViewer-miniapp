@@ -51,7 +51,7 @@ test("splits Rive, Lottie, and PAG runtimes from the initial application chunk",
   const riveChunk = assetNames.find((name) => /^rive-player-.*\.js$/.test(name));
   const canvasRuntimeChunk = assetNames.find((name) => /^canvas_advanced-.*\.js$/.test(name));
   const webglRuntimeChunk = assetNames.find((name) => /^webgl2_advanced-.*\.js$/.test(name));
-  const lottieChunk = assetNames.find((name) => /^lottie_light_canvas-.*\.js$/.test(name));
+  const lottieChunk = assetNames.find((name) => /^lottie_canvas-.*\.js$/.test(name));
   const pagChunk = assetNames.find((name) => /^pag-player-.*\.js$/.test(name));
   const pagWasm = assetNames.find((name) => /^libpag-.*\.wasm$/.test(name));
 
@@ -133,10 +133,12 @@ test("defaults to WebGL2, exposes the engine selector last, and keeps automatic 
 });
 
 test("batches stage resizing and delays backing-canvas allocation", async () => {
-  const appSource = await readFile(
-    new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url),
-    "utf8",
-  );
+  const [appSource, lottieSource, pagSource, styleSource] = await Promise.all([
+    readFile(new URL("../app/rive-viewer/RiveViewerApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/lottie-player.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/pag-player.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
   const moveBody = appSource.slice(
     appSource.indexOf("const moveStageResize"),
     appSource.indexOf("const endStageResize"),
@@ -148,6 +150,14 @@ test("batches stage resizing and delays backing-canvas allocation", async () => 
     appSource,
     /if \(draggingStageRef\.current \|\| draggingInspectorRef\.current\)[\s\S]{0,180}pendingPlayerSizeRef/,
   );
+  assert.match(appSource, /stageKeepsSourceAspect = activeFile\?\.file\.format === "rive"/);
+  assert.match(appSource, /keepSourceAspect = activeFile\?\.file\.format === "rive"[\s\S]{0,180}fitRef\.current === "contain"/);
+  assert.match(appSource, /className=\{`canvas-card[\s\S]{0,100}stageKeepsSourceAspect/);
+  assert.match(lottieSource, /lottie-web\/build\/player\/lottie_canvas/);
+  assert.match(lottieSource, /progressiveLoad:\s*false/);
+  assert.doesNotMatch(lottieSource, /lottie_light_canvas/);
+  assert.match(pagSource, /this\.view = view;\s*this\.resize\(this\.cssWidth, this\.cssHeight\);/);
+  assert.match(styleSource, /\.canvas-card canvas\s*\{[\s\S]{0,100}width:\s*100% !important;[\s\S]{0,100}height:\s*100% !important;/);
 });
 
 test("uses a resizable inspector from iPad Pro landscape width", async () => {

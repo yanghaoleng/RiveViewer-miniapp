@@ -54,11 +54,11 @@ export class WebLottiePlayer {
 
   async load(source: ArrayBuffer): Promise<RiveMetadata> {
     const document = parseLottie(source);
-    const module = await import("lottie-web/build/player/lottie_light_canvas");
+    const module = await import("lottie-web/build/player/lottie_canvas");
     const lottie = module.default;
     this.document = document;
     this.container.replaceChildren();
-    this.animation = lottie.loadAnimation({
+    const animation = lottie.loadAnimation({
       container: this.container,
       renderer: "canvas",
       loop: true,
@@ -66,11 +66,12 @@ export class WebLottiePlayer {
       animationData: document,
       rendererSettings: {
         clearCanvas: true,
-        progressiveLoad: true,
+        progressiveLoad: false,
         preserveAspectRatio: "xMidYMid meet",
       },
     });
-    this.removeEnterFrame = this.animation.addEventListener("enterFrame", (event: BMEnterFrameEvent) => {
+    this.animation = animation;
+    this.removeEnterFrame = animation.addEventListener("enterFrame", (event: BMEnterFrameEvent) => {
       const now = performance.now();
       const duration = Math.max(0, this.animation?.getDuration() || 0);
       const time = Math.max(0, event.currentTime / Math.max(1, document.fr));
@@ -110,7 +111,7 @@ export class WebLottiePlayer {
     return [];
   }
 
-  resize(width: number, height: number): void { this.animation?.resize(width, height); }
+  resize(): void { this.animation?.resize(); }
   setFit(fit: "contain" | "cover"): void {
     this.fit = fit;
     if (this.animation?.renderer?.renderConfig) {

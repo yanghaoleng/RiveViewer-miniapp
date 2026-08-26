@@ -368,6 +368,9 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /className="file-version-menu"/);
   assert.match(appSource, /className="file-heading-version-update press-feedback"/);
   assert.match(appSource, /"上传新版本"/);
+  assert.match(appSource, /const hostedVersioningEnabled = isHostedPlatform;/);
+  assert.match(appSource, /listHostedShares\("active", undefined, hostedVersioningEnabled \? \["rive", "lottie", "pag"\]/);
+  assert.doesNotMatch(appSource, /isBetaVersioning/);
   assert.match(appSource, /subtleSelected selected=\{quality === 1\}/);
   assert.match(panelSource, /className="comment-version-heading"/);
   assert.match(panelSource, /loadError \? null : versions\.length > 1/);
