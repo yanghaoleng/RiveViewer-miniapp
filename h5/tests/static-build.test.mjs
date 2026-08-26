@@ -15,15 +15,17 @@ test("builds the viewer at the configured public base", async () => {
     : base === "/beta/"
       ? "../deploy/nginx-rive-host-beta.conf"
       : "../deploy/nginx-rive-viewer.conf";
-  const [html, nginx] = await Promise.all([
+  const [html, nginx, hostedNginx] = await Promise.all([
     readFile(new URL("../dist-static/index.html", import.meta.url), "utf8"),
     readFile(new URL(nginxConfig, import.meta.url), "utf8"),
+    readFile(new URL("../deploy/nginx-rive-host.conf", import.meta.url), "utf8"),
   ]);
 
   assert.match(html, /<title>Rive 预览台 H5<\/title>/i);
   const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   assert.match(html, new RegExp(`${escapedBase}assets/index-[^"']+\\.js`));
   assert.match(html, /<div id="root"><\/div>/);
+  assert.match(hostedNginx, /POST:\/api\/v1\/shares\(\?:\/\[0-9A-Za-z\]\{3\}\/versions\)\?\$/);
   if (base === "/") {
     assert.match(nginx, /server_name rive\.mikeywa\.site/);
     assert.match(nginx, /location \^~ \/api\//);
