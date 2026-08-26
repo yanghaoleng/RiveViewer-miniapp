@@ -7,8 +7,6 @@ const {
 const {
   describeFileActionError,
   isCancelError,
-  isDesktopWechat,
-  savePreparedFileToDisk,
   sharePreparedFile
 } = require('../../utils/file-actions')
 const {
@@ -19,6 +17,10 @@ const {
   TIMELINE_SHARE_IMAGE,
   TIMELINE_QUERY
 } = require('../../utils/share')
+const {
+  getWindowInfo,
+  supportsDesktopSplit
+} = require('../../utils/desktop-split')
 
 const WEB_VIEW_URL = 'https://mikeywa.site/rive-viewer/'
 
@@ -28,7 +30,26 @@ Page({
     importing: false,
     userFileCount: 0,
     expandedFileId: '',
-    saveTargetLabel: isDesktopWechat() ? '保存到电脑' : '保存到手机'
+    desktopSplitEnabled: false,
+    desktopPreviewFileId: ''
+  },
+
+  onLoad(options = {}) {
+    const windowInfo = getWindowInfo()
+    const desktopSplitEnabled = supportsDesktopSplit(windowInfo)
+    const requestedPreviewId = decodeURIComponent(options.preview || '')
+    const desktopPreviewFileId = desktopSplitEnabled
+      && requestedPreviewId
+      && getFileById(requestedPreviewId)
+      ? requestedPreviewId
+      : ''
+    this.setData({ desktopSplitEnabled, desktopPreviewFileId })
+    this.desktopWindowResizeHandler = (result) => {
+      this.updateDesktopSplit(result?.size || getWindowInfo())
+    }
+    if (typeof wx.onWindowResize === 'function') {
+      wx.onWindowResize(this.desktopWindowResizeHandler)
+    }
   },
 
   onReady() {
@@ -43,6 +64,10 @@ Page({
   onUnload() {
     clearTimeout(this.rivePrewarmTimer)
     this.rivePrewarmTimer = 0
+    if (this.desktopWindowResizeHandler && typeof wx.offWindowResize === 'function') {
+      wx.offWindowResize(this.desktopWindowResizeHandler)
+    }
+    this.desktopWindowResizeHandler = null
   },
 
   onShareAppMessage: function () {
@@ -63,7 +88,26 @@ Page({
 
   onShow() {
     enableShareMenu()
+    this.updateDesktopSplit(getWindowInfo())
     this.refreshFiles()
+  },
+
+  updateDesktopSplit(windowInfo) {
+    const desktopSplitEnabled = supportsDesktopSplit(windowInfo)
+    if (desktopSplitEnabled === this.data.desktopSplitEnabled) return
+    const activeFileId = this.data.desktopPreviewFileId
+    if (desktopSplitEnabled || !activeFileId) {
+      this.setData({ desktopSplitEnabled })
+      return
+    }
+    this.setData({
+      desktopSplitEnabled: false,
+      desktopPreviewFileId: ''
+    }, () => {
+      wx.navigateTo({
+        url: `/pages/preview/index?id=${encodeURIComponent(activeFileId)}`
+      })
+    })
   },
 
   startRivePrewarm() {
@@ -80,9 +124,13 @@ Page({
 
   refreshFiles() {
     const files = getAllFiles()
+    const desktopPreviewFileId = this.data.desktopPreviewFileId
+    const activeFileExists = !desktopPreviewFileId
+      || files.some((file) => file.id === desktopPreviewFileId)
     this.setData({
       files,
-      userFileCount: files.filter((file) => !file.builtin).length
+      userFileCount: files.filter((file) => !file.builtin).length,
+      desktopPreviewFileId: activeFileExists ? desktopPreviewFileId : ''
     })
   },
 
@@ -216,6 +264,10 @@ Page({
   openWithCoverTransition(file, index) {
     if (this.transitioningFileId) return
     this.startRivePrewarm()
+    if (this.data.desktopSplitEnabled) {
+      this.openDesktopPreview(file.id)
+      return
+    }
     this.transitioningFileId = file.id
     wx.createSelectorQuery()
       .selectAll('.file-cover')
@@ -259,9 +311,33 @@ Page({
 
   openById(id) {
     this.startRivePrewarm()
+    if (this.data.desktopSplitEnabled) {
+      this.openDesktopPreview(id)
+      return
+    }
     wx.navigateTo({
       url: `/pages/preview/index?id=${encodeURIComponent(id)}`
     })
+  },
+
+  openDesktopPreview(fileId) {
+    if (!fileId) return
+    this.transitioningFileId = ''
+    getApp().globalData.pendingPreviewTransition = null
+    this.setData({
+      expandedFileId: '',
+      desktopPreviewFileId: fileId
+    })
+  },
+
+  closeDesktopPreview() {
+    this.setData({ desktopPreviewFileId: '' })
+  },
+
+  selectDesktopPreviewFile(event) {
+    const fileId = event.detail?.fileId
+    if (!fileId || fileId === this.data.desktopPreviewFileId) return
+    this.setData({ desktopPreviewFileId: fileId })
   },
 
   showAuthorWechat() {
@@ -281,27 +357,6 @@ Page({
       content: describeFileActionError(error, '请稍后重试'),
       showCancel: false,
       confirmText: '知道了'
-    })
-  },
-
-  saveToDevice(event) {
-    const id = event.currentTarget.dataset.id
-    this.setData({ expandedFileId: '' })
-    if (isDesktopWechat()) {
-      savePreparedFileToDisk(id, {
-        success: () => wx.showToast({ title: '已保存到电脑', icon: 'success' }),
-        fail: (error) => this.showFileActionError('保存失败', error)
-      })
-      return
-    }
-    wx.showModal({
-      title: '保存到手机',
-      content: '微信暂不允许小程序把 .riv 直接写入系统文件管理器。请发送到“文件传输助手”，再从聊天文件中保存或用其他应用打开。',
-      confirmText: '去发送',
-      cancelText: '取消',
-      success: ({ confirm }) => {
-        if (confirm) this.shareFileById(id)
-      }
     })
   },
 
@@ -334,6 +389,9 @@ Page({
         if (!result.confirm) return
         try {
           await removeFile(id)
+          if (id === this.data.desktopPreviewFileId) {
+            this.setData({ desktopPreviewFileId: '' })
+          }
           this.refreshFiles()
           wx.showToast({ title: '已删除', icon: 'success' })
         } catch (error) {

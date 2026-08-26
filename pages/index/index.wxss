@@ -4,6 +4,59 @@ page {
   flex-direction: column;
 }
 
+.desktop-workspace {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: #0b0f14;
+}
+
+.desktop-home-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.desktop-home-content {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  transform-origin: left top;
+}
+
+.desktop-preview-pane {
+  width: 50%;
+  min-width: 0;
+  height: 100%;
+  flex: none;
+  overflow: hidden;
+  background: #0b0f14;
+}
+
+.desktop-workspace.is-split.has-preview .desktop-home-pane {
+  width: 50%;
+  flex: none;
+}
+
+.desktop-workspace.is-split.has-preview .desktop-home-content {
+  width: 200%;
+  height: 200%;
+  flex: none;
+  transform: scale(.5);
+}
+
+.desktop-workspace.is-split.has-preview .page-scroll {
+  width: 100%;
+  height: 100%;
+  flex: none;
+}
+
 .page-scroll {
   min-height: 0;
   flex: 1;
@@ -26,13 +79,21 @@ page {
   background: #0f151e;
   border: 2rpx dashed #354355;
   border-radius: 24rpx;
-  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+  transform-origin: center;
+  transition:
+    transform 280ms cubic-bezier(.34, 1.56, .64, 1),
+    border-color 120ms ease,
+    background-color 120ms ease;
 }
 
-.import-dropzone:active {
+.import-dropzone.is-pressed {
+  position: relative;
+  z-index: 5;
   background: #151e29;
   border-color: #f2c94c;
-  transform: scale(0.99);
+  transform: scale(1.025);
+  transition-duration: 70ms, 120ms, 120ms;
+  transition-timing-function: cubic-bezier(.2, .9, .3, 1), ease, ease;
 }
 
 .import-dropzone__mark {
@@ -114,13 +175,11 @@ page {
   background: #1a2330;
   border: 1rpx solid #2c3949;
   border-radius: 12rpx;
-  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
-}
-
-.web-link-footer__copy--pressed {
-  background: #252719;
-  border-color: #f2c94c;
-  transform: scale(0.96);
+  transform-origin: center;
+  transition:
+    transform 280ms cubic-bezier(.34, 1.56, .64, 1),
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .web-link-footer__copy-icon {
@@ -135,10 +194,12 @@ page {
   font-size: 24rpx;
   line-height: 1.4;
   text-align: center;
-}
-
-.author-contact:active {
-  color: #96a2b2;
+  transform-origin: center;
+  transition:
+    transform 280ms cubic-bezier(.34, 1.56, .64, 1),
+    color 120ms ease,
+    background-color 120ms ease;
+  border-radius: 12rpx;
 }
 
 .section-heading {
@@ -193,8 +254,12 @@ page {
 }
 
 .file-row--pressed {
+  position: relative;
+  z-index: 5;
   background: #18212d;
-  transform: scale(0.995);
+  transform: scale(1.025);
+  transition-duration: 70ms, 120ms;
+  transition-timing-function: cubic-bezier(.2, .9, .3, 1), ease;
 }
 
 .file-open {
@@ -209,6 +274,10 @@ page {
   color: inherit;
   text-align: left;
   background: transparent;
+  transform-origin: center;
+  transition:
+    transform 280ms cubic-bezier(.34, 1.56, .64, 1),
+    background-color 120ms ease;
 }
 
 .file-row--menu-open {
@@ -319,16 +388,16 @@ page {
   background: #1a2330;
   border: 1rpx solid #2c3949;
   border-radius: 12rpx;
-  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transform-origin: center;
+  transition:
+    transform 280ms cubic-bezier(.34, 1.56, .64, 1),
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .file-menu-toggle.is-open {
   background: #f2c94c;
   border-color: #f2c94c;
-}
-
-.file-menu-toggle:active {
-  transform: scale(0.96);
 }
 
 .file-menu-chevron {
@@ -367,25 +436,55 @@ page {
   font-weight: 610;
   text-align: center;
   background: #1b2531;
+  transform-origin: center;
+  transition:
+    transform 280ms cubic-bezier(.34, 1.56, .64, 1),
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
 .file-menu button + button {
   border-top: 1rpx solid #2a3543;
 }
 
-.file-menu button:active {
-  background: #253142;
-}
-
 .file-menu .file-menu__danger {
   color: #e28585;
 }
 
+.file-menu-toggle.is-pressed,
+.file-menu button.is-pressed,
+.web-link-footer__copy.is-pressed,
+.author-contact.is-pressed {
+  position: relative;
+  z-index: 20;
+  transform: scale(1.25);
+  transition-duration: 70ms, 120ms, 120ms;
+  transition-timing-function: cubic-bezier(.2, .9, .3, 1), ease, ease;
+}
+
+.file-menu-toggle.is-pressed,
+.web-link-footer__copy.is-pressed {
+  background: #252719;
+  border-color: #f2c94c;
+}
+
+.file-menu button.is-pressed {
+  background: #253142;
+}
+
+.author-contact.is-pressed {
+  color: #96a2b2;
+  background: #121923;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .import-dropzone,
+  .file-open,
   .file-row,
   .file-menu-toggle,
-  .web-link-footer__copy {
+  .file-menu button,
+  .web-link-footer__copy,
+  .author-contact {
     transition: none;
   }
 }

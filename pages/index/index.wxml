@@ -1,10 +1,16 @@
-<navigation-bar title="Rive 预览台" back="{{false}}" color="#f2f0e8" background="#0b0f14"></navigation-bar>
+<view class="desktop-workspace {{desktopSplitEnabled ? 'is-split' : ''}} {{desktopPreviewFileId ? 'has-preview' : ''}}">
+  <view class="desktop-home-pane">
+    <navigation-bar title="Rive 预览台" back="{{false}}" color="#f2f0e8" background="#0b0f14"></navigation-bar>
+    <view class="desktop-home-content">
 
-<scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
   <view class="page-shell">
     <view
       class="import-dropzone"
       bindtap="showImportMenu"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
       role="button"
       aria-label="导入 Rive 文件"
     >
@@ -32,7 +38,8 @@
             data-index="{{index}}"
             catchtap="openFile"
             hover-class="file-row--pressed"
-            hover-stay-time="100"
+            hover-start-time="0"
+            hover-stay-time="70"
             role="button"
             aria-label="预览 {{item.name}}"
           >
@@ -61,6 +68,9 @@
               class="file-menu-toggle {{expandedFileId === item.id ? 'is-open' : ''}}"
               data-id="{{item.id}}"
               catchtap="toggleFileMenu"
+              hover-class="is-pressed"
+              hover-start-time="0"
+              hover-stay-time="70"
               role="button"
               aria-label="文件操作"
             >
@@ -72,12 +82,14 @@
             class="file-menu"
             catchtap="toggleFileMenu"
           >
-            <button data-id="{{item.id}}" catchtap="saveToDevice">{{saveTargetLabel}}</button>
-            <button data-id="{{item.id}}" catchtap="shareFile">发送文件</button>
+            <button data-id="{{item.id}}" catchtap="shareFile" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70">发送文件</button>
             <button
               class="file-menu__danger"
               data-id="{{item.id}}"
               catchtap="deleteFile"
+              hover-class="is-pressed"
+              hover-start-time="0"
+              hover-stay-time="70"
             >删除文件</button>
           </view>
         </view>
@@ -93,8 +105,9 @@
       <view
         class="web-link-footer__copy"
         bindtap="copyWebViewerUrl"
-        hover-class="web-link-footer__copy--pressed"
-        hover-stay-time="100"
+        hover-class="is-pressed"
+        hover-start-time="0"
+        hover-stay-time="70"
         role="button"
         aria-label="复制网页版预览地址"
       >
@@ -105,8 +118,22 @@
     <view
       class="author-contact"
       bindtap="showAuthorWechat"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
       role="button"
       aria-label="联系作者反馈意见，查看作者微信号"
     >联系作者反馈意见</view>
   </view>
-</scroll-view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view wx:if="{{desktopSplitEnabled && desktopPreviewFileId}}" class="desktop-preview-pane">
+    <preview-panel
+      file-id="{{desktopPreviewFileId}}"
+      bindclose="closeDesktopPreview"
+      bindselectfile="selectDesktopPreviewFile"
+    ></preview-panel>
+  </view>
+</view>

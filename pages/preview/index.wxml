@@ -19,7 +19,7 @@
         <text class="file-heading__status file-heading__fps">{{fps || '--'}} FPS</text>
       </view>
     </view>
-    <button class="file-heading__save" bindtap="showSaveMenu" hover-class="none" aria-label="保存或发送文件">
+    <button class="file-heading__save" bindtap="showSaveMenu" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" aria-label="保存或发送文件">
       <image src="/assets/icons/download.svg"></image>
     </button>
   </view>
@@ -56,27 +56,30 @@
       <button
         class="canvas-state__action"
         bindtap="retryNative"
+        hover-class="is-pressed"
+        hover-start-time="0"
+        hover-stay-time="70"
       >重新加载</button>
     </view>
 
   </view>
 
   <view
-    class="stage-resizer {{stageDragging ? 'is-dragging' : ''}}"
+    class="stage-resizer {{stageDragging ? 'is-dragging' : ''}} {{stageResizeMenuActive ? 'is-selecting' : ''}} {{stageResizeTapOpen ? 'is-tap-open' : ''}} {{stageResizePressActive ? 'is-press-active' : ''}}"
     data-stage-resizer="true"
-    bindtouchstart="stageResizeStart"
+    catchtouchstart="stageResizeStart"
     catchtouchmove="stageResizeMove"
-    bindtouchend="stageResizeEnd"
-    bindtouchcancel="stageResizeEnd"
-    bindtap="stageResizerTap"
+    catchtouchend="stageResizeEnd"
+    catchtouchcancel="stageResizeCancel"
+    catchlongpress="stageResizeLongPress"
     role="slider"
-    aria-label="上下拖动画板高度，双击在自适应和参数全览之间切换"
+    aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画板高度，按住后左右滑动选择，双击切换完整或铺满"
     aria-valuemin="{{stageMinHeight}}"
     aria-valuemax="{{stageMaxHeight}}"
     aria-valuenow="{{stageHeight}}"
   >
     <view
-      wx:if="{{showResizeGuide}}"
+      wx:if="{{showResizeGuide && !stageResizeMenuActive}}"
       class="resize-guide {{resizeGuideLeaving ? 'is-leaving' : ''}}"
       catchtap="stopResizeGuideTouch"
     >
@@ -84,76 +87,105 @@
       <view
         class="resize-guide__dismiss"
         catchtap="dismissResizeGuide"
+        hover-class="is-pressed"
+        hover-start-time="0"
+        hover-stay-time="70"
         role="button"
         aria-label="知道了"
       >✓</view>
     </view>
-    <view class="stage-resizer__grip" data-stage-resizer="true">
-      <view data-stage-resizer="true"></view>
+    <view class="stage-resizer__surface" data-stage-resizer="true">
+      <view class="stage-resizer__grip" data-stage-resizer="true">
+        <view data-stage-resizer="true"></view>
+      </view>
+      <view class="stage-resizer__modes" aria-hidden="{{!stageResizeMenuActive}}">
+        <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}" data-fit="contain" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="完整显示">
+          <view class="stage-resizer__mode-icon-wrap">
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--default" src="/assets/icons/arrows-in-simple.svg"></image>
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--active" src="/assets/icons/arrows-in-simple-active.svg"></image>
+          </view>
+          <text>完整</text>
+        </view>
+        <view class="stage-resizer__mode stage-resizer__mode--cover {{fit === 'cover' ? 'is-current' : ''}} {{stageResizeHoverFit === 'cover' ? 'is-hovered' : ''}}" data-fit="cover" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="铺满显示">
+          <view class="stage-resizer__mode-icon-wrap">
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--default" src="/assets/icons/arrows-out-simple.svg"></image>
+            <image class="stage-resizer__mode-icon stage-resizer__mode-icon--active" src="/assets/icons/arrows-out-simple-active.svg"></image>
+          </view>
+          <text>铺满</text>
+        </view>
+      </view>
     </view>
   </view>
 
   <view class="transport">
-    <view class="transport__left">
-      <view class="transport__playback">
-        <button class="transport__primary" bindtap="resetAnimation" aria-label="重播">
-          <image class="transport__icon" src="/assets/icons/restore.svg"></image>
-        </button>
-        <button
-          class="transport__secondary"
-          bindtap="togglePlay"
-          aria-label="{{isPlaying ? '暂停' : '播放'}}"
-        >
-          <image
-            class="transport__icon"
-            src="{{isPlaying ? '/assets/icons/player-pause.svg' : '/assets/icons/player-play.svg'}}"
-          ></image>
-        </button>
-      </view>
+    <view class="transport__primary transport__slot--replay" bindtap="resetAnimation" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="重播">
+      <image class="transport__icon" src="/assets/icons/restore.svg"></image>
     </view>
-    <view class="speed-menu-shell" data-speed-control="true">
-      <button
-        class="speed-menu"
-        data-speed-control="true"
-        bindtouchstart="speedTouchStart"
-        bindtouchmove="speedTouchMove"
-        bindtouchend="speedTouchEnd"
-        bindtouchcancel="speedTouchCancel"
-        aria-label="当前播放速度 {{speedLabel}}，轻点切换，按住选择"
-      >
-        <image class="speed-menu__icon" data-speed-control="true" src="/assets/icons/gauge.svg"></image>
-        <text class="speed-menu__value" data-speed-control="true">{{speedLabel}}</text>
-      </button>
+    <view
+      class="transport__secondary transport__slot--play"
+      bindtap="togglePlay"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      role="button"
+      aria-label="{{isPlaying ? '暂停' : '播放'}}"
+    >
+      <image
+        class="transport__icon"
+        src="{{isPlaying ? '/assets/icons/player-pause.svg' : '/assets/icons/player-play.svg'}}"
+      ></image>
+    </view>
+    <view
+      class="speed-menu transport__slot--speed"
+      data-speed-control="true"
+      bindtouchstart="speedTouchStart"
+      bindtouchmove="speedTouchMove"
+      bindtouchend="speedTouchEnd"
+      bindtouchcancel="speedTouchCancel"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      role="button"
+      aria-label="当前播放速度 {{speedLabel}}，轻点切换，按住选择"
+    >
+      <image class="speed-menu__icon" data-speed-control="true" src="/assets/icons/gauge.svg"></image>
+      <text class="speed-menu__value" data-speed-control="true">{{speedLabel}}</text>
     </view>
     <view
       wx:if="{{showFileNavigation}}"
-      class="transport__files"
+      class="transport__file-button transport__slot--previous {{!hasPreviousFile ? 'is-disabled' : ''}}"
       data-file-navigation="true"
+      data-offset="-1"
+      bindtouchstart="fileNavigationTouchStart"
+      bindtouchmove="fileNavigationTouchMove"
+      bindtouchend="fileNavigationTouchEnd"
+      bindtouchcancel="fileNavigationTouchCancel"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      role="button"
+      aria-disabled="{{!hasPreviousFile}}"
+      aria-label="上一个文件，按住查看文件列表"
     >
-      <button
-        class="transport__file-button {{!hasPreviousFile ? 'is-disabled' : ''}}"
-        data-file-navigation="true"
-        data-offset="-1"
-        bindtouchstart="fileNavigationTouchStart"
-        bindtouchend="fileNavigationTouchEnd"
-        bindtouchcancel="fileNavigationTouchCancel"
-        aria-disabled="{{!hasPreviousFile}}"
-        aria-label="上一个文件，按住查看文件列表"
-      >
-        <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-left.svg"></image>
-      </button>
-      <button
-        class="transport__file-button {{!hasNextFile ? 'is-disabled' : ''}}"
-        data-file-navigation="true"
-        data-offset="1"
-        bindtouchstart="fileNavigationTouchStart"
-        bindtouchend="fileNavigationTouchEnd"
-        bindtouchcancel="fileNavigationTouchCancel"
-        aria-disabled="{{!hasNextFile}}"
-        aria-label="下一个文件，按住查看文件列表"
-      >
-        <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-right.svg"></image>
-      </button>
+      <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-left.svg"></image>
+    </view>
+    <view
+      wx:if="{{showFileNavigation}}"
+      class="transport__file-button transport__slot--next {{!hasNextFile ? 'is-disabled' : ''}}"
+      data-file-navigation="true"
+      data-offset="1"
+      bindtouchstart="fileNavigationTouchStart"
+      bindtouchmove="fileNavigationTouchMove"
+      bindtouchend="fileNavigationTouchEnd"
+      bindtouchcancel="fileNavigationTouchCancel"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
+      role="button"
+      aria-disabled="{{!hasNextFile}}"
+      aria-label="下一个文件，按住查看文件列表"
+    >
+      <image class="transport__file-icon" data-file-navigation="true" src="/assets/icons/arrow-right.svg"></image>
     </view>
   </view>
 
@@ -182,6 +214,8 @@
             bindtap="expandArtboardCatalog"
             disabled="{{artboardCatalogLoading}}"
             hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="70"
             aria-label="{{artboardCatalogLoading ? '正在解析画板列表 ' + artboardCatalogProgress + '%' : '展开其余 ' + artboardRemainingCount + ' 个画板'}}"
           >
             <view
@@ -247,6 +281,17 @@
         </view>
       </view>
 
+      <view class="parameter-row">
+        <text class="parameter-row__label">预览背景</text>
+        <view class="tone-options">
+          <view class="tone tone--mist {{canvasTone === 'mist' ? 'is-active' : ''}}" data-tone="mist" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="浅灰背景"></view>
+          <view class="tone tone--paper {{canvasTone === 'paper' ? 'is-active' : ''}}" data-tone="paper" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="米白背景"></view>
+          <view class="tone tone--white {{canvasTone === 'white' ? 'is-active' : ''}}" data-tone="white" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="纯白背景"></view>
+          <view class="tone tone--yellow {{canvasTone === 'yellow' ? 'is-active' : ''}}" data-tone="yellow" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="黄色背景"></view>
+          <view class="tone tone--ink {{canvasTone === 'ink' ? 'is-active' : ''}}" data-tone="ink" bindtap="setCanvasTone" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" role="button" aria-label="深色背景"></view>
+        </view>
+      </view>
+
       <view wx:if="{{hasAudio}}" class="parameter-row">
         <text class="parameter-row__label">声音</text>
         <view class="parameter-actions">
@@ -261,19 +306,6 @@
       </view>
 
       <view class="parameter-row">
-        <text class="parameter-row__label">缩放方式</text>
-        <view class="compact-switch">
-          <button
-            wx:for="{{fitOptions}}"
-            wx:key="key"
-            class="compact-option {{fit === item.key ? 'is-active' : ''}}"
-            data-key="{{item.key}}"
-            bindtap="selectFit"
-          >{{item.label}}</button>
-        </view>
-      </view>
-
-      <view class="parameter-row">
         <text class="parameter-row__label">渲染质量</text>
         <view class="compact-switch">
           <button
@@ -282,18 +314,26 @@
             class="compact-option {{qualityMode === item.key ? 'is-active' : ''}}"
             data-key="{{item.key}}"
             bindtap="selectQuality"
+            hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="70"
           >{{item.label}}</button>
         </view>
       </view>
 
-      <view class="parameter-row">
-        <text class="parameter-row__label">预览背景</text>
-        <view class="tone-options">
-          <view class="tone tone--mist {{canvasTone === 'mist' ? 'is-active' : ''}}" data-tone="mist" bindtap="setCanvasTone" role="button" aria-label="浅灰背景"></view>
-          <view class="tone tone--paper {{canvasTone === 'paper' ? 'is-active' : ''}}" data-tone="paper" bindtap="setCanvasTone" role="button" aria-label="米白背景"></view>
-          <view class="tone tone--white {{canvasTone === 'white' ? 'is-active' : ''}}" data-tone="white" bindtap="setCanvasTone" role="button" aria-label="纯白背景"></view>
-          <view class="tone tone--yellow {{canvasTone === 'yellow' ? 'is-active' : ''}}" data-tone="yellow" bindtap="setCanvasTone" role="button" aria-label="黄色背景"></view>
-          <view class="tone tone--ink {{canvasTone === 'ink' ? 'is-active' : ''}}" data-tone="ink" bindtap="setCanvasTone" role="button" aria-label="深色背景"></view>
+      <view class="parameter-row parameter-row--last">
+        <text class="parameter-row__label">缩放方式</text>
+        <view class="compact-switch">
+          <button
+            wx:for="{{fitOptions}}"
+            wx:key="key"
+            class="compact-option {{fit === item.key ? 'is-active' : ''}}"
+            data-key="{{item.key}}"
+            bindtap="selectFit"
+            hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="70"
+          >{{item.label}}</button>
         </view>
       </view>
     </view>
@@ -301,6 +341,12 @@
 </view>
 
 <root-portal enable="{{showSpeedMenu || showFileMenu}}">
+  <cover-view
+    wx:if="{{showSpeedMenu || showFileMenu}}"
+    class="native-menu-backdrop"
+    catchtap="dismissNativeMenus"
+    aria-label="关闭菜单"
+  ></cover-view>
   <cover-view
     wx:if="{{showSpeedMenu}}"
     class="native-menu-overlay speed-popover {{speedMenuLeaving ? 'is-leaving' : ''}}"
@@ -315,6 +361,9 @@
       data-value="{{item.value}}"
       data-label="{{item.label}}"
       bindtap="selectSpeedOption"
+      hover-class="is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
       role="button"
     >{{item.label}}</cover-view>
     <cover-view class="speed-popover__arrow" data-speed-control="true"></cover-view>
@@ -329,10 +378,13 @@
     <cover-view
       wx:for="{{fileMenuOptions}}"
       wx:key="id"
-      class="file-popover__option {{item.current ? 'is-current' : ''}}"
+      class="file-popover__option {{item.current ? 'is-current' : ''}} {{fileHoverId === item.id ? 'is-hovered' : ''}}"
       data-file-navigation="true"
       data-id="{{item.id}}"
       bindtap="selectFileFromMenu"
+      hover-class="is-hovered is-pressed"
+      hover-start-time="0"
+      hover-stay-time="70"
       role="button"
     >
       <cover-view class="file-popover__name" data-file-navigation="true">{{item.name}}</cover-view>
