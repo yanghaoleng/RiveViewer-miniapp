@@ -263,6 +263,10 @@ function DataAccessGate({ checking, onUnlocked }: {
                   onChange={(event) => replacePassword(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Escape") replacePassword("");
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submit();
+                    }
                   }}
                   aria-label="六位访问密码"
                   aria-describedby={error ? "data-password-error" : "data-password-hint"}
