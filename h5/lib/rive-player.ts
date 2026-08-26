@@ -23,6 +23,11 @@ export type RiveInput = {
 export type RenderEngine = "webgl2" | "canvas2d";
 
 export const DEFAULT_RENDER_ENGINE: RenderEngine = "webgl2";
+export const ARTBOARD_AUTO_EXPAND_MAX = 8;
+
+export function shouldAutoExpandArtboardCatalog(count: number): boolean {
+  return count > 0 && count <= ARTBOARD_AUTO_EXPAND_MAX;
+}
 
 export function runtimeWasmFile(renderEngine: RenderEngine): string {
   return renderEngine === "webgl2"
@@ -349,13 +354,17 @@ export class WebRivePlayer {
     const metadata = this.inspectArtboard(defaultArtboard);
     this.artboardMetadata.set(metadata.name, metadata);
     this.catalogNames = [metadata.name];
-    this.catalogLoaded = this.file.artboardCount() <= 1;
+    const artboardCount = this.file.artboardCount();
+    this.catalogLoaded = artboardCount <= 1;
     this.complexFile = this.sourceSize >= policy.complexity.sourceBytes
-      || this.file.artboardCount() >= policy.complexity.web.artboards
+      || artboardCount >= policy.complexity.web.artboards
       || metadata.animations.length >= policy.complexity.web.animations
       || metadata.stateMachines.length >= policy.complexity.web.stateMachines;
     this.configurePerformanceProfile();
     this.activateArtboard(metadata.name, undefined, defaultArtboard);
+    if (!this.catalogLoaded && shouldAutoExpandArtboardCatalog(artboardCount)) {
+      await this.loadArtboardCatalog(() => undefined);
+    }
     if (!this.activeStateMachineHasListeners()) this.playDefaultSequence(metadata.animations);
     this.resize(this.cssWidth, this.cssHeight);
     this.requestFrame();

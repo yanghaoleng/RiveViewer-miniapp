@@ -22,10 +22,21 @@ const vite = await createServer({
 });
 const playerModule = await vite.ssrLoadModule("/lib/rive-player.ts");
 const logModule = await vite.ssrLoadModule("/lib/runtime-event-log.ts");
-const { advanceStateMachineAndReadReports, readStateMachineReports } = playerModule;
+const {
+  advanceStateMachineAndReadReports,
+  readStateMachineReports,
+  shouldAutoExpandArtboardCatalog,
+} = playerModule;
 const { RuntimeEventLog } = logModule;
 
 after(async () => vite.close());
+
+test("不超过八个画板时直接展开完整目录", () => {
+  assert.equal(shouldAutoExpandArtboardCatalog(0), false);
+  assert.equal(shouldAutoExpandArtboardCatalog(1), true);
+  assert.equal(shouldAutoExpandArtboardCatalog(8), true);
+  assert.equal(shouldAutoExpandArtboardCatalog(9), false);
+});
 
 function event(id: number, label: string): RiveRuntimeEvent {
   return { id, elapsedMs: id * 10, kind: "event", label, detail: "" };
