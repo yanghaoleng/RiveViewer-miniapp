@@ -23,6 +23,7 @@ function shareAsLibraryFile(share: HostedShare): LibraryFile {
     id: `hosted-${share.code}`,
     name: share.filename,
     size: share.size,
+    format: share.format,
     updatedAt: Date.parse(share.createdAt) || Date.now(),
     hostedCode: share.code,
   };

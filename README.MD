@@ -11,6 +11,7 @@
 | 微信小程序 | 微信内使用 | 仅保存在当前设备 | 手机端快速导入、预览和交互检查 |
 | H5 本地版 | <https://mikeywa.site/rive-viewer/> | 仅保存在当前浏览器，不上传服务器 | 在桌面浏览器检查复杂 Rive 文件，保留素材本地性 |
 | JOJO（叫叫）托管版 | <https://rive.mikeywa.site/> | 用户主动选择或拖入后上传云端 | 公司内部交付、公开链接分享、评论协作和归档管理 |
+| JOJO Beta | <https://rive.mikeywa.site/beta/> | 与正式托管共用服务端文件，浏览器本地记录独立 | 提前验证 Rive、Lottie 与 PAG 多格式预览 |
 
 ### 微信小程序码
 
@@ -222,7 +223,7 @@ JOJO 托管版在浏览器宽度达到 `1194px`（iPad Pro 11 寸横屏）时使
 - 文件只做“归档 / 恢复”，不提供永久删除。归档前二次确认；归档后原链接停止播放和新增评论，恢复后沿用原短码、评论和创建时间。
 - 萌萌森林头像母版位于 `h5/assets/forest-avatars-master-4k.png`，尺寸为 `3840×1920`；母版是 `8×4` 方格，每格严格 `480×480px`。运行时使用 `h5/public/rive-viewer/avatars/` 下 32 张一一对应的不透明方形 WebP，单张严格为 `32×32px`；每张使用不同满版底色和大动物轮廓，由 `h5/scripts/build-forest-avatars.py` 按比例格线生成，避免透明边缘细缝和二次裁偏。
 - 后端为 `server/` 下仅使用 Node 内置模块的单进程服务，监听 `127.0.0.1:8097`。文件保存在 `/var/lib/rive-host/files/`，状态以 `state.json` 原子更新，发布目录与数据目录分离。
-- 单文件上限 `64 MiB`、托管总量 `5 GiB`、最多 `10,000` 个分享；磁盘可用空间低于 `6 GiB` 时拒绝上传。单文件最多 `500` 条评论，全站最多 `5,000` 条评论。
+- Rive 与 Lottie 单文件上限 `64 MiB`，PAG 单文件上限严格为 `10 MiB`；限制同时在浏览器与服务端执行。托管总量 `5 GiB`、最多 `10,000` 个分享；磁盘可用空间低于 `6 GiB` 时拒绝上传。单文件最多 `500` 条评论，全站最多 `5,000` 条评论。
 - 每次上传都生成新的三位短码和独立评论区，即使文件字节完全相同也不复用旧短码；SHA-256 只用于完整性、ETag 和示例导入识别。Nginx 对上传和写操作按来源限速，归档与恢复要求 `X-Rive-Action` 确认头，页面和响应带 `noindex`。
 
 ### 托管 API
@@ -230,7 +231,7 @@ JOJO 托管版在浏览器宽度达到 `1194px`（iPad Pro 11 寸横屏）时使
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `GET` | `/healthz` | 服务健康检查 |
-| `GET / POST` | `/api/v1/shares` | 按状态列出文件；上传原始 `.riv` |
+| `GET / POST` | `/api/v1/shares` | 按状态与 `formats` 列出文件；上传 `.riv`、`.json` 或 `.pag` |
 | `GET` | `/api/v1/shares/:code` | 获取分享元数据 |
 | `GET / HEAD` | `/api/v1/shares/:code/file` | 下载文件，支持 Range 与 ETag |
 | `GET / POST` | `/api/v1/shares/:code/comments` | 读取和提交纯文本评论 |
@@ -249,11 +250,14 @@ JOJO 托管版在浏览器宽度达到 `1194px`（iPad Pro 11 寸横屏）时使
 
 ## Beta 文件版本
 
-Beta 入口为 <https://rive.mikeywa.site/beta/>，正式根路径继续使用原静态版本。详情页下载按钮左侧可“上传新版本”，新版本沿用原三位短码并默认打开；文件名下拉可切换历史版本并显示上传日期。评论携带 `versionId`；只有两个及以上版本时才按“版本 N”分组，单版本沿用普通评论列表，不展示版本概念。
+Beta 入口为 <https://rive.mikeywa.site/beta/>，正式根路径继续使用原静态版本。Beta 可预览 `.riv`、自包含的 Lottie `.json` 与 `.pag`；详情页下载按钮左侧可“上传新版本”，新版本必须与原文件格式一致，沿用原三位短码并默认打开。文件名下拉可切换历史版本并显示上传日期。评论携带 `versionId`；只有两个及以上版本时才按“版本 N”分组，单版本沿用普通评论列表，不展示版本概念。
 
 - `POST /api/v1/shares/:code/versions` 上传并设为当前版本；`GET /api/v1/shares/:code/file?versionId=<UUID>` 下载指定版本。
-- 分享元数据新增 `versions`、`currentVersionId` 和 `versionCount`；旧数据启动时自动补为“版本 1”，原文件、评论和根路径接口保持兼容。
-- Beta 前端发布目录为 `/var/www/rive-host-beta/releases/20260826-124647`，后端仍为 `/opt/rive-host/releases/20260826-120610`；正式前端仍为 `/var/www/rive-host/releases/20260826-111929`。
+- Lottie 使用轻量 Canvas 播放器，只接受图片与字体已内嵌、没有外部资源 URL 的单个 JSON；PAG 使用 WebAssembly 播放器，超过 `10 MiB` 时直接拒绝，不进入上传队列。
+- 三种播放器均按格式动态加载。首屏不预加载 Rive WASM；Lottie 增量约 `57 KB gzip`，首次打开 PAG 增量约 `700 KB gzip`，其中 PAG WASM 为 `609.9 KB gzip`，后续由浏览器长期缓存。
+- 分享元数据新增 `format`、`versions`、`currentVersionId` 和 `versionCount`；旧数据启动时自动识别为 Rive 并补为“版本 1”。正式前端调用不带 `formats` 的列表接口时只返回 Rive，避免 Beta 测试文件进入正式首页。
+- Beta 使用独立 IndexedDB `rive-viewer-h5-beta`，不会把多格式最近记录写入正式页的 `rive-viewer-h5`。线上测试文件为 [Lottie `V1e`](https://rive.mikeywa.site/beta/V1e) 与 [PAG `lOF`](https://rive.mikeywa.site/beta/lOF)。
+- Beta 前端与兼容后端发布目录均为 `20260826-132255`；正式前端仍为 `/var/www/rive-host/releases/20260826-111929`。
 
 ## 许可证
 

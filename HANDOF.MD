@@ -2,6 +2,17 @@
 
 更新日期：2026-08-26
 
+## 2026-08-26 Beta Lottie / PAG（已发布）
+
+- 本轮只扩展 H5 Beta，小程序与正式根路径静态前端未改。Beta 现支持 `.riv`、自包含 Lottie `.json` 和 `.pag`，统一保留播放、重播、倍速、进度、FPS、完整/铺满、背景和评论；Rive 独有的画板、状态机、输入、事件与渲染引擎只在 Rive 文件显示。
+- PAG 上限严格为 `10 MiB`，浏览器与服务端双重校验：测试中 `10 MiB` 通过，`10 MiB + 1 B` 在线接口返回 `413 file_too_large`。Lottie 拒绝外链图片或字体，只允许自包含 JSON，避免预览时向第三方地址发起不可控请求。
+- 三个运行时均动态加载；首屏入口为 `89.91 KB gzip`，Lottie 首次打开增量约 `57 KB gzip`，PAG 首次打开增量约 `700 KB gzip`（含 `609.93 KB gzip` WASM）。已移除首屏 Rive WASM 预加载，非 Rive 用户不再承担该带宽。
+- H5 lint、TypeScript、`/beta/` 构建、`46/46` 测试和 `npm audit = 0` 均通过；服务端 `12/12` 通过。真实浏览器使用 Rive Guide、Airbnb Lottie 示例和 Tencent libpag 示例完成回归：Lottie 约 `60 FPS`，PAG 约 `24 FPS`，Rive 原控制保持正常，三者均无控制台错误或警告；PAG 在 `390×844` 手机视口无横向溢出。
+- 线上测试链接为 Lottie <https://rive.mikeywa.site/beta/V1e>（`1,959,221 B`）与 PAG <https://rive.mikeywa.site/beta/lOF>（`6,922 B`）。Beta 列表显式请求三种格式；正式列表不带格式参数时只返回 Rive。Beta 另用 IndexedDB `rive-viewer-h5-beta`，不会污染正式页最近记录。
+- Beta 前端与兼容后端已原子切换为 `20260826-132255`；正式前端仍为 `20260826-111929`。公网 Beta HTML 与本机构建 SHA-256 均为 `a205f4fc6770f62842d72efc7c7d3824a893caed4f9e80406188fa9afb250206`，PAG WASM 为 `application/wasm` 且一年 immutable；API PID 为 `265276`。
+- 当前完整数据备份为 `/var/backups/rive-host-data-after-beta-20260826-132255.tar.gz`（`47,196,112 B`，SHA-256 `cd540221018269085ddee1f5709bac21ca27f116fb8bc78940e10309173756c0`），含 11 个文件、6 条评论。首次备份命中了 systemd 的数据目录软链接，只得到 `119 B` 的链接条目，已改名为 `.invalid-symlink-only.tar.gz` 防止误用；随后按真实目录重新生成并校验完整备份。
+- 首次 Beta 前端切换因发布包缺少 `/beta/` 目录层被健康闸门拒绝，旧前端持续服务；修正目录层后才切换。没有发生错误页面切流或数据丢失，旧 Beta 前端 `20260826-124647`、旧后端 `20260826-120610` 均保留为代码回滚点。
+
 ## 2026-08-26 Beta 文件版本（已发布）
 
 - GitHub 已创建并推送 `beta` 分支；功能、视觉、安全头与单版本评论修复提交依次为 `551c4f2`、`b3da53e`、`6fc2d22`、`86f57c8`。正式功能分支与正式前端静态目录未切换。

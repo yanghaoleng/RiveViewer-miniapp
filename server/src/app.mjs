@@ -1,12 +1,16 @@
 import { createReadStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
-import { MAX_FILE_BYTES } from "./config.mjs";
+import {
+  fileTooLargeMessage,
+  maxBytesForFormat,
+  parseFormatFilter,
+} from "./animation-formats.mjs";
 import { AppError, isAppError } from "./errors.mjs";
 import { pickForestIdentity } from "./forest-identities.mjs";
 import {
   decodeFilenameHeader,
-  stageRiveStream,
+  stageAnimationStream,
 } from "./ingest.mjs";
 import { ShareStore } from "./store.mjs";
 
@@ -308,7 +312,8 @@ export async function createRiveHostApp({
           if (!['active', 'archived'].includes(status)) {
             throw new AppError(400, "invalid_status", "status 必须是 active 或 archived");
           }
-          sendJson(response, 200, { items: store.list(status) });
+          const formats = parseFormatFilter(url.searchParams.get("formats"));
+          sendJson(response, 200, { items: store.list(status, formats) });
           return;
         }
         if (request.method === "POST") {
@@ -316,18 +321,22 @@ export async function createRiveHostApp({
           if (contentType !== "application/octet-stream") {
             throw new AppError(415, "unsupported_media_type", "上传必须使用 application/octet-stream");
           }
-          const filename = decodeFilenameHeader(request.headers["x-rive-filename"]);
+          const encodedFilename = request.headers["x-animation-filename"]
+            ?? request.headers["x-rive-filename"];
+          const { filename, format } = decodeFilenameHeader(encodedFilename);
           const declaredLength = parseContentLength(request);
-          if (declaredLength !== null && declaredLength > MAX_FILE_BYTES) {
-            throw new AppError(413, "file_too_large", "Rive 文件不能超过 64 MiB");
+          const maxBytes = maxBytesForFormat(format);
+          if (declaredLength !== null && declaredLength > maxBytes) {
+            throw new AppError(413, "file_too_large", fileTooLargeMessage(format));
           }
           await store.assertUploadAllowed(declaredLength || 0);
 
-          const staged = await stageRiveStream(request, store.tempDir);
+          const staged = await stageAnimationStream(request, store.tempDir, format, { maxBytes });
           try {
             const item = await store.createFromStaged({
               ...staged,
               filename,
+              format,
               isExample: false,
             });
             sendJson(response, 201, { item });
@@ -375,18 +384,27 @@ export async function createRiveHostApp({
         if (contentType !== "application/octet-stream") {
           throw new AppError(415, "unsupported_media_type", "上传必须使用 application/octet-stream");
         }
-        const filename = decodeFilenameHeader(request.headers["x-rive-filename"]);
+        const encodedFilename = request.headers["x-animation-filename"]
+          ?? request.headers["x-rive-filename"];
+        const { filename, format } = decodeFilenameHeader(encodedFilename);
+        const existingShare = store.get(match[1]);
+        if (!existingShare) throw new AppError(404, "share_not_found", "分享不存在");
+        if (existingShare.format !== format) {
+          throw new AppError(422, "format_mismatch", "新版本必须与当前文件格式一致");
+        }
         const declaredLength = parseContentLength(request);
-        if (declaredLength !== null && declaredLength > MAX_FILE_BYTES) {
-          throw new AppError(413, "file_too_large", "Rive 文件不能超过 64 MiB");
+        const maxBytes = maxBytesForFormat(format);
+        if (declaredLength !== null && declaredLength > maxBytes) {
+          throw new AppError(413, "file_too_large", fileTooLargeMessage(format));
         }
         await store.assertUploadAllowed(declaredLength || 0);
 
-        const staged = await stageRiveStream(request, store.tempDir);
+        const staged = await stageAnimationStream(request, store.tempDir, format, { maxBytes });
         try {
           const item = await store.addVersionFromStaged(match[1], {
             ...staged,
             filename,
+            format,
           });
           sendJson(response, 201, { item });
         } finally {

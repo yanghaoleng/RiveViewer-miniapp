@@ -45,17 +45,23 @@ test("builds the viewer at the configured public base", async () => {
   }
 });
 
-test("splits the Rive runtime from the initial application chunk", async () => {
+test("splits Rive, Lottie, and PAG runtimes from the initial application chunk", async () => {
   const assetNames = await readdir(new URL("../dist-static/assets/", import.meta.url));
   const appChunk = assetNames.find((name) => /^index-.*\.js$/.test(name));
   const riveChunk = assetNames.find((name) => /^rive-player-.*\.js$/.test(name));
   const canvasRuntimeChunk = assetNames.find((name) => /^canvas_advanced-.*\.js$/.test(name));
   const webglRuntimeChunk = assetNames.find((name) => /^webgl2_advanced-.*\.js$/.test(name));
+  const lottieChunk = assetNames.find((name) => /^lottie_light_canvas-.*\.js$/.test(name));
+  const pagChunk = assetNames.find((name) => /^pag-player-.*\.js$/.test(name));
+  const pagWasm = assetNames.find((name) => /^libpag-.*\.wasm$/.test(name));
 
   assert.ok(appChunk, "缺少应用入口 chunk");
   assert.ok(riveChunk, "Rive 播放器没有独立拆包");
   assert.ok(canvasRuntimeChunk, "Canvas2D 兼容运行时没有独立拆包");
   assert.ok(webglRuntimeChunk, "WebGL2 运行时没有独立拆包");
+  assert.ok(lottieChunk, "Lottie 运行时没有独立拆包");
+  assert.ok(pagChunk, "PAG 播放器没有独立拆包");
+  assert.ok(pagWasm, "PAG WASM 没有独立拆包");
   await access(new URL("../dist-static/rive-2.39.1.wasm.gz", import.meta.url));
   await access(new URL("../dist-static/rive-2.39.1.wasm.br", import.meta.url));
   await access(new URL("../dist-static/rive-webgl2-2.39.1.wasm.gz", import.meta.url));
@@ -92,7 +98,7 @@ test("keeps high-frequency playback state outside the page component", async () 
   ]);
 
   assert.doesNotMatch(appSource, /@phosphor-icons\/react/);
-  assert.match(appSource, /await import\("\.\.\/\.\.\/lib\/rive-player"\)/);
+  assert.match(appSource, /await import\("\.\.\/\.\.\/lib\/animation-player"\)/);
   assert.match(appSource, /<PlaybackMeta telemetry=\{telemetry\} \/>/);
   assert.match(appSource, /<TimelineControl/);
   assert.doesNotMatch(appSource, /const \[timeline, setTimeline\]/);
@@ -123,7 +129,7 @@ test("defaults to WebGL2, exposes the engine selector last, and keeps automatic 
       > appSource.indexOf('<ParameterRow label="缩放方式">'),
     "渲染引擎必须是文件预览选项的最后一项",
   );
-  assert.match(html, /rive-webgl2-2\.39\.1\.wasm/);
+  assert.doesNotMatch(html, /\.wasm/);
 });
 
 test("batches stage resizing and delays backing-canvas allocation", async () => {

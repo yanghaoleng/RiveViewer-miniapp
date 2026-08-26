@@ -16,6 +16,10 @@ import { limitCommentNickname } from "../lib/comment-identity.ts";
 import { hostedVersions, selectedHostedVersion } from "../lib/file-versions.ts";
 import { mergeRecentHostedRecords } from "../lib/library.ts";
 import { mergeUnifiedFiles } from "../lib/unified-library.ts";
+import {
+  MAX_PAG_FILE_BYTES,
+  validateAnimationFile,
+} from "../lib/animation-format.ts";
 
 function share(
   code: string,
@@ -26,6 +30,7 @@ function share(
   return {
     code,
     filename,
+    format: "rive" as const,
     size: 24,
     sha256: "0".repeat(64),
     etag: `"${code}"`,
@@ -55,6 +60,17 @@ test("recognizes public share routes at both deployment bases", () => {
   assert.equal(viewerHomePath("rive-viewer"), "/rive-viewer/");
 });
 
+test("recognizes all preview formats and rejects PAG above 10 MiB", () => {
+  assert.equal(validateAnimationFile({ name: "motion.riv", size: 4 }), "rive");
+  assert.equal(validateAnimationFile({ name: "motion.json", size: 4 }), "lottie");
+  assert.equal(validateAnimationFile({ name: "motion.pag", size: MAX_PAG_FILE_BYTES }), "pag");
+  assert.throws(
+    () => validateAnimationFile({ name: "motion.pag", size: MAX_PAG_FILE_BYTES + 1 }),
+    /超过 10 MiB/,
+  );
+  assert.throws(() => validateAnimationFile({ name: "motion.zip", size: 4 }), /只接受/);
+});
+
 test("版本目录默认选中最新版本并兼容单文件数据", () => {
   const legacy = share("A1b", "legacy.riv", "2026-08-26T01:00:00.000Z");
   assert.equal(hostedVersions(legacy).length, 1);
@@ -64,8 +80,8 @@ test("版本目录默认选中最新版本并兼容单文件数据", () => {
     ...legacy,
     currentVersionId: "v2",
     versions: [
-      { id: "v1", name: "版本 1", filename: "one.riv", size: 4, sha256: "1".repeat(64), etag: "one", createdAt: legacy.createdAt },
-      { id: "v2", name: "版本 2", filename: "two.riv", size: 8, sha256: "2".repeat(64), etag: "two", createdAt: "2026-08-26T02:00:00.000Z" },
+      { id: "v1", name: "版本 1", filename: "one.riv", format: "rive" as const, size: 4, sha256: "1".repeat(64), etag: "one", createdAt: legacy.createdAt },
+      { id: "v2", name: "版本 2", filename: "two.riv", format: "rive" as const, size: 8, sha256: "2".repeat(64), etag: "two", createdAt: "2026-08-26T02:00:00.000Z" },
     ],
   };
   assert.equal(selectedHostedVersion(versioned)?.id, "v2");
@@ -108,12 +124,13 @@ test("keeps recently viewed hosted files deduplicated, ordered, and bounded", ()
 });
 
 test("merges local, recent, and active hosted files into one activity-sorted list", () => {
-  const local = { id: "local-one", name: "同名.riv", size: 24, updatedAt: 200 };
+  const local = { id: "local-one", name: "同名.riv", size: 24, format: "rive" as const, updatedAt: 200 };
   const recent = {
     id: "hosted-Ab1",
     hostedCode: "Ab1",
     name: "同名.riv",
     size: 24,
+    format: "rive" as const,
     updatedAt: 300,
   };
   const otherRecent = {
@@ -121,6 +138,7 @@ test("merges local, recent, and active hosted files into one activity-sorted lis
     hostedCode: "Xy2",
     name: "同名.riv",
     size: 24,
+    format: "rive" as const,
     updatedAt: 100,
   };
   const items = mergeUnifiedFiles(
@@ -140,13 +158,13 @@ test("merges local, recent, and active hosted files into one activity-sorted lis
 });
 
 test("keeps a known published code ready during refresh and removes archived shares from active rows", () => {
-  const local = { id: "local-one", name: "local.riv", size: 24, updatedAt: 200 };
+  const local = { id: "local-one", name: "local.riv", size: 24, format: "rive" as const, updatedAt: 200 };
   const publishedWithoutFreshList = mergeUnifiedFiles([local], [], [], { "local-one": "A1b" });
   assert.equal(publishedWithoutFreshList[0].hostedCode, "A1b");
 
   const archived = share("A1b", "local.riv", "2026-08-22T00:00:00.000Z", "archived");
   const afterArchive = mergeUnifiedFiles(
-    [local, { id: "hosted-A1b", hostedCode: "A1b", name: "local.riv", size: 24, updatedAt: 300 }],
+    [local, { id: "hosted-A1b", hostedCode: "A1b", name: "local.riv", size: 24, format: "rive" as const, updatedAt: 300 }],
     [],
     [archived],
     { "local-one": "A1b" },
@@ -262,7 +280,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   ]);
 
   assert.match(apiSource, /const API_ROOT = "\/api\/v1"/);
-  assert.match(apiSource, /setRequestHeader\("X-Rive-Filename", encodeURIComponent\(filename\)\)/);
+  assert.match(apiSource, /setRequestHeader\("X-Animation-Filename", encodeURIComponent\(filename\)\)/);
   assert.doesNotMatch(apiSource, /X-Rive-Example/);
   assert.match(apiSource, /request\.send\(data\)/);
   assert.match(apiSource, /new XMLHttpRequest\(\)/);
@@ -302,7 +320,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /openPromise = openFile\(savedFile\)/);
   assert.match(appSource, /Promise\.all\(\[openPromise, refreshLibrary\(\), uploadPromise\]\)/);
   assert.match(appSource, /window\.history\.replaceState/);
-  assert.match(appSource, /拖入或点击选择，上传后自动生成公开链接/);
+  assert.match(appSource, /支持 Rive \/ Lottie \/ PAG，PAG 不超过 10 MiB/);
   assert.match(appSource, /const activeHostedCode = isHostedPlatform && activeFile/);
   assert.match(appSource, /activeFile\.hostedShare\?\.code/);
   assert.match(appSource, /uploadStates\[activeFile\.file\.id\]\?\.share\?\.code/);
@@ -431,7 +449,7 @@ test("resolves static assets from Vite's configured public base", async () => {
 
   assert.match(viteSource, /process\.env\.RIVE_VIEWER_BASE/);
   assert.match(html, /%BASE_URL%favicon\.webp/);
-  assert.match(html, /%BASE_URL%rive-webgl2-2\.39\.1\.wasm/);
+  assert.doesNotMatch(html, /\.wasm/);
   assert.match(playerSource, /publicAssetUrl\(runtimeWasmFile\(renderEngine\)\)/);
   assert.match(librarySource, /RECENT_HOSTED_STORE_NAME = "recent-hosted"/);
   assert.match(iconSource, /publicAssetUrl\(`icons\/\$\{name\}\.svg`\)/);
@@ -465,7 +483,7 @@ test("defaults local previews to high quality while hosted previews stay balance
     readFile(new URL("../lib/rive-player.ts", import.meta.url), "utf8"),
   ]);
   const playerCreation = appSource.slice(
-    appSource.indexOf("player = new Player"),
+    appSource.indexOf("player = await createAnimationPlayer"),
     appSource.indexOf("await player.load(sourceData)"),
   );
 

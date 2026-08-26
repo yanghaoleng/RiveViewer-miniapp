@@ -10,6 +10,17 @@ import type {
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import policy from "../../../shared/rive-policy.json";
 import {
+  animationFormatLabel,
+  SUPPORTED_ANIMATION_ACCEPT,
+  validateAnimationFile,
+  type AnimationFormat,
+} from "../../lib/animation-format";
+import type {
+  AnimationInput,
+  AnimationMetadata,
+  AnimationPlayer,
+} from "../../lib/animation-player";
+import {
   archiveHostedComment,
   archiveHostedShare,
   createHostedComment,
@@ -47,12 +58,7 @@ import {
   touchLocalFile,
   type LibraryFile,
 } from "../../lib/library";
-import type {
-  RenderEngine,
-  RiveInput,
-  RiveMetadata,
-  WebRivePlayer,
-} from "../../lib/rive-player";
+import type { RenderEngine } from "../../lib/rive-player";
 import { PlaybackTelemetry } from "../../lib/playback-telemetry";
 import { publicAssetUrl } from "../../lib/public-base";
 import { RuntimeEventLog } from "../../lib/runtime-event-log";
@@ -86,7 +92,7 @@ type LoadingState = {
   phase: string;
 };
 
-const EMPTY_METADATA: RiveMetadata = {
+const EMPTY_METADATA: AnimationMetadata = {
   artboardNames: [],
   artboardCount: 0,
   artboardCatalogLoaded: false,
@@ -107,7 +113,6 @@ const CANVAS_TONES = policy.canvasTones;
 const DEFAULT_RENDER_QUALITY = 2;
 const DEFAULT_HOSTED_RENDER_QUALITY = 1;
 const PUBLISHED_CODES_STORAGE_KEY = "rive-host-published-codes-v1";
-const MAX_HOSTED_FILE_BYTES = 64 * 1024 * 1024;
 const FILE_RAIL_MIN_WIDTH = 160;
 const FILE_RAIL_DEFAULT_WIDTH = 184;
 const FILE_RAIL_MAX_WIDTH = 360;
@@ -236,7 +241,7 @@ export function RiveViewerApp({
   const [files, setFiles] = useState<LibraryFile[]>([]);
   const [expandedFileId, setExpandedFileId] = useState("");
   const [activeFile, setActiveFile] = useState<ActiveFile | null>(null);
-  const [metadata, setMetadata] = useState<RiveMetadata>(EMPTY_METADATA);
+  const [metadata, setMetadata] = useState<AnimationMetadata>(EMPTY_METADATA);
   const [loading, setLoading] = useState<LoadingState>({
     active: false,
     progress: 0,
@@ -315,11 +320,12 @@ export function RiveViewerApp({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const versionInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lottieContainerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const previewWorkbenchRef = useRef<HTMLDivElement>(null);
   const previewInspectorRef = useRef<HTMLElement>(null);
   const previewColumnResizerRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<WebRivePlayer | null>(null);
+  const playerRef = useRef<AnimationPlayer | null>(null);
   const activeSourceRef = useRef<{ sessionId: number; data: ArrayBuffer } | null>(null);
   const openRequestRef = useRef(0);
   const pendingStageHeightRef = useRef<number | null>(null);
@@ -455,8 +461,8 @@ export function RiveViewerApp({
     setHostedLibrary((current) => ({ ...current, loading: true, error: "" }));
     try {
       const [activeItems, archivedItems] = await Promise.all([
-        listHostedShares("active"),
-        listHostedShares("archived"),
+        listHostedShares("active", undefined, isBetaVersioning ? ["rive", "lottie", "pag"] : undefined),
+        listHostedShares("archived", undefined, isBetaVersioning ? ["rive", "lottie", "pag"] : undefined),
       ]);
       if (requestId === hostedLibraryRequestRef.current) {
         setHostedLibrary({ activeItems, archivedItems, loading: false, error: "" });
@@ -469,7 +475,7 @@ export function RiveViewerApp({
         error: errorMessage(hostedError, "托管文件读取失败"),
       }));
     }
-  }, [isHostedPlatform]);
+  }, [isBetaVersioning, isHostedPlatform]);
 
   useEffect(() => {
     if (!isHostedPlatform) return;
@@ -508,7 +514,8 @@ export function RiveViewerApp({
         const openedSize = selectedVersion?.size || share.size;
         const openedAt = selectedVersion?.createdAt || share.createdAt;
         setPublicShare(share);
-        document.title = `${openedFilename} - Rive 预览`;
+        const openedFormat = selectedVersion?.format || share.format;
+        document.title = `${openedFilename} - 动效预览`;
         if (share.status === "archived") {
           activeSourceRef.current = null;
           telemetry.reset();
@@ -523,6 +530,7 @@ export function RiveViewerApp({
             id: `hosted-${share.code}`,
             name: openedFilename,
             size: openedSize,
+            format: openedFormat,
             updatedAt: Date.parse(openedAt) || Date.now(),
             hostedCode: share.code,
           },
@@ -547,6 +555,7 @@ export function RiveViewerApp({
             id: `hosted-${share.code}`,
             name: openedFilename,
             size: openedSize || data.byteLength,
+            format: openedFormat,
             updatedAt: Date.parse(openedAt) || Date.now(),
             hostedCode: share.code,
           },
@@ -624,7 +633,7 @@ export function RiveViewerApp({
   }, [commentsReload, publicShare?.status, shareCode]);
 
   useEffect(() => () => {
-    if (shareCode) document.title = "Rive 预览台 H5";
+    if (shareCode) document.title = "动效预览台 H5";
   }, [shareCode]);
 
   useEffect(() => {
@@ -635,15 +644,16 @@ export function RiveViewerApp({
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    const lottieContainer = lottieContainerRef.current;
     const stage = stageRef.current;
-    if (!activeFile || !canvas || !stage) return;
+    if (!activeFile || !canvas || !lottieContainer || !stage) return;
     const source = activeSourceRef.current;
     if (!source || source.sessionId !== activeFile.sessionId) return;
     activeSourceRef.current = null;
     let sourceData: ArrayBuffer | null = source.data;
     source.data = new ArrayBuffer(0);
     let cancelled = false;
-    let player: WebRivePlayer | null = null;
+    let player: AnimationPlayer | null = null;
     let observer: ResizeObserver | null = null;
     let loadReady = false;
     let pendingRuntimeFailure: Error | null = null;
@@ -654,13 +664,15 @@ export function RiveViewerApp({
         setMetadata(EMPTY_METADATA);
         telemetry.reset();
         runtimeEventLog.reset();
-        setLoading({ active: true, progress: 28, phase: "正在初始化 Rive" });
+        const format = activeFile.file.format;
+        const formatLabel = animationFormatLabel(format);
+        setLoading({ active: true, progress: 28, phase: `正在初始化 ${formatLabel}` });
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         if (cancelled) return;
-        const { WebRivePlayer: Player } = await import("../../lib/rive-player");
+        const { createAnimationPlayer } = await import("../../lib/animation-player");
         if (cancelled) return;
         const selectedEngine = renderEngineRef.current;
-        player = new Player(canvas, {
+        player = await createAnimationPlayer(format, canvas, lottieContainer, {
           onMetadata: (nextMetadata) => !cancelled && setMetadata(nextMetadata),
           onPlayback: (nextPlaying) => {
             if (!cancelled) setPlaying(nextPlaying);
@@ -671,7 +683,7 @@ export function RiveViewerApp({
             if (!cancelled) runtimeEventLog.append(event);
           },
           onRuntimeFailure: (runtimeError) => {
-            if (cancelled || selectedEngine !== "webgl2" || engineFallbackBusyRef.current) return;
+            if (format !== "rive" || cancelled || selectedEngine !== "webgl2" || engineFallbackBusyRef.current) return;
             if (!loadReady) {
               pendingRuntimeFailure = runtimeError;
               return;
@@ -703,7 +715,7 @@ export function RiveViewerApp({
           await player.load(sourceData);
           if (pendingRuntimeFailure) throw pendingRuntimeFailure;
         } catch (engineError) {
-          if (selectedEngine !== "webgl2" || engineFallbackBusyRef.current || cancelled) {
+          if (format !== "rive" || selectedEngine !== "webgl2" || engineFallbackBusyRef.current || cancelled) {
             throw engineError;
           }
           engineFallbackBusyRef.current = true;
@@ -731,7 +743,10 @@ export function RiveViewerApp({
         if (!capturedCoverIdsRef.current.has(activeFile.file.id)) {
           capturedCoverIdsRef.current.add(activeFile.file.id);
           window.setTimeout(async () => {
-            if (cancelled || !canvas.width || !canvas.height) return;
+            const captureCanvas = format === "lottie"
+              ? lottieContainer.querySelector("canvas")
+              : canvas;
+            if (cancelled || !captureCanvas?.width || !captureCanvas.height) return;
             const thumbnail = document.createElement("canvas");
             thumbnail.width = 160;
             thumbnail.height = 120;
@@ -739,7 +754,7 @@ export function RiveViewerApp({
             if (!context) return;
             context.fillStyle = "#1b2632";
             context.fillRect(0, 0, thumbnail.width, thumbnail.height);
-            context.drawImage(canvas, 0, 0, thumbnail.width, thumbnail.height);
+            context.drawImage(captureCanvas, 0, 0, thumbnail.width, thumbnail.height);
             const blob = await new Promise<Blob | null>((resolve) => (
               thumbnail.toBlob(resolve, "image/webp", 0.58)
             ));
@@ -751,7 +766,7 @@ export function RiveViewerApp({
       } catch (loadError) {
         if (cancelled) return;
         setLoading({ active: false, progress: 0, phase: "加载失败" });
-        setError(loadError instanceof Error ? loadError.message : "Rive 文件无法打开");
+        setError(loadError instanceof Error ? loadError.message : "动效文件无法打开");
       } finally {
         sourceData = null;
       }
@@ -879,8 +894,15 @@ export function RiveViewerApp({
     const file = input.files?.[0];
     input.value = "";
     if (!file || !isBetaVersioning || !activeHostedCode || versionUploading) return;
-    if (!file.name.toLowerCase().endsWith(".riv")) {
-      setVersionUploadError("只能上传 .riv 文件");
+    let format: AnimationFormat;
+    try {
+      format = validateAnimationFile(file);
+    } catch (validationError) {
+      setVersionUploadError(errorMessage(validationError, "文件不受支持"));
+      return;
+    }
+    if (format !== publicShare?.format) {
+      setVersionUploadError(`新版本必须仍是 ${animationFormatLabel(publicShare?.format || "rive")} 文件`);
       return;
     }
     setVersionUploading(true);
@@ -907,7 +929,7 @@ export function RiveViewerApp({
     } finally {
       setVersionUploading(false);
     }
-  }, [activeHostedCode, isBetaVersioning, refreshHostedLibrary, versionUploading]);
+  }, [activeHostedCode, isBetaVersioning, publicShare?.format, refreshHostedLibrary, versionUploading]);
   const coverUrls = useMemo(() => new Map(
     [...files, ...(activeFile?.file.cover ? [activeFile.file] : [])]
       .filter((file, index, values) => file.cover && values.findIndex((item) => item.id === file.id) === index)
@@ -985,7 +1007,7 @@ export function RiveViewerApp({
       activeSourceRef.current = { sessionId, data };
       telemetry.reset();
       setActiveFile({ file: openedFile, sessionId });
-      document.title = `${openedFile.name} - Rive 预览`;
+      document.title = `${openedFile.name} - 动效预览`;
       if (activityPolicy === "record") {
         void touchLocalFile(file.id, updatedAt).catch((touchError) => {
           console.warn("更新最近打开时间失败", touchError);
@@ -1097,14 +1119,12 @@ export function RiveViewerApp({
       setImportError("当前文件仍在上传，请完成后再选择下一批文件。");
       return;
     }
-    const selected = Array.from(values).filter((file) => file.name.toLowerCase().endsWith(".riv"));
-    if (!selected.length) {
-      setImportError("只接受 .riv 文件，请重新选择。");
-      return;
-    }
-    const oversized = selected.find((file) => file.size > MAX_HOSTED_FILE_BYTES);
-    if (isHostedPlatform && oversized) {
-      setImportError(`${oversized.name} 超过 64 MiB，无法上传。`);
+    const selected = Array.from(values);
+    if (!selected.length) return;
+    try {
+      selected.forEach(validateAnimationFile);
+    } catch (validationError) {
+      setImportError(errorMessage(validationError, "文件不受支持，请重新选择。"));
       return;
     }
 
@@ -1497,7 +1517,7 @@ export function RiveViewerApp({
     }
   };
 
-  const handleInput = (input: RiveInput, value?: boolean | number) => {
+  const handleInput = (input: AnimationInput, value?: boolean | number) => {
     if (input.type === "trigger") playerRef.current?.fireInput(input.index);
     else playerRef.current?.setInput(input.index, value ?? !input.value);
   };
@@ -1932,7 +1952,7 @@ export function RiveViewerApp({
         ref={fileInputRef}
         className="sr-only"
         type="file"
-        accept=".riv,application/octet-stream"
+        accept={SUPPORTED_ANIMATION_ACCEPT}
         multiple
         disabled={uploadBusy}
         onChange={importFiles}
@@ -1942,7 +1962,7 @@ export function RiveViewerApp({
           ref={versionInputRef}
           className="sr-only"
           type="file"
-          accept=".riv,application/octet-stream"
+          accept={SUPPORTED_ANIMATION_ACCEPT}
           disabled={versionUploading || !activeHostedCode}
           onChange={(event) => void updateHostedVersion(event)}
         />
@@ -1951,7 +1971,7 @@ export function RiveViewerApp({
         <div className="detail-drop-overlay" role="status" aria-live="polite">
           <span><Icon name="cloud-arrow-up" size={24} /></span>
           <strong>松开后立即打开并上传</strong>
-          <small>只接受 .riv 文件</small>
+          <small>支持 Rive、Lottie JSON、PAG（PAG ≤ 10 MiB）</small>
         </div>
       )}
       {activeFile ? (
@@ -1975,7 +1995,7 @@ export function RiveViewerApp({
                   onClick={() => versionInputRef.current?.click()}
                   disabled={versionUploading}
                   aria-label="更新文件版本"
-                  title="上传新的 Rive 文件版本"
+                  title="上传同格式的新文件版本"
                 >
                   <Icon name="cloud-arrow-up" size={18} />
                   <span className="topbar-action-label">
@@ -2041,10 +2061,10 @@ export function RiveViewerApp({
               }}
             >
               <span className="import-mark"><Icon name="plus" size={24} /></span>
-              <span>{isHostedPlatform ? "上传 Rive 文件" : "导入 Rive 文件"}</span>
+              <span>{isHostedPlatform ? "上传动效文件" : "导入动效文件"}</span>
               <small>{isHostedPlatform
-                ? "拖入或点击选择，上传后自动生成公开链接"
-                : "拖入或点击选择，只保存在当前浏览器"}</small>
+                ? "支持 Rive / Lottie / PAG，PAG 不超过 10 MiB"
+                : "支持 Rive / Lottie / PAG，只保存在当前浏览器"}</small>
             </button>
             {importError && <div className="inline-error import-error" role="alert">{importError}</div>}
 
@@ -2167,7 +2187,7 @@ export function RiveViewerApp({
                 onClick={() => versionInputRef.current?.click()}
                 disabled={versionUploading}
                 aria-label="更新文件版本"
-                title={versionUploading ? `正在上传 ${versionUploadProgress}%` : "上传新的 Rive 文件版本"}
+                title={versionUploading ? `正在上传 ${versionUploadProgress}%` : "上传同格式的新文件版本"}
               >
                 <Icon name="cloud-arrow-up" size={18} />
                 <span>{versionUploading ? `${versionUploadProgress}%` : "上传新版本"}</span>
@@ -2209,12 +2229,18 @@ export function RiveViewerApp({
               <canvas
                 key={canvasGeneration}
                 ref={canvasRef}
-                aria-label="Rive 交互画布"
+                className={activeFile.file.format === "lottie" ? "is-surface-hidden" : ""}
+                aria-label={`${animationFormatLabel(activeFile.file.format)} 动效画布`}
                 onPointerDown={(event) => canvasPointer("down", event)}
                 onPointerMove={(event) => canvasPointer("move", event)}
                 onPointerUp={(event) => canvasPointer("up", event)}
                 onPointerCancel={(event) => canvasPointer("exit", event)}
                 onPointerLeave={(event) => canvasPointer("exit", event)}
+              />
+              <div
+                ref={lottieContainerRef}
+                className={`lottie-surface ${activeFile.file.format === "lottie" ? "is-active" : ""}`}
+                aria-hidden={activeFile.file.format !== "lottie"}
               />
               {loading.active && (
                 <div className="canvas-state loading-state">
@@ -2227,7 +2253,7 @@ export function RiveViewerApp({
               )}
               {error && (
                 <div className="canvas-state error-state">
-                  <strong>Rive 文件未能加载</strong>
+                  <strong>动效文件未能加载</strong>
                   <p>{error}</p>
                   <button onClick={reloadActiveFile}>重新加载</button>
                 </div>
@@ -2315,12 +2341,12 @@ export function RiveViewerApp({
 
           <aside ref={previewInspectorRef} id="preview-inspector" className="preview-inspector" aria-label="评论与预览参数">
             <div className="control-panel">
-          <RuntimeEventConsole log={runtimeEventLog} />
+          {activeFile.file.format === "rive" && <RuntimeEventConsole log={runtimeEventLog} />}
           {isPublicRoute && commentsPanel && (
             <div className="public-comments-inline">{commentsPanel}</div>
           )}
 
-          <ParameterRow label="画板">
+          {activeFile.file.format === "rive" && <ParameterRow label="画板">
             {metadata.artboardNames.map((name) => (
               <Tag key={name} selected={metadata.activeArtboard === name} onClick={() => playerRef.current?.selectArtboard(name)}>{name}</Tag>
             ))}
@@ -2330,13 +2356,13 @@ export function RiveViewerApp({
                 <span>{catalogLoading ? `正在解析 ${catalogProgress}%` : `展开其余 ${remainingArtboards} 个`}</span>
               </button>
             )}
-          </ParameterRow>
+          </ParameterRow>}
 
-          <ParameterRow label="状态机">
+          {activeFile.file.format === "rive" && <ParameterRow label="状态机">
             {metadata.stateMachines.length ? metadata.stateMachines.map((name) => (
               <Tag key={name} selected={metadata.activeStateMachine === name} onClick={() => playerRef.current?.selectStateMachine(name)}>{name}</Tag>
             )) : <EmptyTag>无状态机</EmptyTag>}
-          </ParameterRow>
+          </ParameterRow>}
 
           <TimelineControl
             key={activeFile.sessionId}
@@ -2346,7 +2372,7 @@ export function RiveViewerApp({
             onSelect={selectTimelineFromControl}
           />
 
-          <ParameterRow label="状态机输入">
+          {activeFile.file.format === "rive" && <ParameterRow label="状态机输入">
             {metadata.inputs.length ? metadata.inputs.map((input) => (
               input.type === "number" ? (
                 <label className="number-tag" key={`${input.name}-${input.index}`}>
@@ -2369,7 +2395,7 @@ export function RiveViewerApp({
                 </Tag>
               )
             )) : <EmptyTag>无输入</EmptyTag>}
-          </ParameterRow>
+          </ParameterRow>}
 
           <ParameterRow label="预览背景">
             {CANVAS_TONES.map((tone) => (
@@ -2395,19 +2421,19 @@ export function RiveViewerApp({
             </ParameterRow>
           )}
 
-          <ParameterRow label="渲染质量">
+          {activeFile.file.format !== "lottie" && <ParameterRow label="渲染质量">
             <Tag subtleSelected selected={quality === 1} onClick={() => setQuality(1)}>性能</Tag>
             <Tag subtleSelected selected={quality === 1.5} onClick={() => setQuality(1.5)}>平衡</Tag>
             <Tag subtleSelected selected={quality === 2} onClick={() => setQuality(2)}>高清</Tag>
-          </ParameterRow>
+          </ParameterRow>}
           <ParameterRow label="缩放方式">
             <Tag subtleSelected selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>
             <Tag subtleSelected selected={fit === "cover"} onClick={() => selectFit("cover")}>铺满</Tag>
           </ParameterRow>
-          <ParameterRow label="渲染引擎">
+          {activeFile.file.format === "rive" && <ParameterRow label="渲染引擎">
             <Tag subtleSelected selected={renderEngine === "webgl2"} onClick={() => selectRenderEngine("webgl2")}>WebGL2</Tag>
             <Tag subtleSelected selected={renderEngine === "canvas2d"} onClick={() => selectRenderEngine("canvas2d")}>兼容模式</Tag>
-          </ParameterRow>
+          </ParameterRow>}
             </div>
           </aside>
         </div>
@@ -2442,6 +2468,7 @@ export function RiveViewerApp({
             id: `hosted-${publishedShare.code}`,
             name: publishedShare.filename,
             size: publishedShare.size,
+            format: publishedShare.format,
             updatedAt: Date.parse(publishedShare.createdAt) || Date.now(),
             hostedCode: publishedShare.code,
           }, publishedShare.code)}
@@ -2919,8 +2946,8 @@ function PreviewFileRail({
           className="preview-file-add press-feedback"
           onClick={onAdd}
           disabled={uploadBusy}
-          aria-label="选择并上传 Rive 文件"
-          title="选择并上传 Rive 文件"
+          aria-label="选择并上传动效文件"
+          title="选择并上传动效文件"
         >
           <Icon name="plus" size={18} />
         </button>

@@ -193,7 +193,7 @@
 | 评论动物头像 | Circular forest or custom comment avatar | `compressCommentAvatar`、`COMMENT_AVATAR_EDGE = 64`、`avatarDataUrl`、`.comment-identity-avatar`、`.comment-author img`；自定义原图只在内存解码，居中裁切为 `64×64 WebP`，列表按 `32×32px` 圆形展示 |
 | 归档评论 | Collapsed archived comment | `archiveHostedComment`、`.comment-item-archived`、`POST /comments/:commentId/archive`；默认折叠，保留身份与状态摘要 |
 | 恢复评论 | Restore archived comment | `restoreHostedComment`、`POST /comments/:commentId/restore`、`X-Rive-Action: restore`；展开归档评论后恢复原文与顺序 |
-| 托管文件库 | Server-side Rive storage | `ShareStore.createFromStaged`、`/var/lib/rive-host/files`、`state.json` 原子更新、发布目录外持久化；每次上传生成新短码和独立评论线程，不按内容哈希复用 |
+| 托管文件库 | Server-side animation storage | `ShareStore.createFromStaged`、`/var/lib/rive-host/files`、`state.json` 原子更新、发布目录外持久化；每次上传生成新短码和独立评论线程，不按内容哈希复用 |
 | 归档文件 | Soft archive hosted file | `archiveHostedShare`、`X-Rive-Action: archive`、`archivedAt`、`.archive-confirm`、二次确认 |
 | 已归档入口 | Archived library trigger | `.archived-library-trigger`、`.archived-library-count`、`archivedDialogOpen`、`aria-controls="archived-library-dialog"`；位于首页“最近文件”标题右侧，数量是无底色的普通灰字 |
 | 已归档文件 | Archived file dialog | `ArchivedLibraryDialog`、`.archived-library-dialog`、`.archived-dialog-body`、`ArchiveConfirmDialog`；默认不占首页高度，弹窗内复制、恢复、刷新 |
@@ -201,6 +201,14 @@
 | 详情内文件加载 | Inline hosted-file loading | `navigateHostedShare`、`shareCode`内部路由状态、`history.pushState`、`.canvas-card .loading-state`；切换云端文件不刷新全页，Loading 只位于预览画布 |
 | 播放速度菜单 | Custom playback speed listbox | `.speed-select`、`.speed-menu`、`.speed-option`、`speedMenuOpen`；向上展开的自定义 `listbox`，不使用浏览器原生下拉控件 |
 | Rive 音频暂停 | Synchronized Rive audio suspension | `suspendRiveAudio`、`resumeRiveAudio`、`AudioContext.suspend/resume`；暂停画面时同步暂停内部声音 |
-| 托管 API 服务 | Rive host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |
+| 动效文件格式 | Hosted animation format | `AnimationFormat`、`animationFormatFromFilename`、`normalizeAnimationFormat`；`rive / lottie / pag` |
+| 统一播放器 | Animation player adapter | `AnimationPlayer`、`createAnimationPlayer`；按格式动态加载 Rive、Lottie 或 PAG 实现 |
+| Lottie 播放器 | Lottie canvas player | `LottieAnimationPlayer`、`lottie_light_canvas`；仅接受无外链资源的自包含 JSON |
+| PAG 播放器 | libpag WebAssembly player | `PagAnimationPlayer`、`libpag@4.5.85`；按需加载 JS 与版本化 WASM |
+| PAG 十兆限制 | PAG 10 MiB hard limit | `MAX_PAG_FILE_BYTES`、`maxFileBytesForFormat`；浏览器预检与服务端流式读取双重限制，`10 MiB` 可接受、再多 `1 B` 拒绝 |
+| Beta 本地库隔离 | Beta IndexedDB isolation | `rive-viewer-h5-beta`；正式页继续使用 `rive-viewer-h5`，多格式最近记录不串入正式页 |
+| 托管格式筛选 | Hosted format filter | `GET /api/v1/shares?formats=rive,lottie,pag`；未传参数时兼容正式旧前端，仅返回 Rive |
+| 托管 API 服务 | Animation host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |
 | 托管原子发布 | Hosted atomic release | `/opt/rive-host/releases/<时间戳>`、`/var/www/rive-host/releases/<时间戳>`、两个 `current` 软链接 |
-| 当前 JOJO 前后端 | Active hosted release | `/var/www/rive-host/releases/20260826-104757`、`/opt/rive-host/releases/20260826-104757`；本机评论身份、黄色光标、可整理判定已发布，WebGL2/Canvas2D 双引擎保留 |
+| 当前正式 JOJO 前端 | Active formal frontend | `/var/www/rive-host/releases/20260826-111929`；正式根路径保持 Rive 版 |
+| 当前 Beta 前后端 | Active Beta release | `/var/www/rive-host-beta/releases/20260826-132255`、`/opt/rive-host/releases/20260826-132255`；Beta 支持 Rive、Lottie、PAG，后端兼容正式 Rive 列表 |

@@ -1,9 +1,12 @@
+import type { AnimationFormat } from "./animation-format";
+
 export type HostedShareStatus = "active" | "archived";
 
 export type HostedFileVersion = {
   id: string;
   name: string;
   filename: string;
+  format: AnimationFormat;
   size: number;
   sha256: string;
   etag: string;
@@ -13,6 +16,7 @@ export type HostedFileVersion = {
 export type HostedShare = {
   code: string;
   filename: string;
+  format: AnimationFormat;
   size: number;
   sha256: string;
   etag: string;
@@ -131,9 +135,11 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 export async function listHostedShares(
   status: HostedShareStatus,
   signal?: AbortSignal,
+  formats?: AnimationFormat[],
 ): Promise<HostedShare[]> {
+  const formatQuery = formats?.length ? `&formats=${encodeURIComponent(formats.join(","))}` : "";
   const payload = await requestJson<ItemsEnvelope<HostedShare>>(
-    `/shares?status=${encodeURIComponent(status)}`,
+    `/shares?status=${encodeURIComponent(status)}${formatQuery}`,
     { signal },
   );
   return payload.items;
@@ -186,7 +192,7 @@ function uploadHostedBinary(
     request.responseType = "json";
     request.setRequestHeader("Accept", "application/json");
     request.setRequestHeader("Content-Type", "application/octet-stream");
-    request.setRequestHeader("X-Rive-Filename", encodeURIComponent(filename));
+    request.setRequestHeader("X-Animation-Filename", encodeURIComponent(filename));
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable || event.total <= 0) return;
       onProgress?.(Math.min(99, Math.max(1, Math.round((event.loaded / event.total) * 100))));

@@ -1,7 +1,13 @@
+import {
+  normalizeAnimationFormat,
+  type AnimationFormat,
+} from "./animation-format.ts";
+
 export type LibraryFile = {
   id: string;
   name: string;
   size: number;
+  format: AnimationFormat;
   updatedAt: number;
   hostedCode?: string;
   cover?: Blob;
@@ -11,7 +17,9 @@ type StoredRiveFile = LibraryFile & {
   data: ArrayBuffer;
 };
 
-const DB_NAME = "rive-viewer-h5";
+const DB_NAME = import.meta.env?.BASE_URL === "/beta/"
+  ? "rive-viewer-h5-beta"
+  : "rive-viewer-h5";
 type StoredCover = {
   id: string;
   blob: Blob;
@@ -22,6 +30,7 @@ type StoredRecentHostedFile = {
   hostedCode: string;
   name: string;
   size: number;
+  format?: AnimationFormat;
   updatedAt: number;
 };
 
@@ -78,6 +87,7 @@ export async function listLocalFiles(): Promise<LibraryFile[]> {
         id: record.id,
         name: record.name,
         size: record.size,
+        format: normalizeAnimationFormat(record.format, record.name),
         updatedAt: record.updatedAt,
       }))
       .sort((left, right) => right.updatedAt - left.updatedAt);
@@ -88,7 +98,7 @@ export async function listLocalFiles(): Promise<LibraryFile[]> {
 
 export function mergeRecentHostedRecords(
   records: StoredRecentHostedFile[],
-  share: { code: string; filename: string; size: number },
+  share: { code: string; filename: string; size: number; format?: AnimationFormat },
   updatedAt = Date.now(),
   limit = RECENT_HOSTED_LIMIT,
   preserveExistingActivity = false,
@@ -102,6 +112,7 @@ export function mergeRecentHostedRecords(
     hostedCode: code,
     name: share.filename,
     size: share.size,
+    format: normalizeAnimationFormat(share.format, share.filename),
     updatedAt: preserveExistingActivity
       ? records.find((record) => record.hostedCode === code)?.updatedAt || updatedAt
       : updatedAt,
@@ -139,14 +150,17 @@ export async function listRecentHostedFiles(): Promise<LibraryFile[]> {
       .filter(isStoredRecentHostedFile)
       .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, RECENT_HOSTED_LIMIT)
-      .map((record) => ({ ...record }));
+      .map((record) => ({
+        ...record,
+        format: normalizeAnimationFormat(record.format, record.name),
+      }));
   } finally {
     database.close();
   }
 }
 
 export async function rememberRecentHostedFile(
-  share: { code: string; filename: string; size: number },
+  share: { code: string; filename: string; size: number; format?: AnimationFormat },
   updatedAt = Date.now(),
   preserveExistingActivity = false,
 ): Promise<LibraryFile | null> {
@@ -175,7 +189,10 @@ export async function rememberRecentHostedFile(
       if (!keepIds.has(item.id)) store.delete(item.id);
     });
     await transactionDone(writeTransaction);
-    return { ...record };
+    return {
+      ...record,
+      format: normalizeAnimationFormat(record.format, record.name),
+    };
   } finally {
     database.close();
   }
@@ -211,6 +228,7 @@ export async function saveLocalFile(file: File): Promise<LibraryFile> {
     id: `local-${crypto.randomUUID()}`,
     name: file.name,
     size: file.size,
+    format: normalizeAnimationFormat(undefined, file.name),
     updatedAt: Date.now(),
     data,
   };
@@ -222,6 +240,7 @@ export async function saveLocalFile(file: File): Promise<LibraryFile> {
       id: record.id,
       name: record.name,
       size: record.size,
+      format: record.format,
       updatedAt: record.updatedAt,
     };
   } finally {

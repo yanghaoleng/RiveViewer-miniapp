@@ -31,6 +31,10 @@ function normalizeLegacyState(state) {
   if (!state || !Array.isArray(state.shares)) return { state, changed };
 
   for (const share of state.shares) {
+    if (!Object.hasOwn(share, "format")) {
+      share.format = "rive";
+      changed = true;
+    }
     if (!Object.hasOwn(share, "versions")) {
       const versionId = String(share.storageName || "").replace(/\.riv$/i, "");
       share.versions = [{
@@ -38,6 +42,7 @@ function normalizeLegacyState(state) {
         name: "版本 1",
         storageName: share.storageName,
         filename: share.filename,
+        format: share.format,
         size: share.size,
         sha256: share.sha256,
         etag: share.etag,
@@ -48,6 +53,12 @@ function normalizeLegacyState(state) {
     } else if (!Object.hasOwn(share, "currentVersionId") && share.versions.length) {
       share.currentVersionId = share.versions.at(-1).id;
       changed = true;
+    }
+    for (const version of share.versions) {
+      if (!Object.hasOwn(version, "format")) {
+        version.format = share.format;
+        changed = true;
+      }
     }
     if (!Array.isArray(share?.comments)) continue;
     for (const comment of share.comments) {
@@ -80,6 +91,7 @@ function publicVersion(version) {
     id: version.id,
     name: version.name,
     filename: version.filename,
+    format: version.format,
     size: version.size,
     sha256: version.sha256,
     etag: version.etag,
@@ -91,6 +103,7 @@ function publicMetadata(share, { includeVersions = false } = {}) {
   const metadata = {
     code: share.code,
     filename: share.filename,
+    format: share.format,
     size: share.size,
     sha256: share.sha256,
     etag: share.etag,
@@ -123,6 +136,7 @@ function validateState(state) {
     codes.add(share.code);
     if (
       typeof share.filename !== "string"
+      || !["rive", "lottie", "pag"].includes(share.format)
       || !Number.isSafeInteger(share.size)
       || share.size < 4
       || !/^[0-9a-f]{64}$/.test(share.sha256 || "")
@@ -149,6 +163,7 @@ function validateState(state) {
         || [...version.name].length < 1
         || [...version.name].length > 40
         || typeof version.filename !== "string"
+        || version.format !== share.format
         || !Number.isSafeInteger(version.size)
         || version.size < 4
         || !/^[0-9a-f]{64}$/.test(version.sha256 || "")
@@ -354,9 +369,9 @@ export class ShareStore {
     }
   }
 
-  list(status) {
+  list(status, formats = ["rive"]) {
     return this.state.shares
-      .filter((share) => share.status === status && !share.isExample)
+      .filter((share) => share.status === status && !share.isExample && formats.includes(share.format))
       .slice()
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .map(publicMetadata);
@@ -388,7 +403,7 @@ export class ShareStore {
     return share ? publicMetadata(share) : null;
   }
 
-  async createFromStaged({ tempPath, filename, size, sha256, isExample }) {
+  async createFromStaged({ tempPath, filename, format = "rive", size, sha256, isExample }) {
     return this.#enqueue(async () => {
       if (this.state.shares.length >= MAX_SHARES) {
         throw new AppError(507, "share_limit", "托管文件数量已达到上限");
@@ -419,6 +434,7 @@ export class ShareStore {
         name: "版本 1",
         storageName,
         filename,
+        format,
         size,
         sha256,
         etag: `"sha256-${sha256}"`,
@@ -428,6 +444,7 @@ export class ShareStore {
         code,
         storageName,
         filename,
+        format,
         size,
         sha256,
         etag: `"sha256-${sha256}"`,
@@ -456,12 +473,15 @@ export class ShareStore {
     });
   }
 
-  async addVersionFromStaged(code, { tempPath, filename, size, sha256 }) {
+  async addVersionFromStaged(code, { tempPath, filename, format = "rive", size, sha256 }) {
     return this.#enqueue(async () => {
       const currentShare = this.state.shares.find((item) => item.code === code);
       if (!currentShare) throw new AppError(404, "share_not_found", "分享不存在");
       if (currentShare.status === "archived") {
         throw new AppError(409, "share_archived", "归档分享不能更新版本");
+      }
+      if (currentShare.format !== format) {
+        throw new AppError(422, "format_mismatch", "新版本必须与当前文件格式一致");
       }
       if (currentShare.versions.length >= MAX_VERSIONS_PER_SHARE) {
         throw new AppError(429, "version_limit", "这个文件的版本数已达上限");
@@ -476,6 +496,7 @@ export class ShareStore {
         name: `版本 ${currentShare.versions.length + 1}`,
         storageName,
         filename,
+        format,
         size,
         sha256,
         etag: `"sha256-${sha256}"`,

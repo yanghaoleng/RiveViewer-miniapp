@@ -7,6 +7,7 @@ export function hostedVersions(share: HostedShare | null): HostedFileVersion[] {
     id: share.currentVersionId || share.etag,
     name: "版本 1",
     filename: share.filename,
+    format: share.format,
     size: share.size,
     sha256: share.sha256,
     etag: share.etag,

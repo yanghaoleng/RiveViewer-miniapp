@@ -20,7 +20,7 @@ if (!inputPaths.length) {
     const info = await stat(filePath);
     if (!info.isFile()) throw new Error(`${filePath} 不是文件`);
     if (info.size > MAX_FILE_BYTES) throw new Error(`${filePath} 超过 64 MiB`);
-    const filename = normalizeFilename(path.basename(filePath));
+    const { filename } = normalizeFilename(path.basename(filePath));
     const staged = await stageRiveStream(createReadStream(filePath), store.tempDir);
     try {
       const existing = store.findExampleBySha256(staged.sha256);

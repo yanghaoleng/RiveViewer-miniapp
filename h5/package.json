@@ -19,6 +19,8 @@
     "@rive-app/canvas-advanced": "2.39.1",
     "@rive-app/webgl2-advanced": "2.39.1",
     "calligraph": "^1.4.1",
+    "libpag": "4.5.85",
+    "lottie-web": "5.13.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },

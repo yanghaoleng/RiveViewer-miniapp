@@ -17,6 +17,7 @@ import {
   MAX_FILE_BYTES,
 } from "../src/config.mjs";
 import { stageRiveStream } from "../src/ingest.mjs";
+import { MAX_PAG_FILE_BYTES } from "../src/animation-formats.mjs";
 
 const serverRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const silentLogger = { error() {}, warn() {}, log() {} };
@@ -119,6 +120,17 @@ async function uploadVersion(port, code, filename, bytes) {
     },
     body: bytes,
   });
+}
+
+function makeLottie() {
+  return Buffer.from(JSON.stringify({ v: "5.12.0", w: 100, h: 100, fr: 30, ip: 0, op: 60, layers: [] }));
+}
+
+function makePag(size = 8) {
+  const bytes = Buffer.alloc(Math.max(4, size));
+  bytes.write("PAG", 0, "ascii");
+  bytes[3] = 1;
+  return bytes;
 }
 
 async function withTempDir(run) {
@@ -318,6 +330,65 @@ test("uploads, serves ranges, comments, archives, restores, and persists exact-c
     assert.equal(response.json.items[0].status, "active");
     assert.equal(response.json.items[0].archivedAt, null);
     await restarted.close();
+  });
+});
+
+test("accepts self-contained Lottie and PAG, filters legacy lists, and caps PAG at 10 MiB", async () => {
+  await withTempDir(async (dataDir) => {
+    const instance = await listenApp(dataDir, {
+      codeGenerator: sequenceGenerator(["R01", "L01", "P01"]),
+    });
+    let response = await upload(instance.port, "legacy.riv", makeRive());
+    assert.equal(response.status, 201);
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Animation-Filename": encodeURIComponent("motion.json"),
+      },
+      body: makeLottie(),
+    });
+    assert.equal(response.status, 201);
+    assert.equal(response.json.item.format, "lottie");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Animation-Filename": encodeURIComponent("motion.pag"),
+      },
+      body: makePag(),
+    });
+    assert.equal(response.status, 201);
+    assert.equal(response.json.item.format, "pag");
+
+    response = await call(instance.port, { pathname: "/api/v1/shares?status=active" });
+    assert.deepEqual(response.json.items.map((item) => item.format), ["rive"]);
+    response = await call(instance.port, {
+      pathname: "/api/v1/shares?status=active&formats=rive,lottie,pag",
+    });
+    assert.equal(response.json.items.length, 3);
+
+    response = await uploadVersion(instance.port, "P01", "wrong.riv", makeRive());
+    assert.equal(response.status, 422);
+    assert.equal(response.json.error.code, "format_mismatch");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Animation-Filename": encodeURIComponent("too-large.pag"),
+      },
+      body: makePag(MAX_PAG_FILE_BYTES + 1),
+    });
+    assert.equal(response.status, 413);
+    assert.equal(response.json.error.message, "PAG 文件不能超过 10 MiB");
+
+    await instance.close();
   });
 });
 
