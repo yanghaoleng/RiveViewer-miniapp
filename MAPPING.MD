@@ -121,7 +121,7 @@
 | H5 平台标签（已移除） | Removed platform badge | 不再渲染 `.platform-label` 或右上角 `H5` 文案 |
 | H5 标题品牌图标 | Header brand mark | `Brand`、`.brand-mark`、`.brand-title`、`.brand-signature`、`favicon.webp?v=2`；署名小字为 `for JOJO` |
 | H5 文件操作箭头 | Hover file action toggle | `.file-action`、`.file-row:hover`、`.file-row:focus-within`、`.is-menu-open` |
-| H5 完整模式比例画布 | Proportional contain canvas | `hasStageAspect`、`stageAspect`、`stageStyle`、`.canvas-card.is-proportional` |
+| H5 Rive 完整比例画布 | Proportional Rive contain canvas | `stageKeepsSourceAspect`、`hasStageAspect`、`stageAspect`、`stageStyle`、`.canvas-card.is-proportional`；只对 Rive 外框锁原比例 |
 | H5 整行悬停背景 | Full-row file hover fill | `.file-row:hover`、`.file-row:focus-within`、`.file-row.is-menu-open` |
 | H5 右上角下载 | Preview top-right download | 手机 `.topbar-download`、宽屏 `.file-heading-download`、`downloadFile`；参数区不再渲染“文件操作” |
 | H5 详情复制按钮 | Direct hosted detail copy | 手机 `.topbar-copy-link`、宽屏 `.file-heading-copy-link`、`copyActiveHostedLink`、`detailCopyFeedback`、`.is-copied`、`check.svg`；下载旁直接复制，成功原位变为普通深色的“已复制” |
@@ -178,7 +178,7 @@
 | 完整文件名浮层 | File name hover tooltip | `.preview-file-rail-name-tooltip`、`data-full-name`；文件名 Hover 或聚焦时在文件栏外显示完整名称 |
 | 当前文件黄线 | Rounded current-file marker | `.preview-file-rail-row.is-current::before`、`3px`、`border-radius: 999px`、`aria-current`；独立竖线，不使用黄色内阴影 |
 | 公开评论栏 | File-scoped forest comment thread | `ShareCommentsPanel`、`CommentThreadState.code`、`.public-comments-inline`、`GET/POST /api/v1/shares/:code/comments`；按三位短码隔离，事件控制台后的唯一正文输入区，聚焦后显示可点击的本机头像和昵称 |
-| JOJO 可调工作台 | Resizable preview workbench | `.preview-workbench`、`.preview-main-column`、`.is-stage-height-customized`、`--manual-stage-height`、`.stage-resizer`、`.preview-inspector`、`1194px`；左画布默认满高、保持文件原比例且保留手柄；桌面优先给预览约 `800px`，右栏最小 `360px` |
+| JOJO 可调工作台 | Resizable preview workbench | `.preview-workbench`、`.preview-main-column`、`.is-stage-height-customized`、`--manual-stage-height`、`.stage-resizer`、`.preview-inspector`、`1194px`；Rive 完整模式外框保持文件比例，Lottie/PAG 使用可调窗口并在内部保持比例；桌面优先给预览约 `800px`，右栏最小 `360px` |
 | 可调中缝 | Accessible column separator | `.preview-column-resizer`、`WIDE_COLUMN_RESIZER_WIDTH`、`applyInspectorWidth`、`role="separator"`；支持拖动、方向键、Home 和 End |
 | 时间轴整理 | Grouped timeline organizer | `TimelineControl`、`hasOrganizableTimelineGroups`、`getDefaultTimelineLayout`、`organizeTimelines`、`.timeline-group-title`；无重复下划线前缀时不显示展开/整理；可分组且超过 `10` 条默认整理，无前缀项目排最前，标签显示后缀但评论引用完整名 |
 | 时间轴三层置顶 | Stacked timeline sticky headers | `.inspector-section-events`、`.timeline-section-header`、`.timeline-group-title`、`0 / 56 / 88px`；滚动时依次固定，Hover 标签高亮对应组标题 |
@@ -203,12 +203,12 @@
 | Rive 音频暂停 | Synchronized Rive audio suspension | `suspendRiveAudio`、`resumeRiveAudio`、`AudioContext.suspend/resume`；暂停画面时同步暂停内部声音 |
 | 动效文件格式 | Hosted animation format | `AnimationFormat`、`animationFormatFromFilename`、`normalizeAnimationFormat`；`rive / lottie / pag` |
 | 统一播放器 | Animation player adapter | `AnimationPlayer`、`createAnimationPlayer`；按格式动态加载 Rive、Lottie 或 PAG 实现 |
-| Lottie 播放器 | Lottie canvas player | `LottieAnimationPlayer`、`lottie_light_canvas`；仅接受无外链资源的自包含 JSON |
-| PAG 播放器 | libpag WebAssembly player | `PagAnimationPlayer`、`libpag@4.5.85`；按需加载 JS 与版本化 WASM |
+| Lottie 播放器 | Lottie canvas player | `WebLottiePlayer`、`lottie_canvas`、`progressiveLoad: false`；完整 Canvas 运行时，仅接受无外链资源的自包含 JSON |
+| PAG 播放器 | libpag WebAssembly player | `WebPagPlayer`、`libpag@4.5.85`、`.canvas-card canvas { width/height: 100% !important; }`；按需加载并禁止 Canvas 越过父容器 |
 | PAG 十兆限制 | PAG 10 MiB hard limit | `MAX_PAG_FILE_BYTES`、`maxFileBytesForFormat`；浏览器预检与服务端流式读取双重限制，`10 MiB` 可接受、再多 `1 B` 拒绝 |
 | Beta 本地库隔离 | Beta IndexedDB isolation | `rive-viewer-h5-beta`；正式页继续使用 `rive-viewer-h5`，多格式最近记录不串入正式页 |
 | 托管格式筛选 | Hosted format filter | `GET /api/v1/shares?formats=rive,lottie,pag`；未传参数时兼容正式旧前端，仅返回 Rive |
 | 托管 API 服务 | Animation host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |
 | 托管原子发布 | Hosted atomic release | `/opt/rive-host/releases/<时间戳>`、`/var/www/rive-host/releases/<时间戳>`、两个 `current` 软链接 |
-| 当前正式 JOJO 前端 | Active formal frontend | `/var/www/rive-host/releases/20260826-111929`；正式根路径保持 Rive 版 |
-| 当前 Beta 前后端 | Active Beta release | `/var/www/rive-host-beta/releases/20260826-132255`、`/opt/rive-host/releases/20260826-132255`；Beta 支持 Rive、Lottie、PAG，后端兼容正式 Rive 列表 |
+| 当前正式 JOJO 前端 | Active formal frontend | `/var/www/rive-host/releases/20260826-140429`；正式根路径支持 Rive、Lottie、PAG 和文件版本 |
+| 当前 Beta 前后端 | Active Beta release | `/var/www/rive-host-beta/releases/20260826-132255`、`/opt/rive-host/releases/20260826-132255`；兼容正式与 Beta 三格式列表 |

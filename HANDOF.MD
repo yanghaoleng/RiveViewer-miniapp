@@ -2,6 +2,16 @@
 
 更新日期：2026-08-26
 
+## 2026-08-26 Lottie / PAG 画布修复与正式推广（已发布）
+
+- Lottie 官方 `1820×275` 样例原先因非 Rive 也复用比例外框，桌面画布被压为约 `683×103px`；拖动开始时 `applyStageHeight` 又会把高度改回 `auto`。现仅 Rive 的“完整”外框锁源比例，Lottie/PAG 使用可调预览窗口，内部播放器继续按源比例完整居中。
+- Lottie 从 `lottie_light_canvas + progressiveLoad` 切换到完整 `lottie_canvas` 并关闭渐进加载，官方样例在 `683×496px` 窗口内完整显示，约 `60 FPS`。完整运行时独立动态分包为 `69.14 KB gzip`，不进入首屏。
+- PAG 初始化后重新同步最终容器尺寸，并以 `100% !important` 抵消 libpag 遗留的行内像素宽高；真实 `244×244` 样例的 Canvas 由原来向右越界约 `185px` 修正为边框内 `-1px`，约 `24 FPS`。
+- 修复提交 `3abfcac` 已推送 `beta`；`beta` 合并进 `main` 的提交为 `3e0dad3`。正式构建同时解除 `/beta/` 功能开关，正式首页现列出 Rive、Lottie、PAG，并启用文件版本、版本评论与上传新版本。
+- 合并后的正式构建通过 H5 lint、TypeScript、`46/46` 测试、`npm audit = 0`，服务端 `12/12` 通过。公网 Lottie `V1e`、PAG `lOF`、Rive `vGd` 均无加载错误；`vGd` 仍保留两条评论，单版本评论不出现版本分组。
+- 正式前端已原子切换为 `/var/www/rive-host/releases/20260826-140429`，直接回滚点为 `20260826-111929`；Beta 前端仍为 `20260826-132255`，兼容后端仍为 `/opt/rive-host/releases/20260826-132255`。入口 JS/CSS、完整 Lottie 运行时、PAG 播放器与 WASM 均与干净构建 SHA-256 一致。
+- 本次未重启后端、未修改托管数据；API PID 保持 `265276`，状态 SHA-256 前后均为 `1894465b7a3635df388e184da5c373496d9726956fc9a03d61f615ae17441ac3`。
+
 ## 2026-08-26 Beta Lottie / PAG（已发布）
 
 - 本轮只扩展 H5 Beta，小程序与正式根路径静态前端未改。Beta 现支持 `.riv`、自包含 Lottie `.json` 和 `.pag`，统一保留播放、重播、倍速、进度、FPS、完整/铺满、背景和评论；Rive 独有的画板、状态机、输入、事件与渲染引擎只在 Rive 文件显示。

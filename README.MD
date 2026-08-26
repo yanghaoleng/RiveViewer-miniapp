@@ -250,16 +250,17 @@ JOJO 托管版在浏览器宽度达到 `1194px`（iPad Pro 11 寸横屏）时使
 - 真实展示样例为 <https://rive.mikeywa.site/vGd>；宣传只描述“适合在钉钉会话中分享的 H5”，不声称钉钉原生登录、机器人或微应用能力。
 - 6 张 `1536×1024`、`3:2` 宣传封面位于 `h5/assets/hackathon/posters/`，均基于 `vGd` 真实桌面/手机页面与绿豆角色生成；`h5/assets/hackathon/validation/` 保留安全区和 `390×260` 手机缩略检查图。
 
-## Beta 文件版本
+## 托管文件版本与多格式
 
-Beta 入口为 <https://rive.mikeywa.site/beta/>，正式根路径继续使用原静态版本。Beta 可预览 `.riv`、自包含的 Lottie `.json` 与 `.pag`；详情页下载按钮左侧可“上传新版本”，新版本必须与原文件格式一致，沿用原三位短码并默认打开。文件名下拉可切换历史版本并显示上传日期。评论携带 `versionId`；只有两个及以上版本时才按“版本 N”分组，单版本沿用普通评论列表，不展示版本概念。
+正式入口 <https://rive.mikeywa.site/> 与 Beta 均可预览 `.riv`、自包含的 Lottie `.json` 与 `.pag`。详情页下载按钮左侧可“上传新版本”，新版本必须与原文件格式一致，沿用原三位短码并默认打开。文件名下拉可切换历史版本并显示上传日期。评论携带 `versionId`；只有两个及以上版本时才按“版本 N”分组，单版本沿用普通评论列表，不展示版本概念。
 
 - `POST /api/v1/shares/:code/versions` 上传并设为当前版本；`GET /api/v1/shares/:code/file?versionId=<UUID>` 下载指定版本。
-- Lottie 使用轻量 Canvas 播放器，只接受图片与字体已内嵌、没有外部资源 URL 的单个 JSON；PAG 使用 WebAssembly 播放器，超过 `10 MiB` 时直接拒绝，不进入上传队列。
-- 三种播放器均按格式动态加载。首屏不预加载 Rive WASM；Lottie 增量约 `57 KB gzip`，首次打开 PAG 增量约 `700 KB gzip`，其中 PAG WASM 为 `609.9 KB gzip`，后续由浏览器长期缓存。
-- 分享元数据新增 `format`、`versions`、`currentVersionId` 和 `versionCount`；旧数据启动时自动识别为 Rive 并补为“版本 1”。正式前端调用不带 `formats` 的列表接口时只返回 Rive，避免 Beta 测试文件进入正式首页。
-- Beta 使用独立 IndexedDB `rive-viewer-h5-beta`，不会把多格式最近记录写入正式页的 `rive-viewer-h5`。线上测试文件为 [Lottie `V1e`](https://rive.mikeywa.site/beta/V1e) 与 [PAG `lOF`](https://rive.mikeywa.site/beta/lOF)。
-- Beta 前端与兼容后端发布目录均为 `20260826-132255`；正式前端仍为 `/var/www/rive-host/releases/20260826-111929`。
+- Lottie 使用完整 Canvas 播放器并关闭渐进加载，只接受图片与字体已内嵌、没有外部资源 URL 的单个 JSON；PAG 使用 WebAssembly 播放器，超过 `10 MiB` 时直接拒绝，不进入上传队列。
+- Lottie 与 PAG 使用可调高度的预览窗口，内部“完整”模式保持源文件比例并完整居中；PAG Canvas 强制跟随窗口内容区，禁止运行时写入的旧尺寸造成越界。
+- 三种播放器均按格式动态加载。首屏不预加载 Rive WASM；完整 Lottie Canvas 运行时约 `69.1 KB gzip`，PAG WASM 为 `609.9 KB gzip`，后续由浏览器长期缓存。
+- 分享元数据包含 `format`、`versions`、`currentVersionId` 和 `versionCount`；旧数据启动时自动识别为 Rive 并补为“版本 1”。正式版与 Beta 均显式请求三种格式；未传 `formats` 的旧客户端继续只收到 Rive，保持向后兼容。
+- Beta 使用独立 IndexedDB `rive-viewer-h5-beta`，不会把最近记录写入正式页的 `rive-viewer-h5`。正式线上测试文件为 [Lottie `V1e`](https://rive.mikeywa.site/V1e) 与 [PAG `lOF`](https://rive.mikeywa.site/lOF)。
+- 正式前端发布目录为 `/var/www/rive-host/releases/20260826-140429`；Beta 前端和兼容后端仍为 `20260826-132255`。
 
 ## 许可证
 
