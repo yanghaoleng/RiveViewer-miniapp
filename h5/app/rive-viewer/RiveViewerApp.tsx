@@ -1979,7 +1979,7 @@ export function RiveViewerApp({
                 >
                   <Icon name="cloud-arrow-up" size={18} />
                   <span className="topbar-action-label">
-                    {versionUploading ? `${versionUploadProgress}%` : "更新版本"}
+                    {versionUploading ? `${versionUploadProgress}%` : "上传新版本"}
                   </span>
                 </button>
               )}
@@ -2170,6 +2170,7 @@ export function RiveViewerApp({
                 title={versionUploading ? `正在上传 ${versionUploadProgress}%` : "上传新的 Rive 文件版本"}
               >
                 <Icon name="cloud-arrow-up" size={18} />
+                <span>{versionUploading ? `${versionUploadProgress}%` : "上传新版本"}</span>
               </button>
             )}
             <button
@@ -2395,17 +2396,17 @@ export function RiveViewerApp({
           )}
 
           <ParameterRow label="渲染质量">
-            <Tag selected={quality === 1} onClick={() => setQuality(1)}>性能</Tag>
-            <Tag selected={quality === 1.5} onClick={() => setQuality(1.5)}>平衡</Tag>
-            <Tag selected={quality === 2} onClick={() => setQuality(2)}>高清</Tag>
+            <Tag subtleSelected selected={quality === 1} onClick={() => setQuality(1)}>性能</Tag>
+            <Tag subtleSelected selected={quality === 1.5} onClick={() => setQuality(1.5)}>平衡</Tag>
+            <Tag subtleSelected selected={quality === 2} onClick={() => setQuality(2)}>高清</Tag>
           </ParameterRow>
           <ParameterRow label="缩放方式">
-            <Tag selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>
-            <Tag selected={fit === "cover"} onClick={() => selectFit("cover")}>铺满</Tag>
+            <Tag subtleSelected selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>
+            <Tag subtleSelected selected={fit === "cover"} onClick={() => selectFit("cover")}>铺满</Tag>
           </ParameterRow>
           <ParameterRow label="渲染引擎">
-            <Tag selected={renderEngine === "webgl2"} onClick={() => selectRenderEngine("webgl2")}>WebGL2</Tag>
-            <Tag selected={renderEngine === "canvas2d"} onClick={() => selectRenderEngine("canvas2d")}>兼容模式</Tag>
+            <Tag subtleSelected selected={renderEngine === "webgl2"} onClick={() => selectRenderEngine("webgl2")}>WebGL2</Tag>
+            <Tag subtleSelected selected={renderEngine === "canvas2d"} onClick={() => selectRenderEngine("canvas2d")}>兼容模式</Tag>
           </ParameterRow>
             </div>
           </aside>
@@ -2683,16 +2684,18 @@ function ParameterRow({ label, children }: { label: string; children: React.Reac
 
 function Tag({
   selected,
+  subtleSelected = false,
   children,
   onClick,
 }: {
   selected?: boolean;
+  subtleSelected?: boolean;
   children: React.ReactNode;
   onClick: () => void;
 }) {
   return (
     <button
-      className={`parameter-tag press-feedback ${selected ? "is-selected" : ""}`}
+      className={`parameter-tag press-feedback ${selected ? "is-selected" : ""} ${subtleSelected ? "is-subtle-selected" : ""}`}
       aria-pressed={selected}
       onClick={onClick}
     >

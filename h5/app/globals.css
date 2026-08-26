@@ -1481,8 +1481,21 @@ button:disabled {
 
 .file-heading-version-update,
 .file-heading-download {
-  color: var(--accent);
+  color: var(--text);
   background: var(--control);
+}
+
+.file-heading-version-update {
+  width: auto;
+  min-width: 118px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 680;
+  white-space: nowrap;
 }
 
 .version-upload-status,
@@ -2263,6 +2276,12 @@ button:disabled {
 }
 
 .parameter-tag.is-playing {
+  color: #f2f0e8;
+  background: var(--control);
+  border-color: #735f26;
+}
+
+.parameter-tag.is-selected.is-subtle-selected {
   color: #f2f0e8;
   background: var(--control);
   border-color: #735f26;
