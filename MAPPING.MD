@@ -197,4 +197,4 @@
 | Rive 音频暂停 | Synchronized Rive audio suspension | `suspendRiveAudio`、`resumeRiveAudio`、`AudioContext.suspend/resume`；暂停画面时同步暂停内部声音 |
 | 托管 API 服务 | Rive host service | `server/src/server.mjs`、`127.0.0.1:8097`、`rive-host.service`、`DynamicUser` |
 | 托管原子发布 | Hosted atomic release | `/opt/rive-host/releases/<时间戳>`、`/var/www/rive-host/releases/<时间戳>`、两个 `current` 软链接 |
-| 当前 JOJO 前端 | Active hosted frontend release | `/var/www/rive-host/releases/20260825-225304`；超过 `10` 条时间轴默认整理，WebGL2/Canvas2D 双引擎保留；`20260825-215521` 为直接回滚点 |
+| 当前 JOJO 前端 | Active hosted frontend release | `/var/www/rive-host/releases/20260826-084827`；评论按钮命中、Enter 发表、Command/Shift + Enter 换行、文件页内加载已发布，WebGL2/Canvas2D 双引擎保留；`20260825-225304` 为直接回滚点 |
