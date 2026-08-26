@@ -14,7 +14,9 @@ test("builds the viewer at the configured public base", async () => {
     ? "../deploy/nginx-rive-host.conf"
     : base === "/beta/"
       ? "../deploy/nginx-rive-host-beta.conf"
-      : "../deploy/nginx-rive-viewer.conf";
+      : base === "/data/"
+        ? "../deploy/nginx-rive-data.conf"
+        : "../deploy/nginx-rive-viewer.conf";
   const [html, nginx, hostedNginx] = await Promise.all([
     readFile(new URL("../dist-static/index.html", import.meta.url), "utf8"),
     readFile(new URL(nginxConfig, import.meta.url), "utf8"),
@@ -26,6 +28,7 @@ test("builds the viewer at the configured public base", async () => {
   assert.match(html, new RegExp(`${escapedBase}assets/index-[^"']+\\.js`));
   assert.match(html, /<div id="root"><\/div>/);
   assert.match(hostedNginx, /POST:\/api\/v1\/shares\(\?:\/\[0-9A-Za-z\]\{3\}\/versions\)\?\$/);
+  assert.match(hostedNginx, /include \/etc\/nginx\/snippets\/rive-data\.conf/);
   if (base === "/") {
     assert.match(nginx, /server_name rive\.mikeywa\.site/);
     assert.match(nginx, /location \^~ \/api\//);
@@ -39,13 +42,36 @@ test("builds the viewer at the configured public base", async () => {
     assert.match(nginx, /\/var\/www\/rive-host-beta\/current/);
     assert.match(nginx, /location \^~ \/beta\/assets\//);
     assert.match(nginx, /try_files \$uri \$uri\/ \/beta\/index\.html/);
+  } else if (base === "/data/") {
+    assert.match(nginx, /location = \/api\/v1\/analytics\/summary/);
+    assert.match(nginx, /auth_basic_user_file \/etc\/nginx\/\.htpasswd-rive-data/);
+    assert.match(nginx, /location \^~ \/data\/assets\//);
+    assert.match(nginx, /\/var\/www\/rive-data\/current/);
+    assert.match(nginx, /access_log off/);
+    assert.match(nginx, /try_files \$uri \$uri\/ \/data\/index\.html/);
   } else {
     assert.match(nginx, /location = \/rive-viewer/);
     assert.match(nginx, /return 308 \/rive-viewer\//);
   }
 });
 
-test("splits Rive, Lottie, and PAG runtimes from the initial application chunk", async () => {
+test("keeps the analytics dashboard separate from animation runtimes", async (context) => {
+  if (normalizedBuildBase() !== "/data/") {
+    context.skip("only applies to the data build");
+    return;
+  }
+  const assetNames = await readdir(new URL("../dist-static/assets/", import.meta.url));
+  assert.ok(assetNames.some((name) => /^AnalyticsDashboard-.*\.js$/.test(name)), "缺少数据后台 chunk");
+  assert.ok(!assetNames.some((name) => /^rive-player-.*\.js$/.test(name)), "数据后台不应包含 Rive 播放器");
+  assert.ok(!assetNames.some((name) => /^pag-player-.*\.js$/.test(name)), "数据后台不应包含 PAG 播放器");
+  assert.ok(!assetNames.some((name) => /^lottie_light_canvas-.*\.js$/.test(name)), "数据后台不应包含 Lottie 播放器");
+});
+
+test("splits Rive, Lottie, and PAG runtimes from the initial application chunk", async (context) => {
+  if (normalizedBuildBase() === "/data/") {
+    context.skip("the data build intentionally excludes animation runtimes");
+    return;
+  }
   const assetNames = await readdir(new URL("../dist-static/assets/", import.meta.url));
   const appChunk = assetNames.find((name) => /^index-.*\.js$/.test(name));
   const riveChunk = assetNames.find((name) => /^rive-player-.*\.js$/.test(name));

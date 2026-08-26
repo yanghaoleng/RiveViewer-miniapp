@@ -898,6 +898,118 @@ test("refuses to start when an indexed Rive file is missing", async () => {
   });
 });
 
+test("collects privacy-safe analytics and returns filterable dashboard metrics", async () => {
+  await withTempDir(async (dataDir) => {
+    const instance = await listenApp(dataDir, {
+      now: () => "2026-08-26T06:00:00.000Z",
+    });
+    const baseBatch = {
+      version: 1,
+      surface: "generic",
+      visitorId: "visitor-analytics-0001",
+      sessionId: "session-analytics-0001",
+      events: [
+        {
+          id: "event-page-view-0001",
+          name: "page_view",
+          at: "2026-08-26T05:59:00.000Z",
+          page: "home",
+          properties: { sourceType: "campaign", sourceHost: "baidu.com", utmCampaign: "pag-launch" },
+        },
+        {
+          id: "event-preview-ok-0001",
+          name: "preview_result",
+          at: "2026-08-26T05:59:05.000Z",
+          page: "preview",
+          format: "rive",
+          fileSizeBucket: "1m_5m",
+          properties: { outcome: "success", durationMs: 1200, renderer: "webgl2" },
+        },
+        {
+          id: "event-control-use-0001",
+          name: "control_use",
+          at: "2026-08-26T05:59:10.000Z",
+          page: "preview",
+          format: "rive",
+          properties: { control: "speed", speed: 2 },
+        },
+        {
+          id: "event-fps-sample-0001",
+          name: "performance_sample",
+          at: "2026-08-26T05:59:15.000Z",
+          page: "preview",
+          format: "rive",
+          fileSizeBucket: "1m_5m",
+          properties: { fps: 58.4, renderer: "webgl2" },
+        },
+      ],
+    };
+    let response = await call(instance.port, {
+      method: "OPTIONS",
+      pathname: "/api/v1/analytics/events",
+      headers: { Origin: "https://mikeywa.site" },
+    });
+    assert.equal(response.status, 204);
+    assert.equal(response.headers["access-control-allow-origin"], "https://mikeywa.site");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/events",
+      headers: {
+        "Content-Type": "text/plain;charset=UTF-8",
+        Origin: "https://mikeywa.site",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit Safari/605.1.15",
+        "X-Forwarded-For": "203.0.113.42",
+      },
+      body: baseBatch,
+    });
+    assert.equal(response.status, 202);
+    assert.deepEqual(response.json, { accepted: 4 });
+    assert.equal(response.headers["access-control-allow-origin"], "https://mikeywa.site");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/events",
+      headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
+      body: baseBatch,
+    });
+    assert.equal(response.status, 403);
+    assert.equal(response.json.error.code, "origin_not_allowed");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/events",
+      headers: { "Content-Type": "application/json" },
+      body: baseBatch,
+    });
+    assert.equal(response.status, 202);
+
+    response = await call(instance.port, {
+      pathname: "/api/v1/analytics/summary?days=7&surface=generic&format=rive",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.json.item.freshness.eventCount, 4, "重复 event id 应在汇总时去重");
+    assert.equal(response.json.item.kpis.sessions, 1);
+    assert.equal(response.json.item.kpis.visitors, 1);
+    assert.equal(response.json.item.kpis.previews, 1);
+    assert.equal(response.json.item.kpis.activationRate, 1);
+    assert.equal(response.json.item.kpis.previewSuccessRate, 1);
+    assert.equal(response.json.item.kpis.p95LoadMs, 1200);
+    assert.equal(response.json.item.kpis.lowFpsRate, 0);
+    assert.equal(response.json.item.breakdowns.sources[0].key, "campaign");
+    assert.equal(response.json.item.breakdowns.referrers[0].key, "baidu.com");
+    assert.equal(response.json.item.breakdowns.campaigns[0].key, "pag-launch");
+    assert.equal(response.json.item.breakdowns.controls[0].key, "speed");
+
+    const analyticsFile = await readFile(path.join(dataDir, "analytics", "2026-08-26.ndjson"), "utf8");
+    assert.doesNotMatch(analyticsFile, /203\.0\.113\.42|Mozilla\/5\.0|visitor-analytics|session-analytics/);
+    assert.match(analyticsFile, /"browser":"Safari"/);
+    assert.match(analyticsFile, /"os":"macOS"/);
+    assert.match(analyticsFile, /"visitorHash":"[0-9a-f]{24}"/);
+    await instance.close();
+  });
+});
+
 test("loads configuration defaults and validates capacity values", () => {
   const config = loadConfig({ RIVE_HOST_DATA_DIR: "/var/lib/rive-host" });
   assert.equal(config.host, "127.0.0.1");
@@ -910,6 +1022,14 @@ test("loads configuration defaults and validates capacity values", () => {
     RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
     RIVE_HOST_MAX_TOTAL_BYTES: String(MAX_FILE_BYTES - 1),
   }), /超出允许范围/);
+  assert.throws(() => loadConfig({
+    NODE_ENV: "production",
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+  }), /ANALYTICS_SALT/);
+  assert.throws(() => loadConfig({
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+    RIVE_HOST_ANALYTICS_SALT: "short",
+  }), /至少需要 32/);
 });
 
 test("seed script imports examples idempotently and preserves isExample", async () => {

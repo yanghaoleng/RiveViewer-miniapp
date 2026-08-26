@@ -6,6 +6,7 @@ import {
   maxBytesForFormat,
   parseFormatFilter,
 } from "./animation-formats.mjs";
+import { ANALYTICS_ALLOWED_ORIGINS, AnalyticsStore } from "./analytics.mjs";
 import { AppError, isAppError } from "./errors.mjs";
 import { pickForestIdentity } from "./forest-identities.mjs";
 import {
@@ -26,6 +27,8 @@ const COMMENT_RESTORE_PATTERN = new RegExp(
   `^/api/v1/shares/${CODE_PATH}/comments/([^/]+)/restore$`,
 );
 const COMMENT_IDENTITY_PATH = "/api/v1/comment-identity";
+const ANALYTICS_EVENTS_PATH = "/api/v1/analytics/events";
+const ANALYTICS_SUMMARY_PATH = "/api/v1/analytics/summary";
 const ARCHIVE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/archive$`);
 const RESTORE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/restore$`);
 const MAX_JSON_BYTES = 32 * 1024;
@@ -76,10 +79,13 @@ function requireActionHeader(request, expected) {
   }
 }
 
-async function readJson(request) {
+async function readJson(request, {
+  acceptedTypes = ["application/json"],
+  unsupportedMessage = "请求必须使用 application/json",
+} = {}) {
   const type = String(request.headers["content-type"] || "").split(";", 1)[0].trim().toLowerCase();
-  if (type !== "application/json") {
-    throw new AppError(415, "unsupported_media_type", "评论必须使用 application/json");
+  if (!acceptedTypes.includes(type)) {
+    throw new AppError(415, "unsupported_media_type", unsupportedMessage);
   }
   const declaredLength = parseContentLength(request);
   if (declaredLength !== null && declaredLength > MAX_JSON_BYTES) {
@@ -106,6 +112,23 @@ async function readJson(request) {
   } catch {
     throw new AppError(400, "invalid_json", "JSON 内容无效");
   }
+}
+
+function analyticsOrigin(request) {
+  const value = request.headers.origin;
+  if (Array.isArray(value)) return "";
+  return ANALYTICS_ALLOWED_ORIGINS.has(value) ? value : "";
+}
+
+function applyAnalyticsCors(request, response) {
+  const origin = analyticsOrigin(request);
+  if (!origin) return false;
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  response.setHeader("Access-Control-Max-Age", "86400");
+  response.setHeader("Vary", "Origin");
+  return true;
 }
 
 function normalizeHeader(value, limit) {
@@ -274,6 +297,7 @@ export async function createRiveHostApp({
   codeGenerator,
   now,
   diskFreeProvider,
+  analyticsSalt,
   logger = console,
 } = {}) {
   const store = await ShareStore.open({
@@ -282,6 +306,12 @@ export async function createRiveHostApp({
     codeGenerator,
     now,
     diskFreeProvider,
+    logger,
+  });
+  const analyticsStore = await AnalyticsStore.open({
+    dataDir,
+    salt: analyticsSalt,
+    now,
     logger,
   });
 
@@ -293,6 +323,43 @@ export async function createRiveHostApp({
 
       if (request.method === "GET" && pathname === "/healthz") {
         sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (pathname === ANALYTICS_EVENTS_PATH) {
+        if (request.method === "OPTIONS") {
+          const origin = request.headers.origin;
+          if (origin && !applyAnalyticsCors(request, response)) {
+            throw new AppError(403, "origin_not_allowed", "当前来源不允许提交统计事件");
+          }
+          response.writeHead(204, { "Content-Length": 0, "Cache-Control": "no-store" });
+          response.end();
+          return;
+        }
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        const origin = request.headers.origin;
+        if (origin && !applyAnalyticsCors(request, response)) {
+          throw new AppError(403, "origin_not_allowed", "当前来源不允许提交统计事件");
+        }
+        const payload = await readJson(request, {
+          acceptedTypes: ["application/json", "text/plain"],
+          unsupportedMessage: "统计事件必须使用 JSON 或纯文本 JSON",
+        });
+        const accepted = await analyticsStore.recordBatch(payload, {
+          userAgent: normalizeHeader(request.headers["user-agent"], 512),
+        });
+        sendJson(response, 202, { accepted });
+        return;
+      }
+
+      if (pathname === ANALYTICS_SUMMARY_PATH) {
+        if (request.method !== "GET") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        const days = Number(url.searchParams.get("days") || 30);
+        const surface = url.searchParams.get("surface") || "all";
+        const format = url.searchParams.get("format") || "all";
+        sendJson(response, 200, {
+          item: await analyticsStore.summary({ days, surface, format }),
+        });
         return;
       }
 
@@ -473,5 +540,5 @@ export async function createRiveHostApp({
     }
   };
 
-  return { handler, store };
+  return { handler, store, analyticsStore };
 }

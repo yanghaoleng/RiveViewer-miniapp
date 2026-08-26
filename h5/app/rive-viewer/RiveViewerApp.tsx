@@ -10,6 +10,13 @@ import type {
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import policy from "../../../shared/rive-policy.json";
 import {
+  analyticsErrorCategory,
+  analyticsFileSizeBucket,
+  setAnalyticsPage,
+  trackAnalytics,
+  type AnalyticsProperties,
+} from "../../lib/analytics";
+import {
   animationFormatLabel,
   SUPPORTED_ANIMATION_ACCEPT,
   validateAnimationFile,
@@ -83,6 +90,7 @@ import { RuntimeEventConsole } from "./RuntimeEventConsole";
 type ActiveFile = {
   file: LibraryFile;
   sessionId: number;
+  openedAt: number;
   hostedShare?: HostedShare;
 };
 
@@ -211,6 +219,12 @@ function errorMessage(value: unknown, fallback: string): string {
   return value instanceof Error ? value.message : fallback;
 }
 
+function analyticsRenderer(format: AnimationFormat, engine: RenderEngine) {
+  if (format === "lottie") return "canvas" as const;
+  if (format === "pag") return "webassembly" as const;
+  return engine;
+}
+
 type HostedLibraryState = {
   activeItems: HostedShare[];
   archivedItems: HostedShare[];
@@ -234,6 +248,7 @@ export function RiveViewerApp({
 }) {
   const isHostedPlatform = mode === "hosted";
   const hostedVersioningEnabled = isHostedPlatform;
+  const supportsMultipleFormats = isHostedPlatform;
   const [shareCode, setShareCode] = useState(initialShareCode);
   const [preservePublicActivity, setPreservePublicActivity] = useState(
     () => hasRailActivityMarker(initialShareCode),
@@ -315,6 +330,10 @@ export function RiveViewerApp({
   const [commentTimelineInsertion, setCommentTimelineInsertion] = useState<{ id: number; name: string } | null>(null);
   const [publicRouteDetached, setPublicRouteDetached] = useState(false);
   const comments = commentThread.code === shareCode ? commentThread.items : [];
+
+  useEffect(() => {
+    setAnalyticsPage(activeFile || shareCode ? "preview" : "home");
+  }, [activeFile, shareCode]);
   const telemetry = useMemo(() => new PlaybackTelemetry(), []);
   const runtimeEventLog = useMemo(() => new RuntimeEventLog(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -359,6 +378,8 @@ export function RiveViewerApp({
   const detailCopyTimerRef = useRef<number | null>(null);
   const engineToastTimerRef = useRef<number | null>(null);
   const selectedVersionIdRef = useRef("");
+  const performanceSampleRef = useRef({ samples: [] as number[], lastSentAt: 0 });
+  const canvasInteractionSessionRef = useRef(0);
 
   const navigateHostedShare = useCallback((code: string, activityPolicy: ActivityPolicy) => {
     const nextState = historyStateRecord(window.history.state);
@@ -486,6 +507,8 @@ export function RiveViewerApp({
     if (!shareCode) return;
     const controller = new AbortController();
     const sessionId = ++openRequestRef.current;
+    const openedAt = performance.now();
+    let requestedFormat: AnimationFormat | undefined;
     playerRef.current?.pause();
     setMetadata(EMPTY_METADATA);
     telemetry.reset();
@@ -503,6 +526,7 @@ export function RiveViewerApp({
       try {
         const share = await getHostedShare(shareCode, controller.signal);
         if (sessionId !== openRequestRef.current) return;
+        requestedFormat = share.format;
         const selectedVersion = hostedVersioningEnabled
           ? selectedHostedVersion(share, selectedVersionIdRef.current)
           : null;
@@ -512,7 +536,7 @@ export function RiveViewerApp({
         }
         const openedFilename = selectedVersion?.filename || share.filename;
         const openedSize = selectedVersion?.size || share.size;
-        const openedAt = selectedVersion?.createdAt || share.createdAt;
+        const hostedCreatedAt = selectedVersion?.createdAt || share.createdAt;
         setPublicShare(share);
         const openedFormat = selectedVersion?.format || share.format;
         document.title = `${openedFilename} - 动效预览`;
@@ -531,10 +555,11 @@ export function RiveViewerApp({
             name: openedFilename,
             size: openedSize,
             format: openedFormat,
-            updatedAt: Date.parse(openedAt) || Date.now(),
+            updatedAt: Date.parse(hostedCreatedAt) || Date.now(),
             hostedCode: share.code,
           },
           sessionId,
+          openedAt,
           hostedShare: share,
         });
         setLoading({ active: true, progress: 0, phase: "正在下载公开文件" });
@@ -556,10 +581,11 @@ export function RiveViewerApp({
             name: openedFilename,
             size: openedSize || data.byteLength,
             format: openedFormat,
-            updatedAt: Date.parse(openedAt) || Date.now(),
+            updatedAt: Date.parse(hostedCreatedAt) || Date.now(),
             hostedCode: share.code,
           },
           sessionId,
+          openedAt,
           hostedShare: share,
         });
         setPublicShareState("ready");
@@ -584,6 +610,16 @@ export function RiveViewerApp({
         setLoading({ active: false, progress: 0, phase: "公开文件读取失败" });
         setPublicShareError(errorMessage(loadError, "公开链接无法打开"));
         setPublicShareState("error");
+        trackAnalytics({
+          name: "preview_result",
+          page: "preview",
+          ...(requestedFormat ? { format: requestedFormat } : {}),
+          properties: {
+            outcome: "failure",
+            durationMs: performance.now() - openedAt,
+            errorCategory: analyticsErrorCategory(loadError),
+          },
+        });
       }
     };
     loadPublicShare();
@@ -650,6 +686,8 @@ export function RiveViewerApp({
     const source = activeSourceRef.current;
     if (!source || source.sessionId !== activeFile.sessionId) return;
     activeSourceRef.current = null;
+    performanceSampleRef.current = { samples: [], lastSentAt: 0 };
+    canvasInteractionSessionRef.current = 0;
     let sourceData: ArrayBuffer | null = source.data;
     source.data = new ArrayBuffer(0);
     let cancelled = false;
@@ -678,7 +716,27 @@ export function RiveViewerApp({
             if (!cancelled) setPlaying(nextPlaying);
           },
           onProgress: (progress) => !cancelled && telemetry.updateTimeline(progress),
-          onPerformance: (nextFps) => !cancelled && telemetry.updateFps(nextFps),
+          onPerformance: (nextFps) => {
+            if (cancelled) return;
+            telemetry.updateFps(nextFps);
+            const sample = performanceSampleRef.current;
+            sample.samples.push(nextFps);
+            const sampledAt = performance.now();
+            if (sample.samples.length < 3 || (sample.lastSentAt && sampledAt - sample.lastSentAt < 30_000)) return;
+            const averageFps = sample.samples.reduce((sum, value) => sum + value, 0) / sample.samples.length;
+            sample.samples = [];
+            sample.lastSentAt = sampledAt;
+            trackAnalytics({
+              name: "performance_sample",
+              page: "preview",
+              format,
+              fileSizeBucket: analyticsFileSizeBucket(activeFile.file.size),
+              properties: {
+                fps: averageFps,
+                renderer: analyticsRenderer(format, selectedEngine),
+              },
+            });
+          },
           onEvent: (event) => {
             if (!cancelled) runtimeEventLog.append(event);
           },
@@ -694,6 +752,12 @@ export function RiveViewerApp({
             setRenderEngine("canvas2d");
             setCanvasGeneration((current) => current + 1);
             showEngineToast("WebGL2 不可用，已切换到兼容模式");
+            trackAnalytics({
+              name: "control_use",
+              page: "preview",
+              format,
+              properties: { control: "renderer", renderer: "canvas2d", trigger: "automatic" },
+            });
             queueMicrotask(() => reloadActiveFileRef.current());
           },
         }, selectedEngine);
@@ -727,6 +791,12 @@ export function RiveViewerApp({
           setCanvasGeneration((current) => current + 1);
           showEngineToast("WebGL2 不可用，已切换到兼容模式");
           setLoading({ active: true, progress: 34, phase: "正在切换兼容模式" });
+          trackAnalytics({
+            name: "control_use",
+            page: "preview",
+            format,
+            properties: { control: "renderer", renderer: "canvas2d", trigger: "automatic" },
+          });
           return;
         }
         sourceData = null;
@@ -740,6 +810,19 @@ export function RiveViewerApp({
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         if (cancelled) return;
         setLoading({ active: false, progress: 100, phase: "加载完成" });
+        performanceSampleRef.current = { samples: [], lastSentAt: 0 };
+        canvasInteractionSessionRef.current = 0;
+        trackAnalytics({
+          name: "preview_result",
+          page: "preview",
+          format,
+          fileSizeBucket: analyticsFileSizeBucket(activeFile.file.size),
+          properties: {
+            outcome: "success",
+            durationMs: performance.now() - activeFile.openedAt,
+            renderer: analyticsRenderer(format, selectedEngine),
+          },
+        });
         if (!capturedCoverIdsRef.current.has(activeFile.file.id)) {
           capturedCoverIdsRef.current.add(activeFile.file.id);
           window.setTimeout(async () => {
@@ -767,6 +850,18 @@ export function RiveViewerApp({
         if (cancelled) return;
         setLoading({ active: false, progress: 0, phase: "加载失败" });
         setError(loadError instanceof Error ? loadError.message : "动效文件无法打开");
+        trackAnalytics({
+          name: "preview_result",
+          page: "preview",
+          format: activeFile.file.format,
+          fileSizeBucket: analyticsFileSizeBucket(activeFile.file.size),
+          properties: {
+            outcome: "failure",
+            durationMs: performance.now() - activeFile.openedAt,
+            errorCategory: analyticsErrorCategory(loadError),
+            renderer: analyticsRenderer(activeFile.file.format, renderEngineRef.current),
+          },
+        });
       } finally {
         sourceData = null;
       }
@@ -859,6 +954,17 @@ export function RiveViewerApp({
       ? "x"
       : "copy-simple";
 
+  const trackActiveControl = useCallback((control: string, properties: AnalyticsProperties = {}) => {
+    if (!activeFile) return;
+    trackAnalytics({
+      name: "control_use",
+      page: "preview",
+      format: activeFile.file.format,
+      fileSizeBucket: analyticsFileSizeBucket(activeFile.file.size),
+      properties: { control, ...properties },
+    });
+  }, [activeFile]);
+
   const copyActiveHostedLink = useCallback(async () => {
     const code = activeHostedCode;
     if (!code) return;
@@ -868,13 +974,22 @@ export function RiveViewerApp({
     } catch {
       status = "error";
     }
+    trackAnalytics({
+      name: "share_action",
+      page: "preview",
+      ...(activeFile ? {
+        format: activeFile.file.format,
+        fileSizeBucket: analyticsFileSizeBucket(activeFile.file.size),
+      } : {}),
+      properties: { action: "copy_link", outcome: status === "copied" ? "success" : "failure" },
+    });
     setDetailCopyFeedback({ code, status });
     if (detailCopyTimerRef.current !== null) window.clearTimeout(detailCopyTimerRef.current);
     detailCopyTimerRef.current = window.setTimeout(() => {
       setDetailCopyFeedback((current) => current?.code === code ? null : current);
       detailCopyTimerRef.current = null;
     }, 2200);
-  }, [activeHostedCode]);
+  }, [activeFile, activeHostedCode]);
 
   const selectHostedVersion = useCallback((versionId: string) => {
     if (!hostedVersioningEnabled || versionId === selectedVersionIdRef.current) {
@@ -908,6 +1023,7 @@ export function RiveViewerApp({
     setVersionUploading(true);
     setVersionUploadProgress(0);
     setVersionUploadError("");
+    const uploadStartedAt = performance.now();
     try {
       const data = await file.arrayBuffer();
       const updatedShare = await createHostedVersion(
@@ -924,8 +1040,26 @@ export function RiveViewerApp({
       }
       await refreshHostedLibrary();
       setPublicShareReload((current) => current + 1);
+      trackAnalytics({
+        name: "version_upload_result",
+        page: "preview",
+        format,
+        fileSizeBucket: analyticsFileSizeBucket(file.size),
+        properties: { outcome: "success", durationMs: performance.now() - uploadStartedAt },
+      });
     } catch (uploadError) {
       setVersionUploadError(errorMessage(uploadError, "版本更新失败"));
+      trackAnalytics({
+        name: "version_upload_result",
+        page: "preview",
+        format,
+        fileSizeBucket: analyticsFileSizeBucket(file.size),
+        properties: {
+          outcome: "failure",
+          durationMs: performance.now() - uploadStartedAt,
+          errorCategory: analyticsErrorCategory(uploadError),
+        },
+      });
     } finally {
       setVersionUploading(false);
     }
@@ -985,6 +1119,7 @@ export function RiveViewerApp({
       return;
     }
     const sessionId = ++openRequestRef.current;
+    const openedAt = performance.now();
     try {
       setExpandedFileId("");
       setError("");
@@ -1006,7 +1141,7 @@ export function RiveViewerApp({
       });
       activeSourceRef.current = { sessionId, data };
       telemetry.reset();
-      setActiveFile({ file: openedFile, sessionId });
+      setActiveFile({ file: openedFile, sessionId, openedAt });
       document.title = `${openedFile.name} - 动效预览`;
       if (activityPolicy === "record") {
         void touchLocalFile(file.id, updatedAt).catch((touchError) => {
@@ -1017,6 +1152,17 @@ export function RiveViewerApp({
       if (sessionId !== openRequestRef.current) return;
       setLoading({ active: false, progress: 0, phase: "读取失败" });
       setError(openError instanceof Error ? openError.message : "无法读取文件");
+      trackAnalytics({
+        name: "preview_result",
+        page: "preview",
+        format: file.format,
+        fileSizeBucket: analyticsFileSizeBucket(file.size),
+        properties: {
+          outcome: "failure",
+          durationMs: performance.now() - openedAt,
+          errorCategory: analyticsErrorCategory(openError),
+        },
+      });
     }
   }, [navigateHostedShare, telemetry]);
 
@@ -1054,6 +1200,7 @@ export function RiveViewerApp({
   const uploadSavedFiles = useCallback(async (savedFiles: LibraryFile[]) => {
     const uploadedShares: HostedShare[] = [];
     for (const file of savedFiles) {
+      const uploadStartedAt = performance.now();
       setUploadStates((current) => ({
         ...current,
         [file.id]: {
@@ -1091,6 +1238,13 @@ export function RiveViewerApp({
             updatedAt: Date.now(),
           },
         }));
+        trackAnalytics({
+          name: "upload_result",
+          page: "preview",
+          format: file.format,
+          fileSizeBucket: analyticsFileSizeBucket(file.size),
+          properties: { outcome: "success", durationMs: performance.now() - uploadStartedAt },
+        });
       } catch (uploadError) {
         const retryable = !(uploadError instanceof HostedApiError
           && uploadError.status >= 400
@@ -1108,6 +1262,17 @@ export function RiveViewerApp({
             updatedAt: Date.now(),
           },
         }));
+        trackAnalytics({
+          name: "upload_result",
+          page: "preview",
+          format: file.format,
+          fileSizeBucket: analyticsFileSizeBucket(file.size),
+          properties: {
+            outcome: "failure",
+            durationMs: performance.now() - uploadStartedAt,
+            errorCategory: analyticsErrorCategory(uploadError),
+          },
+        });
       }
     }
     await refreshHostedLibrary();
@@ -1122,11 +1287,31 @@ export function RiveViewerApp({
     const selected = Array.from(values);
     if (!selected.length) return;
     try {
-      selected.forEach(validateAnimationFile);
+      selected.forEach((file) => {
+        const format = validateAnimationFile(file);
+        if (!supportsMultipleFormats && format !== "rive") {
+          throw new Error("当前版本只支持 Rive 文件，Lottie 与 PAG 请使用叫叫测试版");
+        }
+      });
     } catch (validationError) {
       setImportError(errorMessage(validationError, "文件不受支持，请重新选择。"));
+      trackAnalytics({
+        name: "file_import",
+        page: activeFile ? "preview" : "home",
+        properties: {
+          outcome: "failure",
+          count: selected.length,
+          errorCategory: analyticsErrorCategory(validationError),
+        },
+      });
       return;
     }
+
+    trackAnalytics({
+      name: "file_import",
+      page: activeFile ? "preview" : "home",
+      properties: { outcome: "success", count: selected.length },
+    });
 
     cloudUploadBusyRef.current = true;
     setImportBusy(true);
@@ -1170,7 +1355,7 @@ export function RiveViewerApp({
       cloudUploadBusyRef.current = false;
       setImportBusy(false);
     }
-  }, [isHostedPlatform, openFile, publicRouteDetached, refreshLibrary, shareCode, uploadSavedFiles]);
+  }, [activeFile, isHostedPlatform, openFile, publicRouteDetached, refreshLibrary, shareCode, supportsMultipleFormats, uploadSavedFiles]);
 
   const importFiles = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files || []);
@@ -1224,21 +1409,43 @@ export function RiveViewerApp({
     hostedCode?: string,
     versionId?: string,
   ) => {
-    if (hostedCode) {
-      const anchor = document.createElement("a");
-      anchor.href = hostedFileUrl(hostedCode, versionId);
-      anchor.download = file.name;
-      anchor.click();
-      return;
+    try {
+      if (hostedCode) {
+        const anchor = document.createElement("a");
+        anchor.href = hostedFileUrl(hostedCode, versionId);
+        anchor.download = file.name;
+        anchor.click();
+      } else {
+        const data = await readLibraryFile(file);
+        const blob = new Blob([data], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = file.name;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      trackAnalytics({
+        name: "share_action",
+        page: "preview",
+        format: file.format,
+        fileSizeBucket: analyticsFileSizeBucket(file.size),
+        properties: { action: "download", outcome: "success" },
+      });
+    } catch (downloadError) {
+      trackAnalytics({
+        name: "share_action",
+        page: "preview",
+        format: file.format,
+        fileSizeBucket: analyticsFileSizeBucket(file.size),
+        properties: {
+          action: "download",
+          outcome: "failure",
+          errorCategory: analyticsErrorCategory(downloadError),
+        },
+      });
+      throw downloadError;
     }
-    const data = await readLibraryFile(file);
-    const blob = new Blob([data], { type: "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = file.name;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, []);
 
   const shareFile = useCallback(async (file: LibraryFile, hostedCode?: string) => {
@@ -1252,6 +1459,13 @@ export function RiveViewerApp({
     if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
       try {
         await navigator.share(payload);
+        trackAnalytics({
+          name: "share_action",
+          page: "preview",
+          format: file.format,
+          fileSizeBucket: analyticsFileSizeBucket(file.size),
+          properties: { action: "send_file", outcome: "success" },
+        });
         return;
       } catch (shareError) {
         if (shareError instanceof DOMException && shareError.name === "AbortError") return;
@@ -1383,6 +1597,15 @@ export function RiveViewerApp({
           console.warn("更新最近评论记录失败", recentError);
         }
       }
+      trackAnalytics({
+        name: "comment_result",
+        page: "preview",
+        ...(activeFile ? {
+          format: activeFile.file.format,
+          fileSizeBucket: analyticsFileSizeBucket(activeFile.file.size),
+        } : {}),
+        properties: { outcome: "success" },
+      });
       return true;
     } catch (commentError) {
       if (commentError instanceof HostedApiError && commentError.code === "share_archived") {
@@ -1395,12 +1618,21 @@ export function RiveViewerApp({
         return false;
       }
       setCommentSubmitError(errorMessage(commentError, "评论提交失败"));
+      trackAnalytics({
+        name: "comment_result",
+        page: "preview",
+        ...(activeFile ? {
+          format: activeFile.file.format,
+          fileSizeBucket: analyticsFileSizeBucket(activeFile.file.size),
+        } : {}),
+        properties: { outcome: "failure", errorCategory: analyticsErrorCategory(commentError) },
+      });
       return false;
     } finally {
       commentSubmitBusyRef.current = false;
       setCommentSubmitting(false);
     }
-  }, [hostedVersioningEnabled, publicShare, refreshLibrary, shareCode]);
+  }, [activeFile, hostedVersioningEnabled, publicShare, refreshLibrary, shareCode]);
 
   const changeCommentStatus = useCallback(async (
     comment: HostedComment,
@@ -1444,36 +1676,52 @@ export function RiveViewerApp({
 
   const selectRenderEngine = useCallback((nextEngine: RenderEngine) => {
     if (renderEngineRef.current === nextEngine) return;
+    trackActiveControl("renderer", { renderer: nextEngine, trigger: "manual" });
     engineFallbackBusyRef.current = false;
     renderEngineRef.current = nextEngine;
     setRenderEngine(nextEngine);
     setCanvasGeneration((current) => current + 1);
     if (activeFile) reloadActiveFile();
-  }, [activeFile, reloadActiveFile]);
+  }, [activeFile, reloadActiveFile, trackActiveControl]);
 
   const togglePlayback = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
-    if (playing) player.pause();
-    else player.play();
-  }, [playing]);
+    if (playing) {
+      player.pause();
+      trackActiveControl("pause");
+    } else {
+      player.play();
+      trackActiveControl("play");
+    }
+  }, [playing, trackActiveControl]);
 
   const navigateFile = useCallback((offset: number) => {
     const next = unifiedFiles[activeIndex + offset];
-    if (next) openUnifiedFile(next, "preserve");
-  }, [activeIndex, openUnifiedFile, unifiedFiles]);
+    if (next) {
+      trackActiveControl("file_navigation");
+      openUnifiedFile(next, "preserve");
+    }
+  }, [activeIndex, openUnifiedFile, trackActiveControl, unifiedFiles]);
 
   const resetPlayback = useCallback(() => {
     playerRef.current?.reset();
-  }, []);
+    trackActiveControl("reset");
+  }, [trackActiveControl]);
 
   const adjustSpeed = useCallback((offset: number) => {
-    setSpeed((current) => {
-      const currentIndex = SPEEDS.indexOf(current);
-      const nextIndex = clamp(currentIndex + offset, 0, SPEEDS.length - 1);
-      return SPEEDS[nextIndex];
-    });
-  }, []);
+    const currentIndex = SPEEDS.indexOf(speed);
+    const nextIndex = clamp(currentIndex + offset, 0, SPEEDS.length - 1);
+    const nextSpeed = SPEEDS[nextIndex];
+    if (nextSpeed === speed) return;
+    setSpeed(nextSpeed);
+    trackActiveControl("speed", { speed: nextSpeed });
+  }, [speed, trackActiveControl]);
+
+  const selectPlaybackSpeed = useCallback((nextSpeed: number) => {
+    setSpeed(nextSpeed);
+    trackActiveControl("speed", { speed: nextSpeed });
+  }, [trackActiveControl]);
 
   useEffect(() => {
     if (!activeFile) return;
@@ -1508,6 +1756,7 @@ export function RiveViewerApp({
 
   const expandCatalog = async () => {
     if (catalogLoading) return;
+    trackActiveControl("artboard");
     setCatalogLoading(true);
     setCatalogProgress(0);
     try {
@@ -1520,6 +1769,7 @@ export function RiveViewerApp({
   const handleInput = (input: AnimationInput, value?: boolean | number) => {
     if (input.type === "trigger") playerRef.current?.fireInput(input.index);
     else playerRef.current?.setInput(input.index, value ?? !input.value);
+    trackActiveControl("input");
   };
 
   const canvasPointer = (
@@ -1532,6 +1782,10 @@ export function RiveViewerApp({
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     if (type === "down") {
+      if (canvasInteractionSessionRef.current !== activeFile?.sessionId) {
+        canvasInteractionSessionRef.current = activeFile?.sessionId || 0;
+        trackActiveControl("canvas");
+      }
       canvas.setPointerCapture(event.pointerId);
       playerRef.current?.pointer("down", x, y, event.pointerId);
       return;
@@ -1721,8 +1975,24 @@ export function RiveViewerApp({
 
   const selectFit = (nextFit: "contain" | "cover") => {
     clearStageResizeMenuDismiss();
+    if (fitRef.current !== nextFit) trackActiveControl("fit", { fit: nextFit });
     setFit(nextFit);
     playerRef.current?.setFit(nextFit);
+  };
+
+  const selectQuality = (nextQuality: number) => {
+    if (qualityRef.current !== nextQuality) trackActiveControl("quality", { quality: nextQuality });
+    setQuality(nextQuality);
+  };
+
+  const selectCanvasTone = (tone: string) => {
+    if (canvasTone !== tone) trackActiveControl("background");
+    setCanvasTone(tone);
+  };
+
+  const toggleAudio = () => {
+    trackActiveControl("audio");
+    playerRef.current?.setAudioEnabled(!metadata.audioEnabled);
   };
 
   const toggleStageFit = () => {
@@ -1888,14 +2158,20 @@ export function RiveViewerApp({
   const isPublicRoute = Boolean(shareCode && !publicRouteDetached);
   const uploadBusy = importBusy;
   const homeHref = viewerHomePath(import.meta.env.BASE_URL);
+  const supportedFileAccept = supportsMultipleFormats ? SUPPORTED_ANIMATION_ACCEPT : ".riv";
+  const supportedFileCopy = supportsMultipleFormats
+    ? "支持 Rive / Lottie / PAG，PAG 不超过 10 MiB"
+    : "仅支持 Rive 文件";
   const selectTimeline = useCallback((name: string) => {
     playerRef.current?.selectAnimation(name);
-  }, []);
+    trackActiveControl("animation");
+  }, [trackActiveControl]);
   const selectTimelineFromControl = useCallback((name: string) => {
     playerRef.current?.selectAnimation(name);
+    trackActiveControl("animation");
     commentTimelineInsertionIdRef.current += 1;
     setCommentTimelineInsertion({ id: commentTimelineInsertionIdRef.current, name });
-  }, []);
+  }, [trackActiveControl]);
   const commentsPanel = publicShare && publicShare.status === "active" ? (
     <ShareCommentsPanel
       comments={comments}
@@ -1957,7 +2233,7 @@ export function RiveViewerApp({
         ref={fileInputRef}
         className="sr-only"
         type="file"
-        accept={SUPPORTED_ANIMATION_ACCEPT}
+        accept={supportedFileAccept}
         multiple
         disabled={uploadBusy}
         onChange={importFiles}
@@ -1976,7 +2252,7 @@ export function RiveViewerApp({
         <div className="detail-drop-overlay" role="status" aria-live="polite">
           <span><Icon name="cloud-arrow-up" size={24} /></span>
           <strong>松开后立即打开并上传</strong>
-          <small>支持 Rive、Lottie JSON、PAG（PAG ≤ 10 MiB）</small>
+          <small>{supportedFileCopy}</small>
         </div>
       )}
       {activeFile ? (
@@ -2067,9 +2343,11 @@ export function RiveViewerApp({
             >
               <span className="import-mark"><Icon name="plus" size={24} /></span>
               <span>{isHostedPlatform ? "上传动效文件" : "导入动效文件"}</span>
-              <small>{isHostedPlatform
-                ? "支持 Rive / Lottie / PAG，PAG 不超过 10 MiB"
-                : "支持 Rive / Lottie / PAG，只保存在当前浏览器"}</small>
+              <small>{supportsMultipleFormats
+                ? supportedFileCopy
+                : isHostedPlatform
+                  ? "仅支持 Rive，上传后生成公开链接"
+                  : "仅支持 Rive，只保存在当前浏览器"}</small>
             </button>
             {importError && <div className="inline-error import-error" role="alert">{importError}</div>}
 
@@ -2310,7 +2588,7 @@ export function RiveViewerApp({
                   {playing ? <Icon name="pause" size={20} /> : <Icon name="play" size={20} />}
                 </button>
               </div>
-              <PlaybackSpeedMenu value={speed} onChange={setSpeed} />
+              <PlaybackSpeedMenu value={speed} onChange={selectPlaybackSpeed} />
               <div className="transport-files">
                 <button className="press-feedback" disabled={activeIndex <= 0} onClick={() => navigateFile(-1)} aria-label="上一个文件" aria-keyshortcuts="ArrowLeft ArrowUp" title="上一个文件 (← / ↑)">
                   <Icon name="arrow-left" size={18} />
@@ -2353,7 +2631,7 @@ export function RiveViewerApp({
 
           {activeFile.file.format === "rive" && <ParameterRow label="画板">
             {metadata.artboardNames.map((name) => (
-              <Tag key={name} selected={metadata.activeArtboard === name} onClick={() => playerRef.current?.selectArtboard(name)}>{name}</Tag>
+              <Tag key={name} selected={metadata.activeArtboard === name} onClick={() => { playerRef.current?.selectArtboard(name); trackActiveControl("artboard"); }}>{name}</Tag>
             ))}
             {!metadata.artboardCatalogLoaded && remainingArtboards > 0 && (
               <button className="disclosure-tag" onClick={expandCatalog} disabled={catalogLoading}>
@@ -2365,7 +2643,7 @@ export function RiveViewerApp({
 
           {activeFile.file.format === "rive" && <ParameterRow label="状态机">
             {metadata.stateMachines.length ? metadata.stateMachines.map((name) => (
-              <Tag key={name} selected={metadata.activeStateMachine === name} onClick={() => playerRef.current?.selectStateMachine(name)}>{name}</Tag>
+              <Tag key={name} selected={metadata.activeStateMachine === name} onClick={() => { playerRef.current?.selectStateMachine(name); trackActiveControl("state_machine"); }}>{name}</Tag>
             )) : <EmptyTag>无状态机</EmptyTag>}
           </ParameterRow>}
 
@@ -2409,7 +2687,7 @@ export function RiveViewerApp({
                 className={`tone-button press-feedback tone-${tone.key} ${canvasTone === tone.key ? "is-active" : ""}`}
                 aria-label={`${tone.label}背景`}
                 aria-pressed={canvasTone === tone.key}
-                onClick={() => setCanvasTone(tone.key)}
+                onClick={() => selectCanvasTone(tone.key)}
               />
             ))}
           </ParameterRow>
@@ -2418,7 +2696,7 @@ export function RiveViewerApp({
             <ParameterRow label="声音">
               <Tag
                 selected={metadata.audioEnabled}
-                onClick={() => playerRef.current?.setAudioEnabled(!metadata.audioEnabled)}
+                onClick={toggleAudio}
               >
                 {metadata.audioEnabled ? <Icon name="speaker-high" size={16} /> : <Icon name="speaker-slash" size={16} />}
                 {metadata.audioEnabled ? "开启" : "静音"}
@@ -2427,9 +2705,9 @@ export function RiveViewerApp({
           )}
 
           {activeFile.file.format !== "lottie" && <ParameterRow label="渲染质量">
-            <Tag subtleSelected selected={quality === 1} onClick={() => setQuality(1)}>性能</Tag>
-            <Tag subtleSelected selected={quality === 1.5} onClick={() => setQuality(1.5)}>平衡</Tag>
-            <Tag subtleSelected selected={quality === 2} onClick={() => setQuality(2)}>高清</Tag>
+            <Tag subtleSelected selected={quality === 1} onClick={() => selectQuality(1)}>性能</Tag>
+            <Tag subtleSelected selected={quality === 1.5} onClick={() => selectQuality(1.5)}>平衡</Tag>
+            <Tag subtleSelected selected={quality === 2} onClick={() => selectQuality(2)}>高清</Tag>
           </ParameterRow>}
           <ParameterRow label="缩放方式">
             <Tag subtleSelected selected={fit === "contain"} onClick={() => selectFit("contain")}>完整</Tag>

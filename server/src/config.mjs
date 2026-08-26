@@ -40,6 +40,14 @@ export function loadConfig(environment = process.env) {
       "RIVE_HOST_MAX_TOTAL_BYTES",
       MAX_FILE_BYTES,
     ),
+    analyticsSalt: (() => {
+      const value = environment.RIVE_HOST_ANALYTICS_SALT || "";
+      if (value && value.length < 32) throw new Error("RIVE_HOST_ANALYTICS_SALT 至少需要 32 个字符");
+      if (environment.NODE_ENV === "production" && !value) {
+        throw new Error("生产环境必须设置 RIVE_HOST_ANALYTICS_SALT");
+      }
+      return value;
+    })(),
   };
 }
 

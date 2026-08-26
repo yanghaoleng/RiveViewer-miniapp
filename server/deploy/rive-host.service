@@ -17,6 +17,7 @@ Environment=RIVE_HOST_HOST=127.0.0.1
 Environment=RIVE_HOST_PORT=8097
 Environment=RIVE_HOST_DATA_DIR=/var/lib/rive-host
 Environment=RIVE_HOST_MAX_TOTAL_BYTES=5368709120
+EnvironmentFile=-/etc/rive-host/analytics.env
 
 ExecStart=/usr/bin/node /opt/rive-host/current/server/src/server.mjs
 Restart=on-failure

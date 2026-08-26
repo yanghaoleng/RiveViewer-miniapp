@@ -12,6 +12,7 @@
 | H5 本地版 | <https://mikeywa.site/rive-viewer/> | 仅保存在当前浏览器，不上传服务器 | 在桌面浏览器检查复杂 Rive 文件，保留素材本地性 |
 | JOJO（叫叫）托管版 | <https://rive.mikeywa.site/> | 用户主动选择或拖入后上传云端 | 公司内部交付、公开链接分享、评论协作和归档管理 |
 | JOJO Beta | <https://rive.mikeywa.site/beta/> | 与正式托管共用服务端文件，浏览器本地记录独立 | 提前验证 Rive、Lottie 与 PAG 多格式预览 |
+| 体验数据后台 | <https://rive.mikeywa.site/data/> | 三套 H5 共用匿名事件汇总 | 查看激活、首帧、稳定性、性能、来源与功能使用，需后台账号登录 |
 
 ### 微信小程序码
 
@@ -77,8 +78,19 @@ H5 本地版与 JOJO 版共用 Rive Web 播放能力，支持画板、状态机�
 | `vendor/rive` | 适配微信运行环境的完整 Rive Canvas 运行时、主版与兼容版两份 Brotli WASM |
 | `h5/` | 独立浏览器 H5；默认使用 `@rive-app/webgl2-advanced@2.39.1`，失败时降级 `@rive-app/canvas-advanced@2.39.1`；以 IndexedDB 保存用户文件、输出实时 FPS 与当前会话事件，渲染和点击共用同一 Fit 矩阵 |
 | `h5/lib/runtime-event-log.ts` | 当前文件事件的定长内存日志；微任务批量通知独立事件控制台，不上传、不持久化，也不推动根组件逐帧更新 |
+| `h5/lib/analytics.ts` | 三套 H5 共用的匿名埋点队列；按批发送，尊重 DNT/GPC，不采集文件名、文件内容、分享码或评论正文 |
+| `h5/app/analytics` | `/data/` 独立按需构建的数据后台；提供周期、版本和格式筛选，不加载动画播放器运行时 |
+| `server/src/analytics.mjs` | 事件校验、标识哈希、90 天 NDJSON 留存与实时汇总；服务端不保存原始 IP 和完整 User-Agent |
 | `shared/rive-policy.json` | 双端倍速、手势、遥测节流和复杂文件阈值的唯一真源；脚本生成微信可加载的 `rive-policy.js` |
 | `AGENTS.md` | AI 修改边界、唯一真源、验证命令和包体预算 |
+
+### 2026-08-26 三套 H5 体验数据后台
+
+- <https://rive.mikeywa.site/data/> 使用同一口径对比 H5 通用版、叫叫正式版和叫叫测试版，并按周期、版本、Rive/Lottie/PAG 筛选。
+- `POST /api/v1/analytics/events` 接收最多 `20` 条的匿名批次；`GET /api/v1/analytics/summary` 返回看板汇总，汇总接口和 `/data/` 都由 Nginx 登录保护。
+- 埋点覆盖访问与可见停留、文件导入、首帧成功/失败与耗时、FPS、播放/参数控件、上传/版本上传、复制/下载/发送和评论结果。失败只记录有界分类，不记录原始错误内容。
+- 数据按日追加到服务端 NDJSON，保留 `90` 天；随机访客、会话与事件标识到服务端后再做 HMAC 哈希。采集接口不写 Nginx access log。
+- 当前前端与后端发布版本均为 `20260826-142218`；数据备份为 `/var/backups/rive-host-data-before-20260826-142218.tar.gz`。
 
 ### 2026-08-17 整体重构结果
 

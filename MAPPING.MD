@@ -212,3 +212,17 @@
 | 托管原子发布 | Hosted atomic release | `/opt/rive-host/releases/<时间戳>`、`/var/www/rive-host/releases/<时间戳>`、两个 `current` 软链接 |
 | 当前正式 JOJO 前端 | Active formal frontend | `/var/www/rive-host/releases/20260826-111929`；正式根路径保持 Rive 版 |
 | 当前 Beta 前后端 | Active Beta release | `/var/www/rive-host-beta/releases/20260826-132255`、`/opt/rive-host/releases/20260826-132255`；Beta 支持 Rive、Lottie、PAG，后端兼容正式 Rive 列表 |
+# 体验数据后台元素映射
+
+| 俗称 | 学名 | 变量名 / 选择器 |
+| --- | --- | --- |
+| 数据后台、数据页 | 体验分析 Dashboard | `AnalyticsDashboard`、`.data-dashboard`、`/data/` |
+| 三个筛选 | 周期、版本、格式筛选器 | `days`、`surface`、`format`、`.data-filters` |
+| 顶部数据卡 | 核心 KPI 指标组 | `metrics`、`.data-metric-grid` |
+| 趋势图 | 会话与成功预览时间序列 | `TrendChart`、`.data-trend-chart` |
+| 漏斗 | 访问到协作的会话漏斗 | `Funnel`、`.data-funnel` |
+| 版本对比 | 三套 H5 质量对比表 | `SurfaceTable`、`.data-table` |
+| 问题维度 | 来源、设备、格式、体积、控件与错误排行 | `RankedList`、`.data-breakdown-grid` |
+| 埋点队列 | 浏览器匿名事件批次 | `trackAnalytics`、`flushAnalytics` |
+| 数据汇总接口 | 受保护的实时汇总 API | `GET /api/v1/analytics/summary` |
+| 事件收集接口 | 三套 H5 公用采集 API | `POST /api/v1/analytics/events` |
