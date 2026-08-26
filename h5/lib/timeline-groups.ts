@@ -5,8 +5,11 @@ export type TimelineGroupItem = {
 
 export type TimelineLayout = "expanded" | "organized";
 
-export function getDefaultTimelineLayout(animationCount: number): TimelineLayout {
-  return animationCount > 10 ? "organized" : "expanded";
+export function getDefaultTimelineLayout(
+  animationCount: number,
+  canOrganize = true,
+): TimelineLayout {
+  return animationCount > 10 && canOrganize ? "organized" : "expanded";
 }
 
 export type TimelineSection =
@@ -50,4 +53,8 @@ export function organizeTimelines(names: string[]): TimelineSection[] {
     });
   });
   return [...standaloneSections, ...groupedSections];
+}
+
+export function hasOrganizableTimelineGroups(sections: TimelineSection[]): boolean {
+  return sections.some((section) => section.type === "group");
 }

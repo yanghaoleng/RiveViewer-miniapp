@@ -2,6 +2,7 @@ import { memo, useMemo, useState, useSyncExternalStore } from "react";
 import { formatPlaybackTime, type PlaybackTelemetry } from "../../lib/playback-telemetry";
 import {
   getDefaultTimelineLayout,
+  hasOrganizableTimelineGroups,
   organizeTimelines,
   type TimelineLayout,
 } from "../../lib/timeline-groups";
@@ -43,7 +44,9 @@ export const TimelineControl = memo(function TimelineControl({
 }) {
   const { timeline } = useTelemetry(telemetry);
   const animationSignature = useMemo(() => animations.join("\u0000"), [animations]);
-  const defaultLayout = getDefaultTimelineLayout(animations.length);
+  const organizedSections = useMemo(() => organizeTimelines(animations), [animations]);
+  const canOrganize = hasOrganizableTimelineGroups(organizedSections);
+  const defaultLayout = getDefaultTimelineLayout(animations.length, canOrganize);
   const [layoutSelection, setLayoutSelection] = useState<{
     animationSignature: string;
     layout: TimelineLayout;
@@ -54,7 +57,6 @@ export const TimelineControl = memo(function TimelineControl({
   const selectLayout = (nextLayout: TimelineLayout) => {
     setLayoutSelection({ animationSignature, layout: nextLayout });
   };
-  const organizedSections = useMemo(() => organizeTimelines(animations), [animations]);
   const progress = `${Math.min(1, Math.max(0, timeline.progress)) * 100}%`;
   const timelineButton = (name: string, label = name) => {
     const selected = activeAnimation === name;
@@ -80,7 +82,7 @@ export const TimelineControl = memo(function TimelineControl({
     <div className={`parameter-row timeline-parameter-row ${animations.length > 10 ? "is-compact" : ""}`}>
       <div className="parameter-label timeline-label">
         <span>时间轴</span>
-        <span className="timeline-layout-switch" role="group" aria-label="时间轴显示方式">
+        {canOrganize && <span className="timeline-layout-switch" role="group" aria-label="时间轴显示方式">
           <button
             type="button"
             className={layout === "expanded" ? "is-active" : ""}
@@ -97,7 +99,7 @@ export const TimelineControl = memo(function TimelineControl({
           >
             整理
           </button>
-        </span>
+        </span>}
       </div>
       <div className="parameter-actions timeline-actions">
         {animations.length && layout === "expanded" && (
@@ -105,7 +107,7 @@ export const TimelineControl = memo(function TimelineControl({
             {animations.map((name) => timelineButton(name))}
           </div>
         )}
-        {animations.length && layout === "organized" && (
+        {animations.length && canOrganize && layout === "organized" && (
           <div className="timeline-organized-list">
             {organizedSections.map((section) => section.type === "timeline"
               ? timelineButton(section.item.name, section.item.label)

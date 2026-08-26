@@ -322,6 +322,12 @@ test("keeps one browser visitor on the same forest nickname and avatar", async (
     await upload(instance.port, "two.riv", makeRive("identity-two"));
 
     const visitorId = "visitor-stable-forest-0001";
+    const assigned = await call(instance.port, {
+      pathname: `/api/v1/comment-identity?visitorId=${encodeURIComponent(visitorId)}`,
+    });
+    assert.equal(assigned.status, 200);
+    assert.deepEqual(assigned.json.item, pickForestIdentity(`visitor:${visitorId}`));
+
     const first = await call(instance.port, {
       method: "POST",
       pathname: "/api/v1/shares/Id1/comments",
@@ -347,13 +353,33 @@ test("keeps one browser visitor on the same forest nickname and avatar", async (
     assert.equal(second.status, 201);
     assert.equal(second.json.item.nickname, first.json.item.nickname);
     assert.equal(second.json.item.avatar, first.json.item.avatar);
+    const compactWebp = Buffer.concat([
+      Buffer.from("RIFF"),
+      Buffer.from([8, 0, 0, 0]),
+      Buffer.from("WEBPVP8 "),
+    ]).toString("base64");
+    const custom = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares/Id1/comments",
+      headers: { "Content-Type": "application/json" },
+      body: {
+        visitorId,
+        body: "自定义身份",
+        nickname: "杨总的小松鼠",
+        avatarDataUrl: `data:image/webp;base64,${compactWebp}`,
+      },
+    });
+    assert.equal(custom.status, 201);
+    assert.equal(custom.json.item.nickname, "杨总的小松鼠");
+    assert.equal(custom.json.item.avatarDataUrl, `data:image/webp;base64,${compactWebp}`);
+    assert.equal(custom.json.item.avatar, first.json.item.avatar);
     const firstThread = await call(instance.port, {
       pathname: "/api/v1/shares/Id1/comments",
     });
     const secondThread = await call(instance.port, {
       pathname: "/api/v1/shares/Id2/comments",
     });
-    assert.deepEqual(firstThread.json.items.map((item) => item.body), ["第一条"]);
+    assert.deepEqual(firstThread.json.items.map((item) => item.body), ["第一条", "自定义身份"]);
     assert.deepEqual(secondThread.json.items.map((item) => item.body), ["第二条"]);
     await instance.close();
   });
@@ -597,6 +623,24 @@ test("rejects invalid uploads and invalid comments with concise JSON errors", as
     });
     assert.equal(response.status, 422);
     assert.equal(response.json.error.code, "invalid_comment");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares/Ab1/comments",
+      headers: { "Content-Type": "application/json" },
+      body: { body: "反馈", nickname: "昵".repeat(13) },
+    });
+    assert.equal(response.status, 422);
+    assert.equal(response.json.error.code, "invalid_nickname");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/shares/Ab1/comments",
+      headers: { "Content-Type": "application/json" },
+      body: { body: "反馈", avatarDataUrl: "data:image/png;base64,AAAA" },
+    });
+    assert.equal(response.status, 422);
+    assert.equal(response.json.error.code, "invalid_avatar");
 
     response = await call(instance.port, {
       method: "POST",

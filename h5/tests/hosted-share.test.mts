@@ -6,7 +6,13 @@ import {
   shareCodeFromPath,
   viewerHomePath,
 } from "../lib/viewer-route.ts";
-import { createHostedComment, getHostedFile, HostedApiError } from "../lib/hosted-api.ts";
+import {
+  createHostedComment,
+  getHostedCommentIdentity,
+  getHostedFile,
+  HostedApiError,
+} from "../lib/hosted-api.ts";
+import { limitCommentNickname } from "../lib/comment-identity.ts";
 import { mergeRecentHostedRecords } from "../lib/library.ts";
 import { mergeUnifiedFiles } from "../lib/unified-library.ts";
 
@@ -161,7 +167,7 @@ test("streams hosted file bytes with honest download progress", async () => {
   }
 });
 
-test("submits comments with a stable browser visitor identity", async () => {
+test("reads the assigned identity and submits local comment customization", async () => {
   const originalFetch = globalThis.fetch;
   let requestUrl = "";
   let requestInit: RequestInit | undefined;
@@ -169,11 +175,17 @@ test("submits comments with a stable browser visitor identity", async () => {
     globalThis.fetch = async (input, init) => {
       requestUrl = String(input);
       requestInit = init;
+      if (requestUrl.includes("comment-identity")) {
+        return new Response(JSON.stringify({
+          item: { nickname: "松果松鼠", avatar: "pinecone-squirrel" },
+        }), { headers: { "Content-Type": "application/json" } });
+      }
       return new Response(JSON.stringify({
         item: {
           id: "comment-1",
-          nickname: "松果松鼠",
+          nickname: "杨总的松鼠",
           avatar: "pinecone-squirrel",
+          avatarDataUrl: "data:image/webp;base64,AAAA",
           body: "按钮可以再大一点，杨皓棱",
           createdAt: "2026-08-24T04:00:00.000Z",
           status: "active",
@@ -185,9 +197,15 @@ test("submits comments with a stable browser visitor identity", async () => {
       });
     };
 
+    const identity = await getHostedCommentIdentity("visitor-stable-forest-0001");
+    assert.equal(requestUrl, "/api/v1/comment-identity?visitorId=visitor-stable-forest-0001");
+    assert.deepEqual(identity, { nickname: "松果松鼠", avatar: "pinecone-squirrel" });
+
     const comment = await createHostedComment("A1b", {
       visitorId: "visitor-stable-forest-0001",
       body: "按钮可以再大一点，杨皓棱",
+      nickname: "杨总的松鼠",
+      avatarDataUrl: "data:image/webp;base64,AAAA",
     });
 
     assert.equal(requestUrl, "/api/v1/shares/A1b/comments");
@@ -195,12 +213,21 @@ test("submits comments with a stable browser visitor identity", async () => {
     assert.deepEqual(JSON.parse(String(requestInit?.body)), {
       visitorId: "visitor-stable-forest-0001",
       body: "按钮可以再大一点，杨皓棱",
+      nickname: "杨总的松鼠",
+      avatarDataUrl: "data:image/webp;base64,AAAA",
     });
-    assert.equal(comment.nickname, "松果松鼠");
+    assert.equal(comment.nickname, "杨总的松鼠");
     assert.equal(comment.avatar, "pinecone-squirrel");
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("昵称以 Unicode 字符限制为 12 个", () => {
+  assert.equal(
+    limitCommentNickname("一二三四五六七八九十✨🐿多余"),
+    "一二三四五六七八九十✨🐿",
+  );
 });
 
 test("keeps hosted API and file upload contracts explicit", async () => {
@@ -307,10 +334,13 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.equal((commentPanelSource.match(/className="comment-editor"/g) || []).length, 1);
   assert.match(commentPanelSource, /contentEditable=\{!submitting\}/);
   assert.doesNotMatch(commentPanelSource, /<textarea/);
-  assert.doesNotMatch(commentPanelSource, /<input|称呼（选填）|COMMENT_NICKNAME_STORAGE_KEY|匿名/);
+  assert.match(commentPanelSource, /className="comment-identity-row"/);
+  assert.match(commentPanelSource, /accept="image\/\*"/);
+  assert.match(commentPanelSource, /COMMENT_NICKNAME_LIMIT/);
+  assert.match(commentPanelSource, /compressCommentAvatar/);
   assert.match(commentPanelSource, /\{!draftBody && <TimelineHint \/>\}/);
   assert.doesNotMatch(commentPanelSource, /placeholder="写下评论或备注"/);
-  assert.match(commentPanelSource, /avatars\/\$\{comment\.avatar\}\.webp/);
+  assert.match(commentPanelSource, /commentAvatarUrl\(comment\)/);
   assert.match(commentPanelSource, /width="32"/);
   assert.match(commentPanelSource, /评论已归档/);
   assert.match(commentPanelSource, /onArchive\(comment\)/);
@@ -355,7 +385,10 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(identitySource, /rive-host-comment-visitor-v1/);
   assert.match(identitySource, /window\.localStorage\.getItem/);
   assert.match(identitySource, /window\.localStorage\.setItem/);
-  assert.doesNotMatch(identitySource, /canvas|navigator\.|screen\.|fingerprint/i);
+  assert.match(identitySource, /COMMENT_AVATAR_EDGE = 64/);
+  assert.match(identitySource, /canvas\.toBlob/);
+  assert.match(identitySource, /"image\/webp"/);
+  assert.doesNotMatch(identitySource, /navigator\.|screen\.|fingerprint/i);
 });
 
 test("resolves static assets from Vite's configured public base", async () => {

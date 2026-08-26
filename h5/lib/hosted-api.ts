@@ -17,10 +17,17 @@ export type HostedComment = {
   id: string;
   nickname: string;
   avatar: string;
+  avatarDataUrl?: string;
   body: string;
   createdAt: string;
   status: HostedShareStatus;
   archivedAt: string | null;
+};
+
+export type HostedCommentIdentity = Pick<HostedComment, "nickname" | "avatar">;
+export type HostedCommentAuthorInput = {
+  nickname?: string;
+  avatarDataUrl?: string;
 };
 
 type ItemEnvelope<T> = { item: T };
@@ -283,9 +290,20 @@ export async function listHostedComments(
   return payload.items;
 }
 
+export async function getHostedCommentIdentity(
+  visitorId: string,
+  signal?: AbortSignal,
+): Promise<HostedCommentIdentity> {
+  const payload = await requestJson<ItemEnvelope<HostedCommentIdentity>>(
+    `/comment-identity?visitorId=${encodeURIComponent(visitorId)}`,
+    { signal },
+  );
+  return payload.item;
+}
+
 export async function createHostedComment(
   code: string,
-  input: { visitorId: string; body: string },
+  input: { visitorId: string; body: string } & HostedCommentAuthorInput,
   signal?: AbortSignal,
 ): Promise<HostedComment> {
   const payload = await requestJson<ItemEnvelope<HostedComment>>(

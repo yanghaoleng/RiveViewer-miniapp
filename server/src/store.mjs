@@ -13,6 +13,8 @@ const MAX_SHARES = 10_000;
 const MAX_COMMENTS_PER_SHARE = 500;
 const MAX_TOTAL_COMMENTS = 5_000;
 const RESERVED_CODES = new Set(["api"]);
+const MAX_CUSTOM_AVATAR_DATA_URL_LENGTH = 16_407;
+const WEBP_DATA_URL_PATTERN = /^data:image\/webp;base64,[0-9A-Za-z+/]+={0,2}$/;
 
 function emptyState() {
   return { version: STATE_VERSION, shares: [] };
@@ -101,7 +103,14 @@ function validateState(state) {
       if (
         typeof comment?.id !== "string"
         || typeof comment.nickname !== "string"
+        || [...comment.nickname].length < 1
+        || [...comment.nickname].length > 12
         || !isForestAvatar(comment.avatar)
+        || (comment.avatarDataUrl !== undefined && (
+          typeof comment.avatarDataUrl !== "string"
+          || comment.avatarDataUrl.length > MAX_CUSTOM_AVATAR_DATA_URL_LENGTH
+          || !WEBP_DATA_URL_PATTERN.test(comment.avatarDataUrl)
+        ))
         || typeof comment.body !== "string"
         || typeof comment.createdAt !== "string"
         || !["active", "archived"].includes(comment.status)
@@ -349,7 +358,7 @@ export class ShareStore {
     });
   }
 
-  async addComment(code, { nickname, avatar, body }) {
+  async addComment(code, { nickname, avatar, avatarDataUrl, body }) {
     return this.#mutate((state) => {
       const share = state.shares.find((item) => item.code === code);
       if (!share) throw new AppError(404, "share_not_found", "分享不存在");
@@ -367,6 +376,7 @@ export class ShareStore {
         id: randomUUID(),
         nickname,
         avatar,
+        ...(avatarDataUrl ? { avatarDataUrl } : {}),
         body,
         createdAt: this.now(),
         status: "active",

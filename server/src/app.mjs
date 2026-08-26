@@ -20,9 +20,12 @@ const COMMENT_ARCHIVE_PATTERN = new RegExp(
 const COMMENT_RESTORE_PATTERN = new RegExp(
   `^/api/v1/shares/${CODE_PATH}/comments/([^/]+)/restore$`,
 );
+const COMMENT_IDENTITY_PATH = "/api/v1/comment-identity";
 const ARCHIVE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/archive$`);
 const RESTORE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/restore$`);
-const MAX_JSON_BYTES = 16 * 1024;
+const MAX_JSON_BYTES = 32 * 1024;
+const MAX_CUSTOM_AVATAR_BYTES = 12 * 1024;
+const WEBP_DATA_URL_PREFIX = "data:image/webp;base64,";
 
 function applyCommonHeaders(response) {
   response.setHeader("X-Content-Type-Options", "nosniff");
@@ -116,6 +119,43 @@ function commentIdentitySource(request, payload) {
   return `network:${address}|agent:${userAgent}`;
 }
 
+function normalizeCustomNickname(value) {
+  if (value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new AppError(422, "invalid_nickname", "昵称必须是文本");
+  }
+  const nickname = value.normalize("NFC").trim();
+  if (
+    [...nickname].length < 1
+    || [...nickname].length > 12
+    || /[\u0000-\u001f\u007f]/u.test(nickname)
+  ) {
+    throw new AppError(422, "invalid_nickname", "昵称须为 1 到 12 个字符");
+  }
+  return nickname;
+}
+
+function normalizeCustomAvatar(value) {
+  if (value === undefined) return null;
+  if (typeof value !== "string" || !value.startsWith(WEBP_DATA_URL_PREFIX)) {
+    throw new AppError(422, "invalid_avatar", "头像必须是 WebP 图片");
+  }
+  const encoded = value.slice(WEBP_DATA_URL_PREFIX.length);
+  if (!encoded || encoded.length % 4 !== 0 || !/^[0-9A-Za-z+/]+={0,2}$/.test(encoded)) {
+    throw new AppError(422, "invalid_avatar", "头像数据无效");
+  }
+  const bytes = Buffer.from(encoded, "base64");
+  if (
+    bytes.length < 16
+    || bytes.length > MAX_CUSTOM_AVATAR_BYTES
+    || bytes.toString("ascii", 0, 4) !== "RIFF"
+    || bytes.toString("ascii", 8, 12) !== "WEBP"
+  ) {
+    throw new AppError(422, "invalid_avatar", "头像须为 12 KiB 以内的 WebP 图片");
+  }
+  return `${WEBP_DATA_URL_PREFIX}${encoded}`;
+}
+
 function normalizeComment(request, payload) {
   if (typeof payload.body !== "string") {
     throw new AppError(422, "invalid_comment", "评论正文必须是文本");
@@ -126,7 +166,14 @@ function normalizeComment(request, payload) {
     throw new AppError(422, "invalid_comment", "评论正文须为 1 到 1000 个字符");
   }
   const identity = pickForestIdentity(commentIdentitySource(request, payload));
-  return { ...identity, body };
+  const nickname = normalizeCustomNickname(payload.nickname);
+  const avatarDataUrl = normalizeCustomAvatar(payload.avatarDataUrl);
+  return {
+    ...identity,
+    ...(nickname ? { nickname } : {}),
+    ...(avatarDataUrl ? { avatarDataUrl } : {}),
+    body,
+  };
 }
 
 function parseRange(value, size) {
@@ -235,6 +282,16 @@ export async function createRiveHostApp({
 
       if (request.method === "GET" && pathname === "/healthz") {
         sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (pathname === COMMENT_IDENTITY_PATH) {
+        if (request.method !== "GET") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        const visitorId = url.searchParams.get("visitorId");
+        if (!visitorId) throw new AppError(422, "invalid_visitor", "访问标识无效");
+        sendJson(response, 200, {
+          item: pickForestIdentity(commentIdentitySource(request, { visitorId })),
+        });
         return;
       }
 

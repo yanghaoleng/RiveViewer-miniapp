@@ -23,6 +23,7 @@ import {
   restoreHostedComment,
   restoreHostedShare,
   type HostedComment,
+  type HostedCommentAuthorInput,
   type HostedShare,
 } from "../../lib/hosted-api";
 import { copyText } from "../../lib/clipboard";
@@ -1237,7 +1238,7 @@ export function RiveViewerApp({
     }
   }, [hostedBusyCode, publishedCodes, refreshHostedLibrary]);
 
-  const submitComment = useCallback(async (body: string) => {
+  const submitComment = useCallback(async (body: string, author: HostedCommentAuthorInput) => {
     if (!shareCode || commentSubmitBusyRef.current) return false;
     const targetCode = shareCode;
     commentSubmitBusyRef.current = true;
@@ -1247,6 +1248,7 @@ export function RiveViewerApp({
       const comment = await createHostedComment(targetCode, {
         visitorId: getCommentVisitorId(),
         body,
+        ...author,
       });
       setCommentThread((current) => {
         if (current.code !== targetCode || current.items.some((item) => item.id === comment.id)) {

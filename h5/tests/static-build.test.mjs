@@ -187,6 +187,11 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(hostedPanelsSource, /document\.execCommand\("insertLineBreak"\)/);
   assert.match(hostedPanelsSource, /closest\("form"\)\?\.requestSubmit\(\)/);
   assert.match(styleSource, /\.comment-submit-row\s*\{[\s\S]{0,120}z-index:\s*2;/);
+  assert.match(hostedPanelsSource, /className="comment-hover-caret"/);
+  assert.match(styleSource, /caret-color:\s*var\(--accent\)/);
+  assert.match(styleSource, /\.comment-editor\[data-empty="true"\]:hover ~ \.comment-hover-caret/);
+  assert.match(styleSource, /comment-hover-caret-blink 900ms/);
+  assert.match(hostedPanelsSource, /className="comment-identity-row"/);
   assert.match(appSource, /const navigateHostedShare = useCallback/);
   assert.match(appSource, /window\.history\.pushState[\s\S]{0,500}setShareCode\(code\)/);
   assert.doesNotMatch(appSource, /window\.location\.reload\(\)/);
@@ -208,7 +213,9 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(timelineSource, />\s*展开\s*<\/button>/);
   assert.match(timelineSource, />\s*整理\s*<\/button>/);
   assert.match(timelineSource, /organizeTimelines\(animations\)/);
-  assert.match(timelineSource, /getDefaultTimelineLayout\(animations\.length\)/);
+  assert.match(timelineSource, /hasOrganizableTimelineGroups\(organizedSections\)/);
+  assert.match(timelineSource, /getDefaultTimelineLayout\(animations\.length, canOrganize\)/);
+  assert.match(timelineSource, /\{canOrganize && <span className="timeline-layout-switch"/);
   assert.match(timelineSource, /layoutSelection\.animationSignature === animationSignature/);
   assert.match(appSource, /<TimelineControl\s+key=\{activeFile\.sessionId\}/);
   assert.match(timelineSource, /timelineButton\(item\.name, item\.label\)/);

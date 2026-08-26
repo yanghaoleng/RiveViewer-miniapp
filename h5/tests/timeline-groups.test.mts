@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getDefaultTimelineLayout, organizeTimelines } from "../lib/timeline-groups.ts";
+import {
+  getDefaultTimelineLayout,
+  hasOrganizableTimelineGroups,
+  organizeTimelines,
+} from "../lib/timeline-groups.ts";
 
 test("defaults timeline layout to organized only above ten items", () => {
   assert.equal(getDefaultTimelineLayout(0), "expanded");
   assert.equal(getDefaultTimelineLayout(10), "expanded");
   assert.equal(getDefaultTimelineLayout(11), "organized");
+  assert.equal(getDefaultTimelineLayout(11, false), "expanded");
+});
+
+test("只有真正可分组时才提供整理模式", () => {
+  assert.equal(hasOrganizableTimelineGroups(organizeTimelines(["idle", "talk", "jump_once"])), false);
+  assert.equal(hasOrganizableTimelineGroups(organizeTimelines(["idol_idle", "idol_talk"])), true);
 });
 
 test("groups repeated first-level timeline prefixes and keeps deeper names", () => {

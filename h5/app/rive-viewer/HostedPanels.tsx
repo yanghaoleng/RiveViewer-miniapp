@@ -1,13 +1,27 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { copyText } from "../../lib/clipboard";
+import {
+  COMMENT_NICKNAME_LIMIT,
+  compressCommentAvatar,
+  getCommentVisitorId,
+  getLocalCommentAuthor,
+  limitCommentNickname,
+  saveLocalCommentAuthor,
+  type LocalCommentAuthor,
+} from "../../lib/comment-identity";
 import { formatCommentAbsoluteDate, formatCommentDate } from "../../lib/comment-time";
 import {
   formatCommentTimelineMarker,
   parseCommentTimelineSegments,
 } from "../../lib/comment-timeline";
 import { formatBytes } from "../../lib/library";
-import type { HostedComment, HostedShare } from "../../lib/hosted-api";
+import {
+  getHostedCommentIdentity,
+  type HostedComment,
+  type HostedCommentIdentity,
+  type HostedShare,
+} from "../../lib/hosted-api";
 import { publicAssetUrl } from "../../lib/public-base";
 import { getCommentKeyboardAction } from "../../lib/comment-shortcut";
 import { hostedSharePath, hostedShareUrl } from "../../lib/viewer-route";
@@ -64,6 +78,10 @@ export type CommentTimelineInsertion = {
   id: number;
   name: string;
 };
+
+function commentAvatarUrl(comment: Pick<HostedComment, "avatar" | "avatarDataUrl">): string {
+  return comment.avatarDataUrl || publicAssetUrl(`avatars/${comment.avatar}.webp`);
+}
 
 export function ArchivedLibraryDialog({
   archivedItems,
@@ -488,18 +506,82 @@ export function ShareCommentsPanel({
   timelines: string[];
   timelineInsertion: CommentTimelineInsertion | null;
   onRetry: () => void;
-  onSubmit: (body: string) => Promise<boolean>;
+  onSubmit: (body: string, author: LocalCommentAuthor) => Promise<boolean>;
   onArchive: (comment: HostedComment) => Promise<void>;
   onRestore: (comment: HostedComment) => Promise<void>;
   onSelectTimeline: (name: string) => void;
 }) {
   const [draftBody, setDraftBody] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
+  const [assignedIdentity, setAssignedIdentity] = useState<HostedCommentIdentity | null>(null);
+  const [localAuthor, setLocalAuthor] = useState<LocalCommentAuthor>(() => getLocalCommentAuthor());
+  const [editingNickname, setEditingNickname] = useState(false);
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [identityNotice, setIdentityNotice] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const nicknameInputRef = useRef<HTMLInputElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const editorFocusedRef = useRef(false);
   const editorBlurredAtRef = useRef(0);
   const handledInsertionIdRef = useRef(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getHostedCommentIdentity(getCommentVisitorId(), controller.signal)
+      .then((identity) => setAssignedIdentity(identity))
+      .catch((error) => {
+        if (!controller.signal.aborted) console.warn("评论身份读取失败", error);
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!editingNickname) return;
+    const frame = window.requestAnimationFrame(() => {
+      nicknameInputRef.current?.focus();
+      nicknameInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editingNickname]);
+
+  const displayedNickname = localAuthor.nickname || assignedIdentity?.nickname || "正在分配昵称";
+  const displayedAvatarUrl = localAuthor.avatarDataUrl
+    || (assignedIdentity ? publicAssetUrl(`avatars/${assignedIdentity.avatar}.webp`) : "");
+
+  const updateLocalAuthor = (next: LocalCommentAuthor) => {
+    setLocalAuthor(saveLocalCommentAuthor(next));
+  };
+
+  const beginNicknameEdit = () => {
+    setNicknameDraft(localAuthor.nickname || assignedIdentity?.nickname || "");
+    setEditingNickname(true);
+    setIdentityNotice("");
+  };
+
+  const commitNickname = () => {
+    const nickname = limitCommentNickname(nicknameDraft).trim();
+    updateLocalAuthor({ ...localAuthor, ...(nickname ? { nickname } : { nickname: undefined }) });
+    setEditingNickname(false);
+    setIdentityNotice(nickname ? "昵称已保存在本机" : "已恢复分配昵称");
+  };
+
+  const chooseAvatar = async (file: File | undefined, input: HTMLInputElement) => {
+    if (!file || avatarBusy) return;
+    setAvatarBusy(true);
+    setIdentityNotice("");
+    try {
+      const avatarDataUrl = await compressCommentAvatar(file);
+      updateLocalAuthor({ ...localAuthor, avatarDataUrl });
+      setIdentityNotice("头像已压缩为 64×64 WebP 并保存在本机");
+    } catch (error) {
+      setIdentityNotice(error instanceof Error ? error.message : "头像处理失败");
+    } finally {
+      input.value = "";
+      setAvatarBusy(false);
+    }
+  };
 
   const captureCaret = () => {
     const editor = editorRef.current;
@@ -561,7 +643,7 @@ export function ShareCommentsPanel({
     const submittedBody = Array.from(draftBody).slice(0, 1000).join("").trim();
     if (!submittedBody || submitting) return;
     setSubmitNotice("");
-    const created = await onSubmit(submittedBody);
+    const created = await onSubmit(submittedBody, localAuthor);
     if (created) {
       editorRef.current?.replaceChildren();
       savedRangeRef.current = null;
@@ -577,71 +659,129 @@ export function ShareCommentsPanel({
         <span>{comments.length}</span>
       </div>
 
-      <form className="comment-form" onSubmit={submit}>
-        {!draftBody && <TimelineHint />}
-        <div
-          ref={editorRef}
-          className="comment-editor"
-          contentEditable={!submitting}
-          role="textbox"
-          aria-label="评论内容"
-          aria-multiline="true"
-          aria-disabled={submitting}
-          data-empty={draftBody ? "false" : "true"}
-          suppressContentEditableWarning
-          onFocus={() => {
-            editorFocusedRef.current = true;
-            setSubmitNotice("");
-            window.requestAnimationFrame(captureCaret);
-          }}
-          onBlur={() => {
-            editorFocusedRef.current = false;
-            editorBlurredAtRef.current = Date.now();
-          }}
-          onInput={() => {
-            syncDraftBody();
-            captureCaret();
-            setSubmitNotice("");
-          }}
-          onKeyUp={captureCaret}
-          onMouseUp={captureCaret}
-          onClick={(event) => {
-            const marker = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-timeline]");
-            if (marker?.dataset.commentTimeline) onSelectTimeline(marker.dataset.commentTimeline);
-          }}
-          onKeyDown={(event) => {
-            const marker = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-timeline]");
-            if (marker?.dataset.commentTimeline && (event.key === "Enter" || event.key === " ")) {
-              event.preventDefault();
-              onSelectTimeline(marker.dataset.commentTimeline);
-              return;
-            }
-            const keyboardAction = getCommentKeyboardAction({
-              key: event.key,
-              metaKey: event.metaKey,
-              shiftKey: event.shiftKey,
-              isComposing: event.nativeEvent.isComposing,
-            });
-            if (keyboardAction === "line-break") {
-              event.preventDefault();
-              document.execCommand("insertLineBreak");
-              window.requestAnimationFrame(() => {
-                syncDraftBody();
-                captureCaret();
-              });
-              return;
-            }
-            if (keyboardAction !== "submit") return;
-            event.preventDefault();
-            event.currentTarget.closest("form")?.requestSubmit();
-          }}
-        />
-        <div className="comment-submit-row">
-          <button className="primary-action press-feedback" type="submit" disabled={!draftBody.trim() || submitting}>
-            {submitting ? "正在提交" : submitError ? "重新发表" : "发表评论"}
+      <div className={`comment-composer ${editingNickname ? "is-editing-identity" : ""}`}>
+        <div className="comment-identity-row">
+          <button
+            className="comment-identity-avatar"
+            type="button"
+            aria-label="自定义本机头像"
+            title="点击更换本机头像"
+            disabled={avatarBusy}
+            onClick={() => avatarInputRef.current?.click()}
+          >
+            {displayedAvatarUrl ? (
+              <img src={displayedAvatarUrl} width="28" height="28" alt="" />
+            ) : <span className="comment-identity-avatar-placeholder" />}
           </button>
+          <input
+            ref={avatarInputRef}
+            className="comment-avatar-input"
+            type="file"
+            accept="image/*"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(event) => void chooseAvatar(event.currentTarget.files?.[0], event.currentTarget)}
+          />
+          {editingNickname ? (
+            <input
+              ref={nicknameInputRef}
+              className="comment-identity-name-input"
+              value={nicknameDraft}
+              aria-label="本机评论昵称"
+              onChange={(event) => setNicknameDraft(limitCommentNickname(event.currentTarget.value))}
+              onBlur={commitNickname}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitNickname();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setEditingNickname(false);
+                }
+              }}
+            />
+          ) : (
+            <button
+              className="comment-identity-name"
+              type="button"
+              title="点击修改本机昵称"
+              onClick={beginNicknameEdit}
+            >
+              {displayedNickname}
+            </button>
+          )}
+          <span className="comment-identity-limit">{COMMENT_NICKNAME_LIMIT} 字内</span>
+          {identityNotice && <span className="comment-identity-notice" role="status">{identityNotice}</span>}
         </div>
-      </form>
+
+        <form className="comment-form" onSubmit={submit}>
+          {!draftBody && <TimelineHint />}
+          <div
+            ref={editorRef}
+            className="comment-editor"
+            contentEditable={!submitting}
+            role="textbox"
+            aria-label="评论内容"
+            aria-multiline="true"
+            aria-disabled={submitting}
+            data-empty={draftBody ? "false" : "true"}
+            suppressContentEditableWarning
+            onFocus={() => {
+              editorFocusedRef.current = true;
+              setSubmitNotice("");
+              window.requestAnimationFrame(captureCaret);
+            }}
+            onBlur={() => {
+              editorFocusedRef.current = false;
+              editorBlurredAtRef.current = Date.now();
+            }}
+            onInput={() => {
+              syncDraftBody();
+              captureCaret();
+              setSubmitNotice("");
+            }}
+            onKeyUp={captureCaret}
+            onMouseUp={captureCaret}
+            onClick={(event) => {
+              const marker = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-timeline]");
+              if (marker?.dataset.commentTimeline) onSelectTimeline(marker.dataset.commentTimeline);
+            }}
+            onKeyDown={(event) => {
+              const marker = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-timeline]");
+              if (marker?.dataset.commentTimeline && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                onSelectTimeline(marker.dataset.commentTimeline);
+                return;
+              }
+              const keyboardAction = getCommentKeyboardAction({
+                key: event.key,
+                metaKey: event.metaKey,
+                shiftKey: event.shiftKey,
+                isComposing: event.nativeEvent.isComposing,
+              });
+              if (keyboardAction === "line-break") {
+                event.preventDefault();
+                document.execCommand("insertLineBreak");
+                window.requestAnimationFrame(() => {
+                  syncDraftBody();
+                  captureCaret();
+                });
+                return;
+              }
+              if (keyboardAction !== "submit") return;
+              event.preventDefault();
+              event.currentTarget.closest("form")?.requestSubmit();
+            }}
+          />
+          <span className="comment-hover-caret" aria-hidden="true" />
+          <div className="comment-submit-row">
+            <button className="primary-action press-feedback" type="submit" disabled={!draftBody.trim() || submitting}>
+              {submitting ? "正在提交" : submitError ? "重新发表" : "发表评论"}
+            </button>
+          </div>
+        </form>
+      </div>
       {submitNotice && (
         <div className="comment-submit-notice" role="status" aria-live="polite">{submitNotice}</div>
       )}
@@ -674,7 +814,7 @@ export function ShareCommentsPanel({
               <summary>
                 <span className="comment-author">
                   <img
-                    src={publicAssetUrl(`avatars/${comment.avatar}.webp`)}
+                    src={commentAvatarUrl(comment)}
                     width="32"
                     height="32"
                     alt=""
@@ -710,7 +850,7 @@ export function ShareCommentsPanel({
             <article className="comment-item" key={comment.id}>
               <img
                 className="comment-avatar"
-                src={publicAssetUrl(`avatars/${comment.avatar}.webp`)}
+                src={commentAvatarUrl(comment)}
                 width="32"
                 height="32"
                 alt=""
