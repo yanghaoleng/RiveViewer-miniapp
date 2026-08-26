@@ -38,6 +38,8 @@ async function listenApp(dataDir, options = {}) {
     codeGenerator: options.codeGenerator,
     now: options.now,
     diskFreeProvider: options.diskFreeProvider || (async () => 100 * GIBIBYTE),
+    analyticsPassword: options.analyticsPassword || "123456",
+    analyticsSalt: options.analyticsSalt || "test-analytics-salt-32-characters-long",
     logger: silentLogger,
   });
   const server = createServer(app.handler);
@@ -891,6 +893,8 @@ test("refuses to start when an indexed Rive file is missing", async () => {
         dataDir,
         maxTotalBytes: DEFAULT_MAX_TOTAL_BYTES,
         diskFreeProvider: async () => 100 * GIBIBYTE,
+        analyticsPassword: "123456",
+        analyticsSalt: "test-analytics-salt-32-characters-long",
         logger: silentLogger,
       }),
       /文件缺失/,
@@ -987,6 +991,32 @@ test("collects privacy-safe analytics and returns filterable dashboard metrics",
     response = await call(instance.port, {
       pathname: "/api/v1/analytics/summary?days=7&surface=generic&format=rive",
     });
+    assert.equal(response.status, 401);
+    assert.equal(response.json.error.code, "analytics_auth_required");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/auth",
+      headers: { "Content-Type": "application/json" },
+      body: { password: "000000" },
+    });
+    assert.equal(response.status, 401);
+    assert.equal(response.json.error.code, "invalid_password");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/auth",
+      headers: { "Content-Type": "application/json" },
+      body: { password: "123456" },
+    });
+    assert.equal(response.status, 204);
+    const sessionCookie = response.headers["set-cookie"][0].split(";", 1)[0];
+    assert.match(response.headers["set-cookie"][0], /HttpOnly; Secure; SameSite=Strict/);
+
+    response = await call(instance.port, {
+      pathname: "/api/v1/analytics/summary?days=7&surface=generic&format=rive",
+      headers: { Cookie: sessionCookie },
+    });
     assert.equal(response.status, 200);
     assert.equal(response.json.item.freshness.eventCount, 4, "重复 event id 应在汇总时去重");
     assert.equal(response.json.item.kpis.sessions, 1);
@@ -1015,6 +1045,7 @@ test("loads configuration defaults and validates capacity values", () => {
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 8097);
   assert.equal(config.maxTotalBytes, 5 * GIBIBYTE);
+  assert.equal(config.analyticsPassword, "");
 
   assert.throws(() => loadConfig({}), /RIVE_HOST_DATA_DIR/);
   assert.throws(() => loadConfig({ RIVE_HOST_DATA_DIR: "relative" }), /绝对路径/);
@@ -1026,6 +1057,15 @@ test("loads configuration defaults and validates capacity values", () => {
     NODE_ENV: "production",
     RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
   }), /ANALYTICS_SALT/);
+  assert.throws(() => loadConfig({
+    NODE_ENV: "production",
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+    RIVE_HOST_ANALYTICS_SALT: "test-analytics-salt-32-characters-long",
+  }), /ANALYTICS_PASSWORD/);
+  assert.throws(() => loadConfig({
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+    RIVE_HOST_ANALYTICS_PASSWORD: "12345a",
+  }), /6 位数字/);
   assert.throws(() => loadConfig({
     RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
     RIVE_HOST_ANALYTICS_SALT: "short",

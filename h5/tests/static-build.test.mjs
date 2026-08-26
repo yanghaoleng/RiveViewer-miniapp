@@ -44,7 +44,9 @@ test("builds the viewer at the configured public base", async () => {
     assert.match(nginx, /try_files \$uri \$uri\/ \/beta\/index\.html/);
   } else if (base === "/data/") {
     assert.match(nginx, /location = \/api\/v1\/analytics\/summary/);
-    assert.match(nginx, /auth_basic_user_file \/etc\/nginx\/\.htpasswd-rive-data/);
+    assert.match(nginx, /location = \/api\/v1\/analytics\/auth/);
+    assert.match(nginx, /limit_req zone=rive_host_analytics_auth/);
+    assert.doesNotMatch(nginx, /auth_basic/);
     assert.match(nginx, /location \^~ \/data\/assets\//);
     assert.match(nginx, /\/var\/www\/rive-data\/current/);
     assert.match(nginx, /access_log off/);

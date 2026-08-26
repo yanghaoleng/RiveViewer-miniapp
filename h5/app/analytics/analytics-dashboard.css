@@ -2,6 +2,200 @@
   color-scheme: dark;
 }
 
+.data-access-page {
+  min-height: 100dvh;
+  color: #edf2f7;
+  background: #0b0f14;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.data-access-brand {
+  display: grid;
+  gap: 4px;
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 30px 0 22px;
+  border-bottom: 1px solid #28313b;
+  color: #9ba9b8;
+  font-size: 13px;
+}
+
+.data-access-brand strong {
+  color: #f2c94c;
+  font-size: 20px;
+  letter-spacing: -.02em;
+}
+
+.data-access-main {
+  display: grid;
+  min-height: calc(100dvh - 104px);
+  place-items: center;
+  padding: 36px 20px 72px;
+}
+
+.data-access-card {
+  width: min(100%, 420px);
+  padding: 30px;
+  border: 1px solid #2d3742;
+  border-radius: 12px;
+  background: #11171d;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 28%);
+}
+
+.data-access-label {
+  color: #f2c94c;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .12em;
+}
+
+.data-access-card h1 {
+  margin: 12px 0 0;
+  color: #f5f8fb;
+  font-size: 27px;
+  letter-spacing: -.03em;
+}
+
+.data-access-card > p {
+  margin: 9px 0 0;
+  color: #96a3b1;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.data-access-card form {
+  margin-top: 24px;
+}
+
+.data-password-field {
+  position: relative;
+  cursor: text;
+}
+
+.data-password-cells {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.data-password-cells span {
+  display: grid;
+  min-width: 0;
+  height: 52px;
+  place-items: center;
+  border: 1px solid #34404c;
+  border-radius: 9px;
+  color: #f2c94c;
+  background: #0d1217;
+  font-size: 13px;
+}
+
+.data-password-cells .is-filled {
+  border-color: #59636d;
+  background: #151c23;
+}
+
+.data-password-field:focus-within .data-password-cells span {
+  border-color: #7a6b34;
+}
+
+.data-password-field input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  cursor: text;
+}
+
+.data-password-hint {
+  display: block;
+  margin-top: 10px;
+  color: #75818d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.data-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.data-keypad button {
+  min-height: 54px;
+  border: 1px solid #34404c;
+  border-radius: 9px;
+  color: #eef2f6;
+  background: #171e25;
+  font: 600 18px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+
+.data-keypad button:hover {
+  border-color: #7a6b34;
+  background: #1b232b;
+}
+
+.data-keypad button:active {
+  transform: translateY(1px);
+}
+
+.data-keypad .data-keypad-secondary {
+  color: #9ca8b3;
+  font: 500 12px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.data-keypad .data-keypad-submit {
+  border-color: #f2c94c;
+  color: #161a1e;
+  background: #f2c94c;
+  font: 650 13px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.data-keypad .data-keypad-submit:disabled {
+  border-color: #4d4529;
+  color: #77735f;
+  background: #252319;
+  cursor: not-allowed;
+}
+
+.data-password-message {
+  min-height: 18px;
+  margin-top: 14px;
+  color: #71808d;
+  font-size: 11px;
+  text-align: center;
+}
+
+.data-password-message span {
+  color: #ff9f96;
+}
+
+.data-access-checking {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 26px;
+  color: #8794a0;
+  font-size: 12px;
+}
+
+.data-access-checking i {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #535f6b;
+  border-top-color: #f2c94c;
+  border-radius: 50%;
+  animation: data-access-spin .8s linear infinite;
+}
+
+@keyframes data-access-spin {
+  to { transform: rotate(360deg); }
+}
+
 .data-dashboard {
   min-height: 100dvh;
   color: #edf2f7;
@@ -111,6 +305,20 @@
 .data-filters button:disabled {
   cursor: wait;
   opacity: .58;
+}
+
+.data-filters .data-lock-button {
+  border-color: #4c3535;
+  color: #d8a19d;
+}
+
+.data-keypad button:focus-visible,
+.data-password-field input:focus-visible,
+.data-filters button:focus-visible,
+.data-filters select:focus-visible,
+.data-error button:focus-visible {
+  outline: 2px solid #f2c94c;
+  outline-offset: 2px;
 }
 
 .data-main {
@@ -558,6 +766,29 @@
 }
 
 @media (max-width: 520px) {
+  .data-access-brand {
+    width: calc(100% - 28px);
+    padding-top: 22px;
+  }
+
+  .data-access-main {
+    align-items: start;
+    min-height: calc(100dvh - 96px);
+    padding: 24px 14px 48px;
+  }
+
+  .data-access-card {
+    padding: 24px 18px;
+  }
+
+  .data-password-cells {
+    gap: 6px;
+  }
+
+  .data-password-cells span {
+    height: 48px;
+  }
+
   .data-header-copy h1 {
     font-size: 31px;
   }
@@ -603,5 +834,9 @@
   .data-filters button,
   .data-error button {
     transition: none;
+  }
+
+  .data-access-checking i {
+    animation: none;
   }
 }

@@ -66,6 +66,39 @@ export type AnalyticsSummary = {
   };
 };
 
+export class AnalyticsAuthRequiredError extends Error {
+  constructor() {
+    super("请先输入数据后台访问密码");
+    this.name = "AnalyticsAuthRequiredError";
+  }
+}
+
+async function responseError(response: Response, fallback: string): Promise<Error> {
+  const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+  return new Error(payload?.error?.message || `${fallback} (${response.status})`);
+}
+
+export async function authenticateAnalytics(password: string): Promise<void> {
+  const response = await fetch("/api/v1/analytics/auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ password }),
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!response.ok) throw await responseError(response, "验证失败");
+}
+
+export async function logoutAnalytics(): Promise<void> {
+  const response = await fetch("/api/v1/analytics/logout", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!response.ok) throw await responseError(response, "锁定失败");
+}
+
 export async function getAnalyticsSummary({
   days,
   surface,
@@ -80,10 +113,12 @@ export async function getAnalyticsSummary({
   const query = new URLSearchParams({ days: String(days), surface, format });
   const response = await fetch(`/api/v1/analytics/summary?${query}`, {
     headers: { Accept: "application/json" },
+    credentials: "same-origin",
     cache: "no-store",
     signal,
   });
-  if (!response.ok) throw new Error(`数据读取失败 (${response.status})`);
+  if (response.status === 401) throw new AnalyticsAuthRequiredError();
+  if (!response.ok) throw await responseError(response, "数据读取失败");
   const payload = await response.json() as { item?: AnalyticsSummary; error?: { message?: string } };
   if (!payload.item) throw new Error(payload.error?.message || "统计数据格式无效");
   return payload.item;

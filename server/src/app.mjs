@@ -7,6 +7,7 @@ import {
   parseFormatFilter,
 } from "./animation-formats.mjs";
 import { ANALYTICS_ALLOWED_ORIGINS, AnalyticsStore } from "./analytics.mjs";
+import { AnalyticsAccess } from "./analytics-auth.mjs";
 import { AppError, isAppError } from "./errors.mjs";
 import { pickForestIdentity } from "./forest-identities.mjs";
 import {
@@ -28,6 +29,8 @@ const COMMENT_RESTORE_PATTERN = new RegExp(
 );
 const COMMENT_IDENTITY_PATH = "/api/v1/comment-identity";
 const ANALYTICS_EVENTS_PATH = "/api/v1/analytics/events";
+const ANALYTICS_AUTH_PATH = "/api/v1/analytics/auth";
+const ANALYTICS_LOGOUT_PATH = "/api/v1/analytics/logout";
 const ANALYTICS_SUMMARY_PATH = "/api/v1/analytics/summary";
 const ARCHIVE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/archive$`);
 const RESTORE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/restore$`);
@@ -57,6 +60,15 @@ function sendError(response, error) {
   const code = isAppError(error) ? error.code : "internal_error";
   const message = isAppError(error) ? error.message : "服务器内部错误";
   sendJson(response, status, { error: { code, message } });
+}
+
+function sendNoContent(response, extraHeaders = {}) {
+  response.writeHead(204, {
+    "Content-Length": 0,
+    "Cache-Control": "no-store",
+    ...extraHeaders,
+  });
+  response.end();
 }
 
 function parseContentLength(request) {
@@ -298,6 +310,7 @@ export async function createRiveHostApp({
   now,
   diskFreeProvider,
   analyticsSalt,
+  analyticsPassword,
   logger = console,
 } = {}) {
   const store = await ShareStore.open({
@@ -313,6 +326,11 @@ export async function createRiveHostApp({
     salt: analyticsSalt,
     now,
     logger,
+  });
+  const analyticsAccess = new AnalyticsAccess({
+    password: analyticsPassword,
+    salt: analyticsSalt,
+    now,
   });
 
   const handler = async (request, response) => {
@@ -352,8 +370,30 @@ export async function createRiveHostApp({
         return;
       }
 
+      if (pathname === ANALYTICS_AUTH_PATH) {
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        if (!analyticsAccess.enabled) {
+          throw new AppError(503, "analytics_auth_unavailable", "数据后台访问密码尚未配置");
+        }
+        const payload = await readJson(request);
+        if (!analyticsAccess.matchesPassword(payload.password)) {
+          throw new AppError(401, "invalid_password", "访问密码不正确");
+        }
+        sendNoContent(response, { "Set-Cookie": analyticsAccess.sessionCookie() });
+        return;
+      }
+
+      if (pathname === ANALYTICS_LOGOUT_PATH) {
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        sendNoContent(response, { "Set-Cookie": analyticsAccess.clearCookie() });
+        return;
+      }
+
       if (pathname === ANALYTICS_SUMMARY_PATH) {
         if (request.method !== "GET") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        if (!analyticsAccess.isAuthorized(request)) {
+          throw new AppError(401, "analytics_auth_required", "请先输入数据后台访问密码");
+        }
         const days = Number(url.searchParams.get("days") || 30);
         const surface = url.searchParams.get("surface") || "all";
         const format = url.searchParams.get("format") || "all";

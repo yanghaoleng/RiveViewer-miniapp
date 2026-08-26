@@ -48,6 +48,16 @@ export function loadConfig(environment = process.env) {
       }
       return value;
     })(),
+    analyticsPassword: (() => {
+      const value = environment.RIVE_HOST_ANALYTICS_PASSWORD || "";
+      if (value && !/^\d{6}$/.test(value)) {
+        throw new Error("RIVE_HOST_ANALYTICS_PASSWORD 必须是 6 位数字");
+      }
+      if (environment.NODE_ENV === "production" && !value) {
+        throw new Error("生产环境必须设置 RIVE_HOST_ANALYTICS_PASSWORD");
+      }
+      return value;
+    })(),
   };
 }
 

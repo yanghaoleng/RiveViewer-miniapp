@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
+  AnalyticsAuthRequiredError,
+  authenticateAnalytics,
   getAnalyticsSummary,
+  logoutAnalytics,
   type AnalyticsDimensionRow,
   type AnalyticsSummary,
 } from "../../lib/analytics-api";
@@ -9,6 +12,7 @@ import "./analytics-dashboard.css";
 type Days = 7 | 30 | 90;
 type Surface = "all" | "generic" | "jojo" | "beta";
 type Format = "all" | "rive" | "lottie" | "pag";
+type AccessState = "checking" | "locked" | "unlocked";
 
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 const compactFormatter = new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 });
@@ -184,6 +188,108 @@ function LoadingDashboard() {
   return <div className="data-loading" aria-label="正在读取体验数据">{Array.from({ length: 8 }, (_, index) => <i key={index} />)}</div>;
 }
 
+function DataAccessGate({ checking, onUnlocked }: {
+  checking: boolean;
+  onUnlocked: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!checking) window.requestAnimationFrame(() => inputRef.current?.focus());
+  }, [checking]);
+
+  const replacePassword = useCallback((value: string) => {
+    setPassword(value.replace(/\D/g, "").slice(0, 6));
+    setError("");
+  }, []);
+
+  const submit = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (submitting || password.length !== 6) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await authenticateAnalytics(password);
+      setPassword("");
+      onUnlocked();
+    } catch (value) {
+      setPassword("");
+      setError(value instanceof Error ? value.message : "验证失败，请重试");
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const pressKey = (key: string) => {
+    if (submitting) return;
+    if (key === "delete") replacePassword(password.slice(0, -1));
+    else if (key === "enter") void submit();
+    else replacePassword(`${password}${key}`);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div className="data-access-page">
+      <header className="data-access-brand"><span>Rive 预览台</span><strong>体验数据</strong></header>
+      <main className="data-access-main">
+        <section className="data-access-card" aria-busy={checking || submitting}>
+          <span className="data-access-label">仅限内部访问</span>
+          <h1>{checking ? "正在确认访问权限" : "输入访问密码"}</h1>
+          <p>{checking ? "正在读取本浏览器的登录状态。" : "无需账号，输入 6 位密码即可进入数据后台。"}</p>
+          {checking ? (
+            <div className="data-access-checking" role="status"><i /><span>正在验证</span></div>
+          ) : (
+            <form onSubmit={submit}>
+              <div className="data-password-field" onClick={() => inputRef.current?.focus()}>
+                <div className="data-password-cells" aria-hidden="true">
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <span className={index < password.length ? "is-filled" : ""} key={index}>
+                      {index < password.length ? "●" : ""}
+                    </span>
+                  ))}
+                </div>
+                <input
+                  ref={inputRef}
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  maxLength={6}
+                  value={password}
+                  onChange={(event) => replacePassword(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") replacePassword("");
+                  }}
+                  aria-label="六位访问密码"
+                  aria-describedby={error ? "data-password-error" : "data-password-hint"}
+                />
+              </div>
+              <span id="data-password-hint" className="data-password-hint">支持点击数字键盘，也支持实体键盘、退格和回车</span>
+              <div className="data-keypad" aria-label="数字键盘">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((key) => (
+                  <button type="button" key={key} onClick={() => pressKey(key)}>{key}</button>
+                ))}
+                <button type="button" className="data-keypad-secondary" onClick={() => pressKey("delete")}>删除</button>
+                <button type="button" onClick={() => pressKey("0")}>0</button>
+                <button type="submit" className="data-keypad-submit" disabled={password.length !== 6 || submitting}>
+                  {submitting ? "验证中" : "进入"}
+                </button>
+              </div>
+              <div className="data-password-message" aria-live="polite">
+                {error ? <span id="data-password-error">{error}</span> : "登录状态在本浏览器保留 12 小时"}
+              </div>
+            </form>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
+
 export function AnalyticsDashboard() {
   const [days, setDays] = useState<Days>(30);
   const [surface, setSurface] = useState<Surface>("all");
@@ -192,6 +298,8 @@ export function AnalyticsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [accessState, setAccessState] = useState<AccessState>("checking");
+  const [locking, setLocking] = useState(false);
 
   const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
 
@@ -201,10 +309,19 @@ export function AnalyticsDashboard() {
     getAnalyticsSummary({ days, surface, format, signal: controller.signal })
       .then((value) => {
         setSummary(value);
+        setAccessState("unlocked");
         setError("");
       })
       .catch((value) => {
-        if (!controller.signal.aborted) setError(value instanceof Error ? value.message : "数据读取失败");
+        if (controller.signal.aborted) return;
+        if (value instanceof AnalyticsAuthRequiredError) {
+          setSummary(null);
+          setError("");
+          setAccessState("locked");
+        } else {
+          setAccessState("unlocked");
+          setError(value instanceof Error ? value.message : "数据读取失败");
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -217,6 +334,28 @@ export function AnalyticsDashboard() {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
+  const handleUnlocked = useCallback(() => {
+    setAccessState("checking");
+    setLoading(true);
+    refresh();
+  }, [refresh]);
+
+  const lockDashboard = useCallback(async () => {
+    if (locking) return;
+    setLocking(true);
+    try {
+      await logoutAnalytics();
+      setSummary(null);
+      setAccessState("locked");
+      setLoading(false);
+      setError("");
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "锁定失败，请重试");
+    } finally {
+      setLocking(false);
+    }
+  }, [locking]);
+
   const metrics = useMemo(() => summary ? [
     { label: "独立会话", value: formatNumber(summary.kpis.sessions), note: `${days} 天内访问工具的浏览器会话`, tone: "default" as const },
     { label: "成功预览", value: formatNumber(summary.kpis.previews), note: "完成解析并绘制首帧", tone: "accent" as const },
@@ -226,6 +365,10 @@ export function AnalyticsDashboard() {
     { label: "深度使用率", value: formatPercent(summary.kpis.engagementRate), note: "激活后使用播放或检查控件", tone: "default" as const },
     { label: "错误率", value: formatPercent(summary.kpis.errorRate), note: "上传、预览、评论与版本操作失败", tone: summary.kpis.errorRate > 0.05 ? "risk" as const : "default" as const },
   ] : [], [days, summary]);
+
+  if (accessState !== "unlocked") {
+    return <DataAccessGate checking={accessState === "checking"} onUnlocked={handleUnlocked} />;
+  }
 
   return (
     <div className="data-dashboard">
@@ -243,6 +386,9 @@ export function AnalyticsDashboard() {
           <label>版本<select value={surface} onChange={(event) => setSurface(event.target.value as Surface)}><option value="all">全部版本</option><option value="generic">H5 通用版</option><option value="jojo">叫叫正式版</option><option value="beta">叫叫测试版</option></select></label>
           <label>格式<select value={format} onChange={(event) => setFormat(event.target.value as Format)}><option value="all">全部格式</option><option value="rive">Rive</option><option value="lottie">Lottie</option><option value="pag">PAG</option></select></label>
           <button type="button" onClick={refresh} disabled={loading}>刷新数据</button>
+          <button type="button" className="data-lock-button" onClick={() => void lockDashboard()} disabled={locking}>
+            {locking ? "锁定中" : "锁定后台"}
+          </button>
         </div>
       </header>
 
