@@ -183,6 +183,10 @@ test("uses a resizable inspector from iPad Pro landscape width", async () => {
   assert.match(appSource, /WIDE_INSPECTOR_DEFAULT_WIDTH = 360/);
   assert.match(appSource, /WIDE_INSPECTOR_MIN_WIDTH = 360/);
   assert.match(appSource, /WIDE_PREVIEW_PREFERRED_WIDTH = 800/);
+  assert.match(appSource, /STAGE_MIN_HEIGHT = 50/);
+  assert.match(appSource, /clamp\([\s\S]{0,160}STAGE_MIN_HEIGHT,[\s\S]{0,80}maximum/);
+  assert.match(appSource, /aria-valuemin=\{STAGE_MIN_HEIGHT\}/);
+  assert.match(styleSource, /\.canvas-card\s*\{[\s\S]{0,100}min-height:\s*50px;/);
   assert.match(appSource, /workbench\.clientWidth - WIDE_COLUMN_RESIZER_WIDTH - WIDE_PREVIEW_PREFERRED_WIDTH/);
   assert.match(appSource, /FILE_RAIL_MIN_WIDTH = 160/);
   assert.match(appSource, /aria-label="调整最近文件栏宽度"/);

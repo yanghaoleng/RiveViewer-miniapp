@@ -124,6 +124,7 @@ const WIDE_PREVIEW_MIN_WIDTH = 520;
 const WIDE_PREVIEW_PREFERRED_WIDTH = 800;
 const WIDE_COLUMN_RESIZER_WIDTH = 13;
 const WIDE_LAYOUT_MIN_WIDTH = 1194;
+const STAGE_MIN_HEIGHT = 50;
 const RAIL_ACTIVITY_STATE_KEY = "riveRailPreserveActivity";
 
 type ActivityPolicy = "record" | "preserve";
@@ -1673,7 +1674,11 @@ export function RiveViewerApp({
     }
     const maximum = maximumStageHeight();
     if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-      pendingStageHeightRef.current = clamp(resizeStartRef.current.height + deltaY, 250, maximum);
+      pendingStageHeightRef.current = clamp(
+        resizeStartRef.current.height + deltaY,
+        STAGE_MIN_HEIGHT,
+        maximum,
+      );
       if (stageResizeFrameRef.current === null) {
         stageResizeFrameRef.current = requestAnimationFrame(() => {
           stageResizeFrameRef.current = null;
@@ -2276,7 +2281,7 @@ export function RiveViewerApp({
               role="slider"
               tabIndex={0}
               aria-label="单击展开完整或铺满并在三秒后收起，上下拖动画布高度，按住后左右滑动选择，双击切换完整或铺满"
-              aria-valuemin={250}
+              aria-valuemin={STAGE_MIN_HEIGHT}
               aria-valuemax={Math.round(maximumStageHeight())}
               aria-valuenow={Math.round(stageSizingHeight)}
             >

@@ -1557,7 +1557,7 @@ button:disabled {
 
 .canvas-card {
   width: 100%;
-  min-height: 250px;
+  min-height: 50px;
   max-height: 66dvh;
   flex: none;
   position: relative;
