@@ -119,7 +119,7 @@
 | H5 顶层浮窗 | Page-level overlay stacking | `--z-header`、`--z-popover`、`.topbar` |
 | H5 意见反馈 | Static feedback credit | `FeedbackContact`、`.feedback-credit`、可见纯文本“反馈意见：杨皓棱”；无按钮、图标或复制行为 |
 | H5 平台标签（已移除） | Removed platform badge | 不再渲染 `.platform-label` 或右上角 `H5` 文案 |
-| H5 标题品牌图标 | Header brand mark | `Brand`、`.brand-mark`、`.brand-title`、`.brand-signature`、`favicon.webp?v=2`；署名小字为 `for JOJO` |
+| H5 标题品牌图标 | Header brand mark | `Brand`、`.brand-mark`、`.brand-title`、`.brand-signature`、`favicon.webp?v=3`；署名小字为 `for JOJO` |
 | H5 文件操作箭头 | Hover file action toggle | `.file-action`、`.file-row:hover`、`.file-row:focus-within`、`.is-menu-open` |
 | H5 Rive 完整比例画布 | Proportional Rive contain canvas | `stageKeepsSourceAspect`、`hasStageAspect`、`stageAspect`、`stageStyle`、`.canvas-card.is-proportional`；只对 Rive 外框锁原比例 |
 | H5 整行悬停背景 | Full-row file hover fill | `.file-row:hover`、`.file-row:focus-within`、`.file-row.is-menu-open` |
@@ -134,7 +134,7 @@
 | H5 小程序入口 | Mini Program access entry | `MiniProgramEntry`、`.mini-program-entry`、`.mini-program-popover`、`mini-program-code.webp`、文案“小程序” |
 | H5 发送文件 | Web Share with download fallback | `shareFile`、`navigator.share`、`navigator.canShare`、`downloadFile` |
 | H5 本地文件保留 | Non-destructive local library | `LibraryList` 不展示删除或移除入口；本机 IndexedDB 文件保持可用，H5 不再预置示例 |
-| H5 页签图标 | Favicon with fallback | `favicon.webp`、`favicon-source.png`、`?v=2`、Figma 节点 `152:723` |
+| H5 页签与 iOS 主屏图标 | Favicon and Apple touch icon | `favicon.webp`、`favicon-source.png`、`apple-touch-icon.png`、`?v=3`；圆角矩形页签图标与 `180×180` 不透明 iOS 方形源图 |
 | H5 公网测试入口 | Temporary production URL | `rive-viewer-miniapp.muhualei.chatgpt.site/rive-viewer` |
 | H5 正式入口 | Custom-domain route | `https://mikeywa.site/rive-viewer/`、`/etc/nginx/snippets/rive-viewer.conf` |
 | H5 小程序包排除 | Mini Program pack ignore | `project.config.json` 的 `packOptions.ignore: h5` |

@@ -2502,7 +2502,7 @@ function Brand({ label, href }: { label: string; href?: string }) {
   const content = (
     <>
       {/* 与浏览器页签复用同一份本地图标，避免品牌图形分叉。 */}
-      <img className="brand-mark" src={`${publicAssetUrl("favicon.webp")}?v=2`} alt="" />
+      <img className="brand-mark" src={`${publicAssetUrl("favicon.webp")}?v=3`} alt="" />
       <span className="brand-title">{label}</span>
       <small className="brand-signature">for JOJO</small>
     </>

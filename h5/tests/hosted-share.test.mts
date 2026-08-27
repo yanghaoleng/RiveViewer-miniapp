@@ -451,7 +451,8 @@ test("resolves static assets from Vite's configured public base", async () => {
   ]);
 
   assert.match(viteSource, /process\.env\.RIVE_VIEWER_BASE/);
-  assert.match(html, /%BASE_URL%favicon\.webp/);
+  assert.match(html, /%BASE_URL%favicon\.webp\?v=3/);
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon\.png\?v=3"/);
   assert.doesNotMatch(html, /\.wasm/);
   assert.match(playerSource, /publicAssetUrl\(runtimeWasmFile\(renderEngine\)\)/);
   assert.match(librarySource, /RECENT_HOSTED_STORE_NAME = "recent-hosted"/);
