@@ -32,6 +32,7 @@ import {
   HostedApiError,
   listHostedComments,
   listHostedShares,
+  renameHostedShare,
   restoreHostedComment,
   restoreHostedShare,
   type HostedComment,
@@ -39,11 +40,11 @@ import {
   type HostedShare,
 } from "../../lib/hosted-api";
 import {
-  formatHostedVersionDate,
   hostedVersions,
   selectedHostedVersion,
 } from "../../lib/file-versions";
 import { copyText } from "../../lib/clipboard";
+import { hostedShareName } from "../../lib/hosted-share-name";
 import { getCommentVisitorId } from "../../lib/comment-identity";
 import {
   attachLibraryCovers,
@@ -77,6 +78,7 @@ import {
   ShareCommentsPanel,
 } from "./HostedPanels";
 import { Icon, type IconName } from "./Icon";
+import { HostedFileName } from "./HostedFileName";
 import { PlaybackMeta, TimelineControl } from "./PlaybackTelemetryView";
 import { RuntimeEventConsole } from "./RuntimeEventConsole";
 
@@ -298,7 +300,6 @@ export function RiveViewerApp({
   const [publicShareError, setPublicShareError] = useState("");
   const [publicShareReload, setPublicShareReload] = useState(0);
   const [selectedVersionId, setSelectedVersionId] = useState("");
-  const [versionMenuOpen, setVersionMenuOpen] = useState(false);
   const [versionUploading, setVersionUploading] = useState(false);
   const [versionUploadProgress, setVersionUploadProgress] = useState(0);
   const [versionUploadError, setVersionUploadError] = useState("");
@@ -373,7 +374,6 @@ export function RiveViewerApp({
     playerRef.current?.pause();
     selectedVersionIdRef.current = "";
     setSelectedVersionId("");
-    setVersionMenuOpen(false);
     setVersionUploadError("");
     setPreservePublicActivity(activityPolicy === "preserve");
     setPublicRouteDetached(false);
@@ -390,7 +390,6 @@ export function RiveViewerApp({
       setPublicRouteDetached(false);
       selectedVersionIdRef.current = "";
       setSelectedVersionId("");
-      setVersionMenuOpen(false);
       setShareCode(nextCode);
       if (nextCode) return;
       openRequestRef.current += 1;
@@ -516,7 +515,7 @@ export function RiveViewerApp({
         const openedAt = selectedVersion?.createdAt || share.createdAt;
         setPublicShare(share);
         const openedFormat = selectedVersion?.format || share.format;
-        document.title = `${openedFilename} - 动效预览`;
+        document.title = `${hostedShareName(share, selectedVersion)} - 动效预览`;
         if (share.status === "archived") {
           activeSourceRef.current = null;
           telemetry.reset();
@@ -838,14 +837,49 @@ export function RiveViewerApp({
       || publishedCodes[activeFile.file.id]
       || ""
     : "";
+  const activeHostedShare = publicShare?.code === activeHostedCode
+    ? publicShare
+    : hostedLibrary.activeItems.find((share) => share.code === activeHostedCode)
+      || (activeFile ? uploadStates[activeFile.file.id]?.share : undefined)
+      || activeFile?.hostedShare
+      || null;
   const activeHostedVersions = useMemo(
-    () => hostedVersioningEnabled ? hostedVersions(publicShare) : [],
-    [hostedVersioningEnabled, publicShare],
+    () => hostedVersioningEnabled ? hostedVersions(activeHostedShare) : [],
+    [hostedVersioningEnabled, activeHostedShare],
   );
   const activeHostedVersion = useMemo(
-    () => hostedVersioningEnabled ? selectedHostedVersion(publicShare, selectedVersionId) : null,
-    [hostedVersioningEnabled, publicShare, selectedVersionId],
+    () => hostedVersioningEnabled ? selectedHostedVersion(activeHostedShare, selectedVersionId) : null,
+    [hostedVersioningEnabled, activeHostedShare, selectedVersionId],
   );
+  const activeDisplayName = activeHostedShare
+    ? hostedShareName(activeHostedShare, activeHostedVersion)
+    : activeFile?.file.name || "";
+
+  useEffect(() => {
+    if (activeHostedCode && activeDisplayName) document.title = `${activeDisplayName} - 动效预览`;
+  }, [activeDisplayName, activeHostedCode]);
+
+  const renameActiveHostedFile = useCallback(async (name: string) => {
+    if (!activeHostedCode) return;
+    const updatedShare = await renameHostedShare(activeHostedCode, name);
+    setPublicShare((current) => current?.code === updatedShare.code
+      ? { ...current, customName: updatedShare.customName }
+      : current);
+    setHostedLibrary((current) => ({
+      ...current,
+      activeItems: current.activeItems.map((share) => share.code === updatedShare.code
+        ? { ...share, customName: updatedShare.customName } : share),
+    }));
+    setUploadStates((current) => Object.fromEntries(Object.entries(current).map(([id, state]) => [
+      id,
+      state.share?.code === updatedShare.code
+        ? { ...state, share: { ...state.share, customName: updatedShare.customName } } : state,
+    ])));
+    await refreshHostedLibrary();
+    if (!updatedShare.isExample) {
+      void rememberRecentHostedFile(updatedShare, Date.now(), true).catch(() => {});
+    }
+  }, [activeHostedCode, refreshHostedLibrary]);
   const activeDetailCopyStatus = detailCopyFeedback?.code === activeHostedCode
     ? detailCopyFeedback.status
     : "";
@@ -879,13 +913,11 @@ export function RiveViewerApp({
 
   const selectHostedVersion = useCallback((versionId: string) => {
     if (!hostedVersioningEnabled || versionId === selectedVersionIdRef.current) {
-      setVersionMenuOpen(false);
       return;
     }
     if (!hostedVersions(publicShare).some((version) => version.id === versionId)) return;
     selectedVersionIdRef.current = versionId;
     setSelectedVersionId(versionId);
-    setVersionMenuOpen(false);
     setVersionUploadError("");
     setPublicShareReload((current) => current + 1);
   }, [hostedVersioningEnabled, publicShare]);
@@ -895,6 +927,7 @@ export function RiveViewerApp({
     const file = input.files?.[0];
     input.value = "";
     if (!file || !hostedVersioningEnabled || !activeHostedCode || versionUploading) return;
+    const requestSessionId = openRequestRef.current;
     let format: AnimationFormat;
     try {
       format = validateAnimationFile(file);
@@ -902,8 +935,8 @@ export function RiveViewerApp({
       setVersionUploadError(errorMessage(validationError, "文件不受支持"));
       return;
     }
-    if (format !== publicShare?.format) {
-      setVersionUploadError(`新版本必须仍是 ${animationFormatLabel(publicShare?.format || "rive")} 文件`);
+    if (format !== activeHostedShare?.format) {
+      setVersionUploadError(`新版本必须仍是 ${animationFormatLabel(activeHostedShare?.format || "rive")} 文件`);
       return;
     }
     setVersionUploading(true);
@@ -917,6 +950,15 @@ export function RiveViewerApp({
         file.name,
         setVersionUploadProgress,
       );
+      if (requestSessionId !== openRequestRef.current) {
+        await refreshHostedLibrary();
+        return;
+      }
+      if (shareCode !== activeHostedCode || publicRouteDetached) {
+        navigateHostedShare(activeHostedCode, "preserve");
+        await refreshHostedLibrary();
+        return;
+      }
       const nextVersion = selectedHostedVersion(updatedShare, updatedShare.currentVersionId);
       setPublicShare(updatedShare);
       if (nextVersion) {
@@ -930,7 +972,8 @@ export function RiveViewerApp({
     } finally {
       setVersionUploading(false);
     }
-  }, [activeHostedCode, hostedVersioningEnabled, publicShare?.format, refreshHostedLibrary, versionUploading]);
+  }, [activeHostedCode, activeHostedShare?.format, hostedVersioningEnabled, navigateHostedShare,
+    publicRouteDetached, refreshHostedLibrary, shareCode, versionUploading]);
   const coverUrls = useMemo(() => new Map(
     [...files, ...(activeFile?.file.cover ? [activeFile.file] : [])]
       .filter((file, index, values) => file.cover && values.findIndex((item) => item.id === file.id) === index)
@@ -1934,11 +1977,11 @@ export function RiveViewerApp({
           kind={kind}
           title={kind === "archived" ? "文件已归档" : kind === "error" ? "公开链接无法打开" : "正在打开公开文件"}
           message={kind === "archived"
-            ? `${publicShare?.filename || "这个文件"} 已停止播放和评论，恢复后原链接仍可使用。`
+            ? `${publicShare ? hostedShareName(publicShare) : "这个文件"} 已停止播放和评论，恢复后原链接仍可使用。`
             : kind === "error"
               ? publicShareError || "请检查链接后重试。"
               : publicShare
-                ? `${publicShare.filename} · ${formatBytes(publicShare.size)}`
+                ? `${hostedShareName(publicShare)} · ${formatBytes(publicShare.size)}`
                 : "正在读取文件信息。"}
           progress={kind === "loading" ? loading.progress : undefined}
           progressLabel={kind === "loading" ? loading.phase : undefined}
@@ -2138,49 +2181,15 @@ export function RiveViewerApp({
             <Icon name="x" size={21} />
           </button>
           <div className="file-heading-copy">
-            <div
-              className="file-version-picker"
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setVersionMenuOpen(false);
-              }}
-            >
-              <h1>
-                {hostedVersioningEnabled && activeHostedVersions.length > 1 ? (
-                  <button
-                    className="file-version-trigger"
-                    type="button"
-                    aria-haspopup="listbox"
-                    aria-expanded={versionMenuOpen}
-                    onClick={() => setVersionMenuOpen((current) => !current)}
-                  >
-                    <span>{activeFile.file.name}</span>
-                    <Icon name="caret-down" size={14} />
-                  </button>
-                ) : activeFile.file.name}
-              </h1>
-              {hostedVersioningEnabled && versionMenuOpen && activeHostedVersions.length > 1 && (
-                <div className="file-version-menu" role="listbox" aria-label="文件版本">
-                  {activeHostedVersions.slice().reverse().map((version) => (
-                    <button
-                      className={version.id === activeHostedVersion?.id ? "is-selected" : ""}
-                      type="button"
-                      role="option"
-                      aria-selected={version.id === activeHostedVersion?.id}
-                      key={version.id}
-                      onClick={() => selectHostedVersion(version.id)}
-                    >
-                      <span><strong>{version.name}</strong><em>{version.filename}</em></span>
-                      <small>{formatHostedVersionDate(version.createdAt)}</small>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <HostedFileName
+              key={`${activeHostedCode}-${activeFile.sessionId}`}
+              name={activeDisplayName}
+              editable={Boolean(activeHostedCode && activeHostedShare?.status === "active"
+                && !versionUploading && !loading.active)}
+              onRename={renameActiveHostedFile}
+            />
             <div className="file-heading-meta">
               <span>{formatBytes(activeFile.file.size)}</span>
-              {hostedVersioningEnabled && activeHostedVersion && (
-                <span>{activeHostedVersion.name} · {formatHostedVersionDate(activeHostedVersion.createdAt)}</span>
-              )}
               {metadata.width > 0 && <span>{Math.round(metadata.width)} × {Math.round(metadata.height)}</span>}
               <PlaybackMeta telemetry={telemetry} />
             </div>

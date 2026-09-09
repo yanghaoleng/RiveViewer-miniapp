@@ -15,6 +15,7 @@ import {
 import { limitCommentNickname } from "../lib/comment-identity.ts";
 import { hostedVersions, selectedHostedVersion } from "../lib/file-versions.ts";
 import { mergeRecentHostedRecords } from "../lib/library.ts";
+import { hostedShareName } from "../lib/hosted-share-name.ts";
 import { mergeUnifiedFiles } from "../lib/unified-library.ts";
 import {
   MAX_PAG_FILE_BYTES,
@@ -365,7 +366,8 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(panelSource, /aria-label="复制公开链接"/);
   assert.match(panelSource, /className="public-download-progress"/);
   assert.match(appSource, /createHostedVersion/);
-  assert.match(appSource, /className="file-version-menu"/);
+  assert.doesNotMatch(appSource, /className="file-version-(?:menu|trigger|picker)"/);
+  assert.match(appSource, /onSelectVersion=\{selectHostedVersion\}/);
   assert.match(appSource, /className="file-heading-version-update press-feedback"/);
   assert.match(appSource, /"上传新版本"/);
   assert.match(appSource, /const hostedVersioningEnabled = isHostedPlatform;/);
@@ -497,4 +499,32 @@ test("defaults local previews to high quality while hosted previews stay balance
   assert.match(playerCreation, /player\.setQuality\(qualityRef\.current\);/);
   assert.match(playerSource, /safetyPixelRatio = this\.complexFile \? 1\.25 : 2;/);
   assert.match(playerSource, /safetyFps = this\.complexFile \? 30 : 60;/);
+});
+
+
+test("uses each uploaded version name until a custom name is saved", () => {
+  const original = share("Nm0", "最新文件.riv", "2026-09-09T00:00:00.000Z");
+  const oldVersion = { filename: "原始文件.riv" };
+  assert.equal(hostedShareName(original), "最新文件.riv");
+  assert.equal(hostedShareName(original, oldVersion), "原始文件.riv");
+  const renamed = { ...original, customName: "叫叫欢迎动画" };
+  assert.equal(hostedShareName(renamed), "叫叫欢迎动画");
+  assert.equal(hostedShareName(renamed, oldVersion), "叫叫欢迎动画");
+});
+
+test("fresh hosted names override stale local and recent names without losing covers or activity", () => {
+  const current = share("Nm0", "新版.riv", "2026-09-09T00:00:00.000Z");
+  const cover = new Blob(["cover"]);
+  const local = { id: "local-one", name: "旧文件.riv", size: 24, format: "rive" as const, updatedAt: 9999999999999, cover };
+  const recent = { ...local, id: "hosted-Nm0", hostedCode: "Nm0", updatedAt: 200 };
+  for (const hosted of [current, { ...current, customName: "自定义名称" }]) {
+    const [item] = mergeUnifiedFiles([local, recent], [hosted], [], { "local-one": "Nm0" });
+    assert.equal(item.file.name, hostedShareName(hosted));
+    assert.equal(item.file.cover, cover);
+    assert.equal(item.localFile, local);
+    assert.equal(item.activityAt, local.updatedAt);
+    const [stored] = mergeRecentHostedRecords([recent], hosted, 300, 20, true);
+    assert.equal(stored.name, hostedShareName(hosted));
+    assert.equal(stored.updatedAt, 200);
+  }
 });

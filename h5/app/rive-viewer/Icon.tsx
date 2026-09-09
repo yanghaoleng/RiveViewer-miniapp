@@ -22,6 +22,7 @@ export type IconName =
   | "keyboard"
   | "link-simple"
   | "pause"
+  | "pencil-simple"
   | "play"
   | "plus"
   | "share-network"

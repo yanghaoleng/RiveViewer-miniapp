@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { hostedShareName } from "../../lib/hosted-share-name";
 import { copyText } from "../../lib/clipboard";
 import {
   COMMENT_NICKNAME_LIMIT,
@@ -222,7 +223,7 @@ export function ArchivedLibraryDialog({
                   <a className="hosted-open press-feedback-large" href={hostedSharePath(share.code, import.meta.env.BASE_URL)}>
                     <span className="hosted-code">{share.code}</span>
                     <span className="hosted-copy">
-                      <strong>{share.filename}</strong>
+                      <strong>{hostedShareName(share)}</strong>
                       <small>
                         {formatBytes(share.size)} / {share.commentCount} 条评论
                       </small>
@@ -236,7 +237,7 @@ export function ArchivedLibraryDialog({
                       className="press-feedback"
                       type="button"
                       onClick={() => copyShare(share)}
-                      aria-label={`复制 ${share.filename} 的公开链接`}
+                      aria-label={`复制 ${hostedShareName(share)} 的公开链接`}
                       title="复制公开链接"
                     >
                       <Icon name="copy-simple" size={17} />
@@ -246,7 +247,7 @@ export function ArchivedLibraryDialog({
                       type="button"
                       onClick={() => onRestore(share)}
                       disabled={busyCode === share.code}
-                      aria-label={`恢复 ${share.filename}`}
+                      aria-label={`恢复 ${hostedShareName(share)}`}
                       title="恢复"
                     >
                       <Icon name="arrow-counter-clockwise" size={17} />
@@ -297,7 +298,7 @@ export function ArchiveConfirmDialog({
         <span className="dialog-icon"><Icon name="archive" size={22} /></span>
         <h2 id="archive-dialog-title">归档这个文件？</h2>
         <p>公开链接会保留，但文件将停止播放和评论。之后可以恢复。</p>
-        <strong>{share.filename}</strong>
+        <strong>{hostedShareName(share)}</strong>
         {error && <div className="archive-dialog-error" role="alert">{error}</div>}
         <div className="dialog-actions">
           <button type="button" onClick={onCancel} disabled={busy}>取消</button>
@@ -317,7 +318,7 @@ export function ShareActionsDialog({
   onClose,
 }: {
   dialogId: string;
-  share: Pick<HostedShare, "code" | "filename">;
+  share: Pick<HostedShare, "code" | "filename" | "customName">;
   onDownload: () => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -420,7 +421,7 @@ export function ShareActionsDialog({
             className="share-download-action press-feedback"
             type="button"
             onClick={() => void download()}
-            title={`下载 ${share.filename}`}
+            title={`下载 ${hostedShareName(share)}`}
           >
             <Icon name="download-simple" size={19} />
             <span>下载</span>

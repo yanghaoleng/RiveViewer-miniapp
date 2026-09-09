@@ -31,6 +31,10 @@ function normalizeLegacyState(state) {
   if (!state || !Array.isArray(state.shares)) return { state, changed };
 
   for (const share of state.shares) {
+    if (!Object.hasOwn(share, "customName")) {
+      share.customName = null;
+      changed = true;
+    }
     if (!Object.hasOwn(share, "format")) {
       share.format = "rive";
       changed = true;
@@ -103,6 +107,7 @@ function publicMetadata(share, { includeVersions = false } = {}) {
   const metadata = {
     code: share.code,
     filename: share.filename,
+    customName: share.customName,
     format: share.format,
     size: share.size,
     sha256: share.sha256,
@@ -136,6 +141,12 @@ function validateState(state) {
     codes.add(share.code);
     if (
       typeof share.filename !== "string"
+      || (share.customName !== null && (
+        typeof share.customName !== "string"
+        || !share.customName.trim()
+        || [...share.customName].length > 120
+        || /[\u0000-\u001f\u007f]/.test(share.customName)
+      ))
       || !["rive", "lottie", "pag"].includes(share.format)
       || !Number.isSafeInteger(share.size)
       || share.size < 4
@@ -444,6 +455,7 @@ export class ShareStore {
         code,
         storageName,
         filename,
+        customName: null,
         format,
         size,
         sha256,
@@ -523,6 +535,22 @@ export class ShareStore {
         await syncDirectory(this.filesDir).catch(() => {});
         throw error;
       }
+    });
+  }
+
+  async rename(code, name) {
+    if (typeof name !== "string" || !name.trim() || [...name.trim()].length > 120
+      || /[\u0000-\u001f\u007f]/.test(name)) {
+      throw new AppError(422, "invalid_name", "名称需为 1–120 个字符，且不能包含换行或控制字符");
+    }
+    return this.#mutate((state) => {
+      const share = state.shares.find((item) => item.code === code);
+      if (!share) throw new AppError(404, "share_not_found", "分享不存在");
+      if (share.status === "archived") {
+        throw new AppError(409, "share_archived", "归档文件需恢复后才能重命名");
+      }
+      share.customName = name.trim();
+      return publicMetadata(share, { includeVersions: true });
     });
   }
 

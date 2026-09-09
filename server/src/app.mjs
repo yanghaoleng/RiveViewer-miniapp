@@ -6,6 +6,8 @@ import {
   maxBytesForFormat,
   parseFormatFilter,
 } from "./animation-formats.mjs";
+import { ANALYTICS_ALLOWED_ORIGINS, AnalyticsStore } from "./analytics.mjs";
+import { AnalyticsAccess } from "./analytics-auth.mjs";
 import { AppError, isAppError } from "./errors.mjs";
 import { pickForestIdentity } from "./forest-identities.mjs";
 import {
@@ -16,6 +18,7 @@ import { ShareStore } from "./store.mjs";
 
 const CODE_PATH = "([0-9A-Za-z]{3})";
 const SHARE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}$`);
+const RENAME_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/rename$`);
 const FILE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/file$`);
 const VERSIONS_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/versions$`);
 const COMMENTS_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/comments$`);
@@ -26,6 +29,10 @@ const COMMENT_RESTORE_PATTERN = new RegExp(
   `^/api/v1/shares/${CODE_PATH}/comments/([^/]+)/restore$`,
 );
 const COMMENT_IDENTITY_PATH = "/api/v1/comment-identity";
+const ANALYTICS_EVENTS_PATH = "/api/v1/analytics/events";
+const ANALYTICS_AUTH_PATH = "/api/v1/analytics/auth";
+const ANALYTICS_LOGOUT_PATH = "/api/v1/analytics/logout";
+const ANALYTICS_SUMMARY_PATH = "/api/v1/analytics/summary";
 const ARCHIVE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/archive$`);
 const RESTORE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/restore$`);
 const MAX_JSON_BYTES = 32 * 1024;
@@ -56,6 +63,15 @@ function sendError(response, error) {
   sendJson(response, status, { error: { code, message } });
 }
 
+function sendNoContent(response, extraHeaders = {}) {
+  response.writeHead(204, {
+    "Content-Length": 0,
+    "Cache-Control": "no-store",
+    ...extraHeaders,
+  });
+  response.end();
+}
+
 function parseContentLength(request) {
   const header = request.headers["content-length"];
   if (header === undefined) return null;
@@ -76,10 +92,13 @@ function requireActionHeader(request, expected) {
   }
 }
 
-async function readJson(request) {
+async function readJson(request, {
+  acceptedTypes = ["application/json"],
+  unsupportedMessage = "请求必须使用 application/json",
+} = {}) {
   const type = String(request.headers["content-type"] || "").split(";", 1)[0].trim().toLowerCase();
-  if (type !== "application/json") {
-    throw new AppError(415, "unsupported_media_type", "评论必须使用 application/json");
+  if (!acceptedTypes.includes(type)) {
+    throw new AppError(415, "unsupported_media_type", unsupportedMessage);
   }
   const declaredLength = parseContentLength(request);
   if (declaredLength !== null && declaredLength > MAX_JSON_BYTES) {
@@ -106,6 +125,23 @@ async function readJson(request) {
   } catch {
     throw new AppError(400, "invalid_json", "JSON 内容无效");
   }
+}
+
+function analyticsOrigin(request) {
+  const value = request.headers.origin;
+  if (Array.isArray(value)) return "";
+  return ANALYTICS_ALLOWED_ORIGINS.has(value) ? value : "";
+}
+
+function applyAnalyticsCors(request, response) {
+  const origin = analyticsOrigin(request);
+  if (!origin) return false;
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  response.setHeader("Access-Control-Max-Age", "86400");
+  response.setHeader("Vary", "Origin");
+  return true;
 }
 
 function normalizeHeader(value, limit) {
@@ -274,6 +310,8 @@ export async function createRiveHostApp({
   codeGenerator,
   now,
   diskFreeProvider,
+  analyticsSalt,
+  analyticsPassword,
   logger = console,
 } = {}) {
   const store = await ShareStore.open({
@@ -284,6 +322,17 @@ export async function createRiveHostApp({
     diskFreeProvider,
     logger,
   });
+  const analyticsStore = await AnalyticsStore.open({
+    dataDir,
+    salt: analyticsSalt,
+    now,
+    logger,
+  });
+  const analyticsAccess = new AnalyticsAccess({
+    password: analyticsPassword,
+    salt: analyticsSalt,
+    now,
+  });
 
   const handler = async (request, response) => {
     applyCommonHeaders(response);
@@ -293,6 +342,69 @@ export async function createRiveHostApp({
 
       if (request.method === "GET" && pathname === "/healthz") {
         sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (pathname === ANALYTICS_EVENTS_PATH) {
+        if (request.method === "OPTIONS") {
+          const origin = request.headers.origin;
+          if (origin && !applyAnalyticsCors(request, response)) {
+            throw new AppError(403, "origin_not_allowed", "当前来源不允许提交统计事件");
+          }
+          response.writeHead(204, { "Content-Length": 0, "Cache-Control": "no-store" });
+          response.end();
+          return;
+        }
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        const origin = request.headers.origin;
+        if (origin && !applyAnalyticsCors(request, response)) {
+          throw new AppError(403, "origin_not_allowed", "当前来源不允许提交统计事件");
+        }
+        const payload = await readJson(request, {
+          acceptedTypes: ["application/json", "text/plain"],
+          unsupportedMessage: "统计事件必须使用 JSON 或纯文本 JSON",
+        });
+        const accepted = await analyticsStore.recordBatch(payload, {
+          userAgent: normalizeHeader(request.headers["user-agent"], 512),
+        });
+        sendJson(response, 202, { accepted });
+        return;
+      }
+
+      if (pathname === ANALYTICS_AUTH_PATH) {
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        if (!analyticsAccess.enabled) {
+          throw new AppError(503, "analytics_auth_unavailable", "数据后台访问密码尚未配置");
+        }
+        const payload = await readJson(request);
+        if (!analyticsAccess.matchesPassword(payload.password)) {
+          throw new AppError(401, "invalid_password", "访问密码不正确");
+        }
+        sendNoContent(response, { "Set-Cookie": analyticsAccess.sessionCookie() });
+        return;
+      }
+
+      if (pathname === ANALYTICS_LOGOUT_PATH) {
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        sendNoContent(response, { "Set-Cookie": analyticsAccess.clearCookie() });
+        return;
+      }
+
+      if (pathname === ANALYTICS_SUMMARY_PATH) {
+        if (request.method !== "GET") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        if (!analyticsAccess.isAuthorized(request)) {
+          throw new AppError(401, "analytics_auth_required", "请先输入数据后台访问密码");
+        }
+        const days = Number(url.searchParams.get("days") || 30);
+        const surface = url.searchParams.get("surface") || "all";
+        const format = url.searchParams.get("format") || "all";
+        const item = await analyticsStore.summary({ days, surface, format });
+        item.failedFiles = item.failedFiles.flatMap((row) => {
+          const share = store.get(row.code);
+          if (!share || share.status !== "active") return [];
+          return [{ ...row, name: share.filename, format: share.format }];
+        });
+        sendJson(response, 200, { item });
         return;
       }
 
@@ -353,6 +465,16 @@ export async function createRiveHostApp({
         if (request.method !== "GET") throw new AppError(405, "method_not_allowed", "请求方法不支持");
         const item = store.get(match[1]);
         if (!item) throw new AppError(404, "share_not_found", "分享不存在");
+        sendJson(response, 200, { item });
+        return;
+      }
+
+      match = RENAME_PATTERN.exec(pathname);
+      if (match) {
+        if (request.method !== "POST") throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        requireActionHeader(request, "rename");
+        const payload = await readJson(request);
+        const item = await store.rename(match[1], payload.name);
         sendJson(response, 200, { item });
         return;
       }
@@ -473,5 +595,5 @@ export async function createRiveHostApp({
     }
   };
 
-  return { handler, store };
+  return { handler, store, analyticsStore };
 }

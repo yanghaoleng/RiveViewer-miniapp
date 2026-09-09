@@ -31,3 +31,9 @@ RIVE_HOST_DATA_DIR=/var/lib/rive-host npm start
 ```bash
 npm test
 ```
+
+## 文件重命名
+
+`POST /api/v1/shares/:code/rename` 使用 `Content-Type: application/json`、`X-Rive-Action: rename` 与请求体 `{ "name": "叫叫欢迎动画" }`，返回完整分享元数据。名称为 1–120 个 Unicode 字符，去除首尾空白，拒绝换行和控制字符；归档文件需恢复后操作。
+
+元数据与 `state.json` 增加 `customName`；旧数据自动补为 `null`。未命名时界面按所选版本的 `filename` 展示，自定义名称保存后适用于所有版本；`filename`、下载响应头与版本文件不修改。重命名与版本写入共用串行、原子落盘流程。

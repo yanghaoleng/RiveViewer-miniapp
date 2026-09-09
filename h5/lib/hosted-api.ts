@@ -16,6 +16,7 @@ export type HostedFileVersion = {
 export type HostedShare = {
   code: string;
   filename: string;
+  customName?: string | null;
   format: AnimationFormat;
   size: number;
   sha256: string;
@@ -410,6 +411,18 @@ async function updateHostedShareStatus(
       method: "POST",
       signal,
       headers: { "X-Rive-Action": action },
+    },
+  );
+  return payload.item;
+}
+
+export async function renameHostedShare(code: string, name: string): Promise<HostedShare> {
+  const payload = await requestJson<ItemEnvelope<HostedShare>>(
+    `/shares/${encodeURIComponent(code)}/rename`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Rive-Action": "rename" },
+      body: JSON.stringify({ name }),
     },
   );
   return payload.item;

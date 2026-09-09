@@ -38,6 +38,8 @@ async function listenApp(dataDir, options = {}) {
     codeGenerator: options.codeGenerator,
     now: options.now,
     diskFreeProvider: options.diskFreeProvider || (async () => 100 * GIBIBYTE),
+    analyticsPassword: options.analyticsPassword || "123456",
+    analyticsSalt: options.analyticsSalt || "test-analytics-salt-32-characters-long",
     logger: silentLogger,
   });
   const server = createServer(app.handler);
@@ -891,10 +893,187 @@ test("refuses to start when an indexed Rive file is missing", async () => {
         dataDir,
         maxTotalBytes: DEFAULT_MAX_TOTAL_BYTES,
         diskFreeProvider: async () => 100 * GIBIBYTE,
+        analyticsPassword: "123456",
+        analyticsSalt: "test-analytics-salt-32-characters-long",
         logger: silentLogger,
       }),
       /文件缺失/,
     );
+  });
+});
+
+test("collects privacy-safe analytics and returns filterable dashboard metrics", async () => {
+  await withTempDir(async (dataDir) => {
+    const instance = await listenApp(dataDir, {
+      now: () => "2026-08-26T06:00:00.000Z",
+      codeGenerator: sequenceGenerator(["Ab1"]),
+    });
+    let response = await upload(instance.port, "损坏动效.riv", makeRive("broken-preview-fixture"));
+    assert.equal(response.status, 201);
+    assert.equal(response.json.item.code, "Ab1");
+    const baseBatch = {
+      version: 1,
+      surface: "jojo",
+      visitorId: "visitor-analytics-0001",
+      sessionId: "session-analytics-0001",
+      events: [
+        {
+          id: "event-page-view-0001",
+          name: "page_view",
+          at: "2026-08-26T05:59:00.000Z",
+          page: "home",
+          properties: { sourceType: "campaign", sourceHost: "baidu.com", utmCampaign: "pag-launch" },
+        },
+        {
+          id: "event-preview-ok-0001",
+          name: "preview_result",
+          at: "2026-08-26T05:59:05.000Z",
+          page: "preview",
+          format: "rive",
+          fileSizeBucket: "1m_5m",
+          properties: { outcome: "success", durationMs: 1200, renderer: "webgl2" },
+        },
+        {
+          id: "event-control-use-0001",
+          name: "control_use",
+          at: "2026-08-26T05:59:10.000Z",
+          page: "preview",
+          format: "rive",
+          properties: { control: "speed", speed: 2 },
+        },
+        {
+          id: "event-preview-fail-0001",
+          name: "preview_result",
+          at: "2026-08-26T05:59:12.000Z",
+          page: "preview",
+          format: "rive",
+          fileSizeBucket: "1m_5m",
+          properties: {
+            outcome: "failure",
+            durationMs: 900,
+            errorCategory: "invalid_file",
+            fileCode: "Ab1",
+          },
+        },
+        {
+          id: "event-fps-sample-0001",
+          name: "performance_sample",
+          at: "2026-08-26T05:59:15.000Z",
+          page: "preview",
+          format: "rive",
+          fileSizeBucket: "1m_5m",
+          properties: { fps: 58.4, renderer: "webgl2" },
+        },
+      ],
+    };
+    response = await call(instance.port, {
+      method: "OPTIONS",
+      pathname: "/api/v1/analytics/events",
+      headers: { Origin: "https://mikeywa.site" },
+    });
+    assert.equal(response.status, 204);
+    assert.equal(response.headers["access-control-allow-origin"], "https://mikeywa.site");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/events",
+      headers: {
+        "Content-Type": "text/plain;charset=UTF-8",
+        Origin: "https://mikeywa.site",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit Safari/605.1.15",
+        "X-Forwarded-For": "203.0.113.42",
+      },
+      body: baseBatch,
+    });
+    assert.equal(response.status, 202);
+    assert.deepEqual(response.json, { accepted: 5 });
+    assert.equal(response.headers["access-control-allow-origin"], "https://mikeywa.site");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/events",
+      headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
+      body: baseBatch,
+    });
+    assert.equal(response.status, 403);
+    assert.equal(response.json.error.code, "origin_not_allowed");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/events",
+      headers: { "Content-Type": "application/json" },
+      body: baseBatch,
+    });
+    assert.equal(response.status, 202);
+
+    response = await call(instance.port, {
+      pathname: "/api/v1/analytics/summary?days=7&surface=jojo&format=rive",
+    });
+    assert.equal(response.status, 401);
+    assert.equal(response.json.error.code, "analytics_auth_required");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/auth",
+      headers: { "Content-Type": "application/json" },
+      body: { password: "000000" },
+    });
+    assert.equal(response.status, 401);
+    assert.equal(response.json.error.code, "invalid_password");
+
+    response = await call(instance.port, {
+      method: "POST",
+      pathname: "/api/v1/analytics/auth",
+      headers: { "Content-Type": "application/json" },
+      body: { password: "123456" },
+    });
+    assert.equal(response.status, 204);
+    const sessionCookie = response.headers["set-cookie"][0].split(";", 1)[0];
+    assert.match(response.headers["set-cookie"][0], /HttpOnly; Secure; SameSite=Strict/);
+
+    response = await call(instance.port, {
+      pathname: "/api/v1/analytics/summary?days=7&surface=jojo&format=rive",
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.json.item.freshness.eventCount, 5, "重复 event id 应在汇总时去重");
+    assert.equal(response.json.item.kpis.sessions, 1);
+    assert.equal(response.json.item.kpis.visitors, 1);
+    assert.equal(response.json.item.kpis.previews, 1);
+    assert.equal(response.json.item.kpis.previewAttempts, 2);
+    assert.equal(response.json.item.kpis.previewFailures, 1);
+    assert.equal(response.json.item.kpis.activationRate, 1);
+    assert.equal(response.json.item.kpis.previewSuccessRate, 0.5);
+    assert.equal(response.json.item.kpis.p95LoadMs, 1200);
+    assert.equal(response.json.item.kpis.lowFpsRate, 0);
+    assert.equal(response.json.item.breakdowns.sources[0].key, "campaign");
+    assert.equal(response.json.item.breakdowns.referrers[0].key, "baidu.com");
+    assert.equal(response.json.item.breakdowns.campaigns[0].key, "pag-launch");
+    assert.equal(response.json.item.breakdowns.controls[0].key, "speed");
+    assert.deepEqual(response.json.item.audiencePeriods, [
+      { days: 7, visitors: 1, visits: 1 },
+      { days: 30, visitors: 1, visits: 1 },
+      { days: 90, visitors: 1, visits: 1 },
+    ]);
+    assert.deepEqual(response.json.item.failedFiles[0], {
+      code: "Ab1",
+      name: "损坏动效.riv",
+      surface: "jojo",
+      format: "rive",
+      errorCategory: "invalid_file",
+      attempts: 1,
+      lastFailedAt: "2026-08-26T05:59:12.000Z",
+      errorLabel: "文件无效或损坏",
+    });
+
+    const analyticsFile = await readFile(path.join(dataDir, "analytics", "2026-08-26.ndjson"), "utf8");
+    assert.doesNotMatch(analyticsFile, /203\.0\.113\.42|Mozilla\/5\.0|visitor-analytics|session-analytics/);
+    assert.match(analyticsFile, /"browser":"Safari"/);
+    assert.match(analyticsFile, /"os":"macOS"/);
+    assert.match(analyticsFile, /"visitorHash":"[0-9a-f]{24}"/);
+    assert.match(analyticsFile, /"fileCode":"Ab1"/);
+    assert.doesNotMatch(analyticsFile, /损坏动效|fileName/);
+    await instance.close();
   });
 });
 
@@ -903,6 +1082,7 @@ test("loads configuration defaults and validates capacity values", () => {
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 8097);
   assert.equal(config.maxTotalBytes, 5 * GIBIBYTE);
+  assert.equal(config.analyticsPassword, "");
 
   assert.throws(() => loadConfig({}), /RIVE_HOST_DATA_DIR/);
   assert.throws(() => loadConfig({ RIVE_HOST_DATA_DIR: "relative" }), /绝对路径/);
@@ -910,6 +1090,23 @@ test("loads configuration defaults and validates capacity values", () => {
     RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
     RIVE_HOST_MAX_TOTAL_BYTES: String(MAX_FILE_BYTES - 1),
   }), /超出允许范围/);
+  assert.throws(() => loadConfig({
+    NODE_ENV: "production",
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+  }), /ANALYTICS_SALT/);
+  assert.throws(() => loadConfig({
+    NODE_ENV: "production",
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+    RIVE_HOST_ANALYTICS_SALT: "test-analytics-salt-32-characters-long",
+  }), /ANALYTICS_PASSWORD/);
+  assert.throws(() => loadConfig({
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+    RIVE_HOST_ANALYTICS_PASSWORD: "12345a",
+  }), /6 位数字/);
+  assert.throws(() => loadConfig({
+    RIVE_HOST_DATA_DIR: "/var/lib/rive-host",
+    RIVE_HOST_ANALYTICS_SALT: "short",
+  }), /至少需要 32/);
 });
 
 test("seed script imports examples idempotently and preserves isExample", async () => {
@@ -960,3 +1157,88 @@ function runProcess(command, args, environment) {
     }));
   });
 }
+
+test("persists custom names across versions, restart and archive without changing source filenames", async () => {
+  await withTempDir(async (dataDir) => {
+    let instance = await listenApp(dataDir, { codeGenerator: sequenceGenerator(["Nm1", "Nm2", "Nm3"]) });
+    try {
+      for (const [index, extension, bytes] of [[1, "riv", makeRive()], [2, "json", makeLottie()], [3, "pag", makePag()]]) {
+        const code = `Nm${index}`;
+        let response = await upload(instance.port, `原始.${extension}`, bytes);
+        assert.equal(response.status, 201);
+        assert.equal(response.json.item.customName, null);
+        response = await uploadVersion(instance.port, code, `更新.${extension}`, bytes);
+        assert.equal(response.status, 201);
+        assert.equal(response.json.item.filename, `更新.${extension}`);
+        assert.equal(response.json.item.customName, null);
+        const previous = response.json.item;
+        response = await call(instance.port, {
+          method: "POST", pathname: `/api/v1/shares/${code}/rename`,
+          headers: { "Content-Type": "application/json", "X-Rive-Action": "rename" },
+          body: { name: `  叫叫新名称 ${index}  ` },
+        });
+        assert.equal(response.status, 200);
+        assert.equal(response.json.item.customName, `叫叫新名称 ${index}`);
+        assert.equal(response.json.item.filename, previous.filename);
+        assert.deepEqual(response.json.item.versions, previous.versions);
+        response = await uploadVersion(instance.port, code, `最终.${extension}`, bytes);
+        assert.equal(response.status, 201);
+        assert.equal(response.json.item.customName, `叫叫新名称 ${index}`);
+        assert.equal(response.json.item.filename, `最终.${extension}`);
+        const download = await call(instance.port, { pathname: `/api/v1/shares/${code}/file?versionId=${previous.versions[0].id}` });
+        assert.deepEqual(download.body, bytes);
+        assert.ok(download.headers["content-disposition"].includes(encodeURIComponent(`原始.${extension}`)));
+      }
+      await instance.close();
+      instance = await listenApp(dataDir);
+      const listing = await call(instance.port, { pathname: "/api/v1/shares?formats=rive,lottie,pag" });
+      assert.deepEqual(listing.json.items.map(item => item.customName).sort(), ["叫叫新名称 1", "叫叫新名称 2", "叫叫新名称 3"]);
+      await call(instance.port, { method: "POST", pathname: "/api/v1/shares/Nm1/archive", headers: { "X-Rive-Action": "archive" } });
+      const archived = await call(instance.port, { pathname: "/api/v1/shares?status=archived" });
+      assert.equal(archived.json.items[0].customName, "叫叫新名称 1");
+      const refused = await call(instance.port, {
+        method: "POST", pathname: "/api/v1/shares/Nm1/rename", headers: { "Content-Type": "application/json", "X-Rive-Action": "rename" }, body: { name: "不能修改" },
+      });
+      assert.equal(refused.status, 409);
+      await call(instance.port, { method: "POST", pathname: "/api/v1/shares/Nm1/restore", headers: { "X-Rive-Action": "restore" } });
+      assert.equal(instance.app.store.get("Nm1").customName, "叫叫新名称 1");
+    } finally { await instance.close(); }
+  });
+});
+
+test("legacy shares stay automatic; explicit same-name rename remains pinned and invalid names do not mutate state", async () => {
+  await withTempDir(async (dataDir) => {
+    let instance = await listenApp(dataDir, { codeGenerator: sequenceGenerator(["Nm0"]) });
+    await upload(instance.port, "original.riv", makeRive());
+    await instance.close();
+    const statePath = path.join(dataDir, "state.json");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    delete state.shares[0].customName;
+    await writeFile(statePath, JSON.stringify(state));
+    instance = await listenApp(dataDir);
+    try {
+      assert.equal(instance.app.store.get("Nm0").customName, null);
+      const before = await readFile(statePath, "utf8");
+      for (const name of [undefined, null, 42, "", "   ", "x".repeat(121), "line\nbreak", "nul\u0000name"]) {
+        const response = await call(instance.port, {
+          method: "POST", pathname: "/api/v1/shares/Nm0/rename",
+          headers: { "Content-Type": "application/json", "X-Rive-Action": "rename" }, body: { name },
+        });
+        assert.equal(response.status, 422);
+      }
+      const withoutHeader = await call(instance.port, {
+        method: "POST", pathname: "/api/v1/shares/Nm0/rename", headers: { "Content-Type": "application/json" }, body: { name: "renamed" },
+      });
+      assert.equal(withoutHeader.status, 400);
+      assert.equal(await readFile(statePath, "utf8"), before);
+      const rename = await call(instance.port, {
+        method: "POST", pathname: "/api/v1/shares/Nm0/rename",
+        headers: { "Content-Type": "application/json", "X-Rive-Action": "rename" }, body: { name: "original.riv" },
+      });
+      assert.equal(rename.status, 200);
+      const next = await uploadVersion(instance.port, "Nm0", "next.riv", makeRive("next"));
+      assert.equal(next.json.item.customName, "original.riv");
+      assert.equal(next.json.item.filename, "next.riv");
+    } finally { await instance.close(); }
+  });
+});

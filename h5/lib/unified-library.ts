@@ -1,5 +1,6 @@
 import type { HostedShare } from "./hosted-api";
 import type { LibraryFile } from "./library";
+import { hostedShareName } from "./hosted-share-name.ts";
 
 export type UnifiedFileItem = {
   key: string;
@@ -21,7 +22,7 @@ function validHostedCode(value: string | undefined): value is string {
 function shareAsLibraryFile(share: HostedShare): LibraryFile {
   return {
     id: `hosted-${share.code}`,
-    name: share.filename,
+    name: hostedShareName(share),
     size: share.size,
     format: share.format,
     updatedAt: Date.parse(share.createdAt) || Date.now(),
@@ -104,6 +105,13 @@ export function mergeUnifiedFiles(
   });
 
   return [...merged.values()]
-    .map((item) => ({ ...item, file: { ...item.file, updatedAt: item.activityAt } }))
+    .map((item) => ({
+      ...item,
+      file: {
+        ...item.file,
+        name: item.share ? hostedShareName(item.share) : item.file.name,
+        updatedAt: item.activityAt,
+      },
+    }))
     .sort((left, right) => right.activityAt - left.activityAt);
 }

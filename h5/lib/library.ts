@@ -2,6 +2,7 @@ import {
   normalizeAnimationFormat,
   type AnimationFormat,
 } from "./animation-format.ts";
+import { hostedShareName } from "./hosted-share-name.ts";
 
 export type LibraryFile = {
   id: string;
@@ -98,7 +99,7 @@ export async function listLocalFiles(): Promise<LibraryFile[]> {
 
 export function mergeRecentHostedRecords(
   records: StoredRecentHostedFile[],
-  share: { code: string; filename: string; size: number; format?: AnimationFormat },
+  share: { code: string; filename: string; customName?: string | null; size: number; format?: AnimationFormat },
   updatedAt = Date.now(),
   limit = RECENT_HOSTED_LIMIT,
   preserveExistingActivity = false,
@@ -110,7 +111,7 @@ export function mergeRecentHostedRecords(
   const next: StoredRecentHostedFile = {
     id: `hosted-${code}`,
     hostedCode: code,
-    name: share.filename,
+    name: hostedShareName(share),
     size: share.size,
     format: normalizeAnimationFormat(share.format, share.filename),
     updatedAt: preserveExistingActivity
@@ -160,7 +161,7 @@ export async function listRecentHostedFiles(): Promise<LibraryFile[]> {
 }
 
 export async function rememberRecentHostedFile(
-  share: { code: string; filename: string; size: number; format?: AnimationFormat },
+  share: { code: string; filename: string; customName?: string | null; size: number; format?: AnimationFormat },
   updatedAt = Date.now(),
   preserveExistingActivity = false,
 ): Promise<LibraryFile | null> {

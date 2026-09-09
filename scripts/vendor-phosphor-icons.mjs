@@ -28,7 +28,8 @@ const icons = [
 
 await fs.mkdir(targetRoot, { recursive: true })
 
-for (const [targetName, sourceName, color] of icons) {
+const miniIcons = process.argv.includes("--h5-only") ? [] : icons
+for (const [targetName, sourceName, color] of miniIcons) {
   const sourcePath = path.join(sourceRoot, `${sourceName}-bold.svg`)
   const targetPath = path.join(targetRoot, targetName)
   const source = await fs.readFile(sourcePath, 'utf8')
@@ -41,4 +42,14 @@ for (const [targetName, sourceName, color] of icons) {
   await fs.writeFile(targetPath, `${output}\n`)
 }
 
-console.log(`Vendored ${icons.length} Phosphor Bold icons.`)
+console.log(`Vendored ${miniIcons.length} Mini Program Phosphor Bold icons.`)
+
+const h5TargetRoot = path.join(root, "h5/public/rive-viewer/icons")
+const h5Icons = ['archive', 'arrow-counter-clockwise', 'arrow-left', 'arrow-right', 'arrow-square-out', 'arrows-in-simple', 'arrows-out-simple', 'caret-down', 'chat-circle-dots', 'check', 'cloud-arrow-up', 'cloud-check', 'cloud-x', 'copy-simple', 'desktop', 'download-simple', 'gauge', 'keyboard', 'link-simple', 'pause', 'pencil-simple', 'play', 'plus', 'share-network', 'speaker-high', 'speaker-slash', 'trash', 'wechat-logo', 'x']
+await fs.mkdir(h5TargetRoot, { recursive: true })
+for (const name of h5Icons) {
+  const source = await fs.readFile(path.join(sourceRoot, `${name}-bold.svg`), 'utf8')
+  const output = source.replace('fill="currentColor"', `fill="#000" data-icon-family="phosphor" data-icon-name="${name}" data-icon-weight="bold"`).trim()
+  await fs.writeFile(path.join(h5TargetRoot, `${name}.svg`), `${output}\n`)
+}
+console.log(`Vendored ${h5Icons.length} H5 Phosphor Bold icons.`)
