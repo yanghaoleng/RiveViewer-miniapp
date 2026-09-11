@@ -43,6 +43,7 @@ import {
   hostedVersions,
   selectedHostedVersion,
 } from "../../lib/file-versions";
+import { fileShortcutModifier, getFileShortcut } from "../../lib/file-shortcuts";
 import { copyText } from "../../lib/clipboard";
 import { hostedShareName } from "../../lib/hosted-share-name";
 import { getCommentVisitorId } from "../../lib/comment-identity";
@@ -932,12 +933,12 @@ export function RiveViewerApp({
     setPublicShareReload((current) => current + 1);
   }, [hostedVersioningEnabled, publicShare]);
 
-  const requestVersionUpload = (target: { code: string; format: AnimationFormat }) => {
+  const requestVersionUpload = useCallback((target: { code: string; format: AnimationFormat }) => {
     if (!hostedVersioningEnabled || versionUploading) return;
     versionTargetRef.current = target;
     setVersionUploadError("");
     versionInputRef.current?.click();
-  };
+  }, [hostedVersioningEnabled, versionUploading]);
 
   const updateHostedVersion = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -1586,6 +1587,31 @@ export function RiveViewerApp({
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [activeFile, activeHostedShare, adjustSpeed, hostedBusyCode, isHostedPlatform, navigateFile, resetPlayback, togglePlayback, versionUploading]);
 
+  useEffect(() => {
+    if (!activeFile) return;
+    const handleFileShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (event.defaultPrevented || event.isComposing
+        || target?.isContentEditable || target?.closest("input, textarea, select")
+        || document.querySelector('[aria-modal="true"], [role="menu"]')) return;
+      const fileAction = getFileShortcut(event, navigator.platform);
+      if (fileAction && (fileAction === "download" || activeHostedCode)) {
+        // Cancel the browser action before starting asynchronous file work.
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        if (fileAction === "copy") void copyActiveHostedLink();
+        else if (fileAction === "download") void downloadFile(activeFile.file, activeHostedCode || undefined, activeHostedVersion?.id);
+        else if (hostedVersioningEnabled && activeHostedCode) {
+          requestVersionUpload({ code: activeHostedCode, format: activeHostedShare?.format || activeFile.file.format || "rive" });
+        }
+        return;
+      }
+    };
+    window.addEventListener("keydown", handleFileShortcut, true);
+    return () => window.removeEventListener("keydown", handleFileShortcut, true);
+  }, [activeFile, activeHostedCode, activeHostedShare?.format, activeHostedVersion?.id, copyActiveHostedLink, downloadFile, hostedVersioningEnabled, requestVersionUpload]);
+
   const expandCatalog = async () => {
     if (catalogLoading) return;
     setCatalogLoading(true);
@@ -2098,7 +2124,7 @@ export function RiveViewerApp({
                   disabled={Boolean(hostedBusyCode) || versionUploading}
                   aria-label="归档当前文件"
                   aria-keyshortcuts="Delete Backspace"
-                  title="归档当前文件 (Delete)"
+                  data-shortcut-tip="归档文件 · Delete"
                 >
                   <Icon name="archive" size={18} /><span className="topbar-action-label">归档</span>
                 </button>
@@ -2107,7 +2133,8 @@ export function RiveViewerApp({
                 className="topbar-action topbar-download press-feedback"
                 onClick={() => downloadFile(activeFile.file, activeHostedCode || undefined, activeHostedVersion?.id)}
                 aria-label="下载当前文件"
-                title="下载当前文件"
+                data-shortcut-tip={`下载文件 · ${fileShortcutModifier()} E`}
+                aria-keyshortcuts="Meta+E Control+E"
               >
                 <Icon name="download-simple" size={18} /><span className="topbar-action-label">下载</span>
               </button>
@@ -2118,7 +2145,8 @@ export function RiveViewerApp({
                   onClick={() => requestVersionUpload({ code: activeHostedCode, format: activeHostedShare?.format || activeFile.file.format || "rive" })}
                   disabled={versionUploading}
                   aria-label="更新文件版本"
-                  title="上传同格式的新文件版本"
+                  data-shortcut-tip={`上传新版本 · ${fileShortcutModifier()} U`}
+                  aria-keyshortcuts="Meta+U Control+U"
                 >
                   <Icon name="cloud-arrow-up" size={18} />
                   <span className="topbar-action-label">
@@ -2131,16 +2159,19 @@ export function RiveViewerApp({
                   className={`topbar-action topbar-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
                   onClick={() => void copyActiveHostedLink()}
                   aria-label={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
-                  title={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
+                  data-shortcut-tip={`复制链接 · ${fileShortcutModifier()} L`}
+                  aria-keyshortcuts="Meta+L Control+L"
                 >
                   <Icon name={detailCopyIcon} size={18} />
                   <span aria-live="polite">{detailCopyLabel}</span>
                 </button>
               )}
+              <ShortcutHelp hosted={isHostedPlatform} />
             </div>
           </header>
           <header className="topbar drawer-home-topbar">
             <Brand hosted={isHostedPlatform} label="Rive 预览台" href={homeHref} />
+            <div className="topbar-actions"><ShortcutHelp hosted={isHostedPlatform} /></div>
           </header>
         </>
       ) : (
@@ -2266,7 +2297,7 @@ export function RiveViewerApp({
               <button className="file-heading-archive press-feedback" type="button"
                 onClick={() => setPendingArchiveShare(activeHostedShare)}
                 disabled={Boolean(hostedBusyCode) || versionUploading}
-                aria-label="归档当前文件" aria-keyshortcuts="Delete Backspace" title="归档当前文件 (Delete)">
+                aria-label="归档当前文件" aria-keyshortcuts="Delete Backspace" data-shortcut-tip="归档文件 · Delete">
                 <Icon name="archive" size={18} />
               </button>
             )}
@@ -2274,7 +2305,8 @@ export function RiveViewerApp({
               className="file-heading-download press-feedback"
               onClick={() => downloadFile(activeFile.file, activeHostedCode || undefined, activeHostedVersion?.id)}
               aria-label="下载当前文件"
-              title="下载当前文件"
+              data-shortcut-tip={`下载文件 · ${fileShortcutModifier()} E`}
+              aria-keyshortcuts="Meta+E Control+E"
             >
               <Icon name="download-simple" size={18} />
             </button>
@@ -2285,7 +2317,8 @@ export function RiveViewerApp({
                 onClick={() => requestVersionUpload({ code: activeHostedCode, format: activeHostedShare?.format || activeFile.file.format || "rive" })}
                 disabled={versionUploading}
                 aria-label="更新文件版本"
-                title={versionUploading ? `正在上传 ${versionUploadProgress}%` : "上传同格式的新文件版本"}
+                data-shortcut-tip={`上传新版本 · ${fileShortcutModifier()} U`}
+                aria-keyshortcuts="Meta+U Control+U"
               >
                 <Icon name="cloud-arrow-up" size={18} />
                 <span>{versionUploading ? `${versionUploadProgress}%` : "上传新版本"}</span>
@@ -2296,7 +2329,8 @@ export function RiveViewerApp({
                 className={`file-heading-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
                 onClick={() => void copyActiveHostedLink()}
                 aria-label={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
-                title={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
+                data-shortcut-tip={`复制链接 · ${fileShortcutModifier()} L`}
+                aria-keyshortcuts="Meta+L Control+L"
               >
                 <Icon name={detailCopyIcon} size={18} />
                 <span aria-live="polite">{detailCopyLabel}</span>
@@ -2786,7 +2820,12 @@ function ShortcutHelp({ hosted }: { hosted: boolean }) {
         <div><span>下一个文件</span><span className="key-group"><kbd>↓</kbd><kbd>→</kbd></span></div>
         <div><span>播放速度</span><span className="key-group"><kbd>-</kbd><kbd>+</kbd></span></div>
         <div><span>返回文件列表</span><kbd>Esc</kbd></div>
-        {hosted && <div><span>归档当前文件</span><kbd>Delete</kbd></div>}
+        <div><span>下载文件</span><kbd>{fileShortcutModifier()} E</kbd></div>
+        {hosted && <>
+          <div><span>上传新版本</span><kbd>{fileShortcutModifier()} U</kbd></div>
+          <div><span>复制链接</span><kbd>{fileShortcutModifier()} L</kbd></div>
+          <div><span>归档当前文件</span><kbd>Delete</kbd></div>
+        </>}
       </div>
     </div>
   );

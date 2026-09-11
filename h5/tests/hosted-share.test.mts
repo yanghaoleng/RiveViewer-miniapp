@@ -333,7 +333,7 @@ test("keeps hosted API and file upload contracts explicit", async () => {
   assert.match(appSource, /type CommentThreadState = \{[\s\S]{0,120}code: string \| null;[\s\S]{0,120}items: HostedComment\[\]/);
   assert.match(appSource, /if \(isHostedPlatform && item\.hostedCode\) \{[\s\S]{0,120}navigateHostedShare\(item\.hostedCode, activityPolicy\)/);
   assert.match(appSource, /if \(current\.code !== targetCode\) return current/);
-  assert.equal((appSource.match(/"复制当前文件链接"/g) || []).length, 4);
+  assert.equal((appSource.match(/"复制当前文件链接"/g) || []).length, 2);
   assert.match(appSource, /copyActiveHostedLink/);
   assert.match(appSource, /copyText\(hostedShareUrl\(code, import\.meta\.env\.BASE_URL\)\)/);
   assert.match(appSource, /detailCopyFeedback/);

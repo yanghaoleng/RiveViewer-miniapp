@@ -4231,3 +4231,40 @@ article.comment-item:focus-within .comment-meta-row time {
   opacity: .5;
   cursor: not-allowed;
 }
+
+/* Compact shortcut hints stay attached to their action on hover or keyboard focus. */
+[data-shortcut-tip] { position: relative; }
+[data-shortcut-tip]::after {
+  content: attr(data-shortcut-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-popover);
+  padding: 7px 9px;
+  border: 1px solid #354355;
+  border-radius: 7px;
+  color: var(--text);
+  background: #121923;
+  box-shadow: var(--shadow);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, visibility 120ms ease;
+}
+[data-shortcut-tip]:focus-visible::after { opacity: 1; visibility: visible; }
+@media (hover: hover) {
+  [data-shortcut-tip]:hover::after { opacity: 1; visibility: visible; }
+}
+
+@media (max-width: 520px) {
+  .preview-actions { gap: 4px; }
+}
+@media (max-width: 380px) {
+  .topbar-copy-link { width: 36px; min-width: 36px; padding: 0; }
+  .topbar-copy-link > span[aria-live] { display: none; }
+  .preview-topbar .brand-signature { display: none; }
+}
