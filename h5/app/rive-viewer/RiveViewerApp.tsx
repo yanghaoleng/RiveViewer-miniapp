@@ -43,6 +43,7 @@ import {
   hostedVersions,
   selectedHostedVersion,
 } from "../../lib/file-versions";
+import { ActionTooltip } from "./ActionTooltip";
 import { fileShortcutModifier, getFileShortcut } from "../../lib/file-shortcuts";
 import { copyText } from "../../lib/clipboard";
 import { hostedShareName } from "../../lib/hosted-share-name";
@@ -2159,8 +2160,8 @@ export function RiveViewerApp({
                   className={`topbar-action topbar-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
                   onClick={() => void copyActiveHostedLink()}
                   aria-label={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
-                  data-shortcut-tip={`复制链接 · ${fileShortcutModifier()} L`}
-                  aria-keyshortcuts="Meta+L Control+L"
+                  data-shortcut-tip="复制链接 · L"
+                  aria-keyshortcuts="L"
                 >
                   <Icon name={detailCopyIcon} size={18} />
                   <span aria-live="polite">{detailCopyLabel}</span>
@@ -2329,8 +2330,8 @@ export function RiveViewerApp({
                 className={`file-heading-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
                 onClick={() => void copyActiveHostedLink()}
                 aria-label={activeDetailCopyStatus === "copied" ? "链接已复制" : "复制当前文件链接"}
-                data-shortcut-tip={`复制链接 · ${fileShortcutModifier()} L`}
-                aria-keyshortcuts="Meta+L Control+L"
+                data-shortcut-tip="复制链接 · L"
+                aria-keyshortcuts="L"
               >
                 <Icon name={detailCopyIcon} size={18} />
                 <span aria-live="polite">{detailCopyLabel}</span>
@@ -2601,6 +2602,7 @@ export function RiveViewerApp({
         />
       )}
       {engineToast && <EngineToast message={engineToast} />}
+      <ActionTooltip />
     </main>
   );
 }
@@ -2823,7 +2825,7 @@ function ShortcutHelp({ hosted }: { hosted: boolean }) {
         <div><span>下载文件</span><kbd>{fileShortcutModifier()} E</kbd></div>
         {hosted && <>
           <div><span>上传新版本</span><kbd>{fileShortcutModifier()} U</kbd></div>
-          <div><span>复制链接</span><kbd>{fileShortcutModifier()} L</kbd></div>
+          <div><span>复制链接</span><kbd>L</kbd></div>
           <div><span>归档当前文件</span><kbd>Delete</kbd></div>
         </>}
       </div>

@@ -2,6 +2,13 @@
 
 更新日期：2026-09-11
 
+## 2026-09-11 气泡顶层与单键复制（本地完成，未发布）
+
+- 原按钮伪元素气泡受祖先层叠/裁切影响，改为单一 `ActionTooltip`，通过 Portal 挂至 body 并使用原生手动 Popover 顶层；兼容路径使用 fixed + 高层级。支持悬停、聚焦、屏幕边缘避让，滚动/点击/Esc 关闭，动态关联 aria-describedby。
+- 复制链接统一使用单按 L，移除 Command / Ctrl L 绑定与说明；输入文件名、评论、输入法、弹窗、菜单期间不触发，上传/下载仍按系统使用 Command / Ctrl U/E。
+- 52/52 测试、lint、TypeScript 与根路径构建通过。隔离 Chrome 验证 Mac/Windows 映射、L 实际复制、改名输入 L 不复制、真实上传/下载与 390/320px 布局；向 body 添加极高层级遮挡物后，以 elementFromPoint 验证气泡仍在其上。审计仍为原有两项。
+- 本地预览 `http://127.0.0.1:18203/SE6`，证据 `/tmp/rive-tooltip-qa/`；本轮未提交、推送或发布，正式版仍为 `20260911-171240`。
+
 ## 2026-09-11 详情快捷键与按钮气泡（已正式发布）
 
 - 详情页桌面/手机右上角恢复 `ShortcutHelp`；新增 Command U 上传新版本、Command L 复制链接、Command E 下载，Windows / Linux 自动使用 Ctrl。

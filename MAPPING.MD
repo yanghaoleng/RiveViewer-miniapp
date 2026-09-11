@@ -4,7 +4,7 @@
 
 | 俗称 | 学名 | 代码名称 |
 | --- | --- | --- |
-| 文件操作快捷键 | Platform file shortcuts | `file-shortcuts.ts` 解析 Mac Command / Windows Ctrl；`handleFileShortcut` 捕获阶段分派；`data-shortcut-tip` 气泡；`ShortcutHelp` 详情右上角说明 |
+| 文件操作快捷键 | Platform file shortcuts | `file-shortcuts.ts` 解析 Mac Command / Windows Ctrl；`handleFileShortcut` 捕获阶段分派；`ActionTooltip.tsx` 通过 Portal + Popover 顶层显示 `data-shortcut-tip`；复制键为单按 L；`ShortcutHelp` 详情右上角说明 |
 | 文件右键菜单与归档 | Shared file actions | `FileActionsMenu.tsx` 的 `FileMenuActions` / `FileContextMenu`；`RiveViewerApp.tsx` 详情归档入口与快捷键 |
 | 文件重命名 | Hosted share custom name | `HostedFileName.tsx`、`hosted-share-name.ts`、`renameHostedShare`、`POST /api/v1/shares/:code/rename`；`customName: null` 跟随上传名，非空时跨版本保留；标题只改名，评论区 `.comment-version-heading` 切换版本 |
 | JOJO 品牌标记 | Edition-specific brand signature | `Brand hosted={isHostedPlatform}`；`.brand-signature` 仅在托管模式渲染 |
