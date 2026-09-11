@@ -1971,7 +1971,7 @@ export function RiveViewerApp({
     return (
       <main className="app-shell public-state-shell">
         <header className="topbar">
-          <Brand label="Rive 预览台" href={homeHref} />
+          <Brand hosted={isHostedPlatform} label="Rive 预览台" href={homeHref} />
         </header>
         <PublicShareState
           kind={kind}
@@ -2039,7 +2039,7 @@ export function RiveViewerApp({
             >
               <Icon name="arrow-left" size={21} />
             </button>
-            <Brand label="Rive 预览台" />
+            <Brand hosted={isHostedPlatform} label="Rive 预览台" />
             <div className="topbar-actions preview-actions">
               {hostedVersioningEnabled && activeHostedCode && (
                 <button
@@ -2078,12 +2078,12 @@ export function RiveViewerApp({
             </div>
           </header>
           <header className="topbar drawer-home-topbar">
-            <Brand label="Rive 预览台" href={homeHref} />
+            <Brand hosted={isHostedPlatform} label="Rive 预览台" href={homeHref} />
           </header>
         </>
       ) : (
         <header className="topbar">
-          <Brand label="Rive 预览台" />
+          <Brand hosted={isHostedPlatform} label="Rive 预览台" />
           <div className="topbar-actions">
             <ShortcutHelp />
           </div>
@@ -2507,13 +2507,13 @@ function EngineToast({ message }: { message: string }) {
   );
 }
 
-function Brand({ label, href }: { label: string; href?: string }) {
+function Brand({ label, href, hosted }: { label: string; href?: string; hosted: boolean }) {
   const content = (
     <>
       {/* 与浏览器页签复用同一份本地图标，避免品牌图形分叉。 */}
       <img className="brand-mark" src={`${publicAssetUrl("favicon.webp")}?v=3`} alt="" />
       <span className="brand-title">{label}</span>
-      <small className="brand-signature">for JOJO</small>
+      {hosted && <small className="brand-signature">for JOJO</small>}
     </>
   );
   if (href) {
