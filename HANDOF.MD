@@ -2,10 +2,15 @@
 
 更新日期：2026-09-11
 
-## 2026-09-11 普通 H5 品牌标记修正（已获授权发布）
+## 2026-09-11 普通 H5 品牌标记修正（已正式发布）
 
-- 修复共用 `Brand` 组件无条件显示 `for JOJO`：四处品牌入口统一传入 `isHostedPlatform`，普通 H5 首页和详情页仅显示“Rive 预览台”，JOJO 与 Beta 托管版保留标记。
-- 普通 H5 构建下 lint、TypeScript 与 49/49 测试通过；浏览器验证普通版桌面首页与 390px 导入详情不显示标记，托管模式桌面/手机仍显示。依赖审计仍为已记录的 2 项；用户已授权发布推送；普通 H5 实际位于 `mikeywa.site`（`115.159.25.169`、SSH 别名 `mikeywa-rive-old`），与 JOJO 所在新主机不同。本次只发布普通 H5，回滚点为 `20260828-042421`。
+- 修复提交 `03c95ae` 已推送 `main`，普通 H5 已发布至 <https://mikeywa.site/rive-viewer/>，版本为 `20260911-152806`。
+- 共用 `Brand` 的四处入口统一传入 `isHostedPlatform`；普通 H5 首页和详情页仅显示“Rive 预览台”，JOJO 与 Beta 托管版保留 `for JOJO`。
+- 普通 H5 实际位于旧主机 `115.159.25.169`（SSH 别名 `mikeywa-rive-old`），发布路径 `/var/www/rive-viewer/releases/20260911-152806/rive-viewer`。本轮只切换 `/var/www/rive-viewer/current`；JOJO 前后端仍为新主机上的 `20260909-153532`。
+- 普通 H5 lint、TypeScript、构建及 49/49 测试通过；依赖审计仍为此前记录的 2 项，依赖未调整。公网 HTML、入口 JS、CSS 与本机构建 SHA-256 全部一致。
+- 正式 Chrome 验收通过：普通版桌面首页、导入真实 Rive 后的 390px 详情页均无 `for JOJO`；JOJO 正式版桌面/手机仍显示该标记，页面无运行错误。
+- 旧发布 `/var/www/rive-viewer/releases/20260828-042421` 保留为回滚点；新目录保留旧哈希资源，兼容已打开的页面。Nginx 配置、后端和持久化数据未修改。
+- 发布证据位于本机 `/tmp/rive-brand-release-20260911/` 与服务器 `/tmp/rive-brand-release-20260911-152806/`。
 
 ## 2026-09-09 JOJO 文件重命名（已正式发布）
 
