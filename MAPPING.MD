@@ -4,6 +4,7 @@
 
 | 俗称 | 学名 | 代码名称 |
 | --- | --- | --- |
+| 文件右键菜单与归档 | Shared file actions | `FileActionsMenu.tsx` 的 `FileMenuActions` / `FileContextMenu`；`RiveViewerApp.tsx` 详情归档入口与快捷键 |
 | 文件重命名 | Hosted share custom name | `HostedFileName.tsx`、`hosted-share-name.ts`、`renameHostedShare`、`POST /api/v1/shares/:code/rename`；`customName: null` 跟随上传名，非空时跨版本保留；标题只改名，评论区 `.comment-version-heading` 切换版本 |
 | JOJO 品牌标记 | Edition-specific brand signature | `Brand hosted={isHostedPlatform}`；`.brand-signature` 仅在托管模式渲染 |
 | H5 本地版 | Local-only H5 viewer | `https://mikeywa.site/rive-viewer/`、`mode: local`；文件只存当前浏览器，不生成公开链接 |
