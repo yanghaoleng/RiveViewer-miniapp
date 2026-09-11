@@ -78,6 +78,7 @@ import {
   ShareCommentsPanel,
 } from "./HostedPanels";
 import { Icon, type IconName } from "./Icon";
+import { FileContextMenu, FileMenuActions, type FileActionsProps, type FileContextTarget } from "./FileActionsMenu";
 import { HostedFileName } from "./HostedFileName";
 import { PlaybackMeta, TimelineControl } from "./PlaybackTelemetryView";
 import { RuntimeEventConsole } from "./RuntimeEventConsole";
@@ -321,6 +322,15 @@ export function RiveViewerApp({
   const runtimeEventLog = useMemo(() => new RuntimeEventLog(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const versionInputRef = useRef<HTMLInputElement>(null);
+  const versionTargetRef = useRef<{ code: string; format: AnimationFormat } | null>(null);
+  const [fileContextTarget, setFileContextTarget] = useState<FileContextTarget | null>(null);
+  const closeFileContextMenu = useCallback(() => setFileContextTarget(null), []);
+  const openFileContextMenu = (event: ReactMouseEvent<HTMLElement>, item: UnifiedFileItem) => {
+    if (!isHostedPlatform) return;
+    event.preventDefault();
+    setExpandedFileId("");
+    setFileContextTarget({ item, x: event.clientX, y: event.clientY, trigger: event.currentTarget });
+  };
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lottieContainerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -922,11 +932,20 @@ export function RiveViewerApp({
     setPublicShareReload((current) => current + 1);
   }, [hostedVersioningEnabled, publicShare]);
 
+  const requestVersionUpload = (target: { code: string; format: AnimationFormat }) => {
+    if (!hostedVersioningEnabled || versionUploading) return;
+    versionTargetRef.current = target;
+    setVersionUploadError("");
+    versionInputRef.current?.click();
+  };
+
   const updateHostedVersion = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
     input.value = "";
-    if (!file || !hostedVersioningEnabled || !activeHostedCode || versionUploading) return;
+    const target = versionTargetRef.current;
+    versionTargetRef.current = null;
+    if (!file || !hostedVersioningEnabled || !target || versionUploading) return;
     const requestSessionId = openRequestRef.current;
     let format: AnimationFormat;
     try {
@@ -935,8 +954,8 @@ export function RiveViewerApp({
       setVersionUploadError(errorMessage(validationError, "文件不受支持"));
       return;
     }
-    if (format !== activeHostedShare?.format) {
-      setVersionUploadError(`新版本必须仍是 ${animationFormatLabel(activeHostedShare?.format || "rive")} 文件`);
+    if (format !== target.format) {
+      setVersionUploadError(`新版本必须仍是 ${animationFormatLabel(target.format || "rive")} 文件`);
       return;
     }
     setVersionUploading(true);
@@ -945,7 +964,7 @@ export function RiveViewerApp({
     try {
       const data = await file.arrayBuffer();
       const updatedShare = await createHostedVersion(
-        activeHostedCode,
+        target.code,
         data,
         file.name,
         setVersionUploadProgress,
@@ -954,8 +973,8 @@ export function RiveViewerApp({
         await refreshHostedLibrary();
         return;
       }
-      if (shareCode !== activeHostedCode || publicRouteDetached) {
-        navigateHostedShare(activeHostedCode, "preserve");
+      if (shareCode !== target.code || publicRouteDetached) {
+        navigateHostedShare(target.code, "preserve");
         await refreshHostedLibrary();
         return;
       }
@@ -972,7 +991,7 @@ export function RiveViewerApp({
     } finally {
       setVersionUploading(false);
     }
-  }, [activeHostedCode, activeHostedShare?.format, hostedVersioningEnabled, navigateHostedShare,
+  }, [hostedVersioningEnabled, navigateHostedShare,
     publicRouteDetached, refreshHostedLibrary, shareCode, versionUploading]);
   const coverUrls = useMemo(() => new Map(
     [...files, ...(activeFile?.file.cover ? [activeFile.file] : [])]
@@ -990,8 +1009,19 @@ export function RiveViewerApp({
       const target = event.target as HTMLElement | null;
       if (!target?.closest(".file-row.is-menu-open")) setExpandedFileId("");
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      document.querySelector<HTMLButtonElement>(".file-row.is-menu-open .square-button")?.focus();
+      setExpandedFileId("");
+    };
     document.addEventListener("pointerdown", closeFileMenu);
-    return () => document.removeEventListener("pointerdown", closeFileMenu);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeFileMenu);
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
   }, [expandedFileId]);
 
   const closeActiveFile = useCallback(() => {
@@ -1367,10 +1397,11 @@ export function RiveViewerApp({
     try {
       await archiveShare(pendingArchiveShare);
       setPendingArchiveShare(null);
+      if (pendingArchiveShare.code === activeHostedCode) closeActiveFile();
     } catch {
       // 列表区域保留服务端错误，确认框继续打开便于重试或取消。
     }
-  }, [archiveShare, pendingArchiveShare]);
+  }, [activeHostedCode, archiveShare, closeActiveFile, pendingArchiveShare]);
 
   const restoreShare = useCallback(async (share: HostedShare) => {
     if (hostedBusyCode) return;
@@ -1523,6 +1554,7 @@ export function RiveViewerApp({
     if (!activeFile) return;
     const handleShortcut = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
+      if (event.isComposing || document.querySelector('[aria-modal="true"], [role="menu"]')) return;
       const target = event.target as HTMLElement | null;
       const tagName = target?.tagName;
       if (
@@ -1536,7 +1568,11 @@ export function RiveViewerApp({
       const key = event.key.toLowerCase();
       if (key === " " && target?.closest(".shortcut-button")) return;
 
-      if (key === "r") resetPlayback();
+      if (key === "delete" || key === "backspace") {
+        if (event.repeat || !isHostedPlatform || activeHostedShare?.status !== "active" || hostedBusyCode || versionUploading) return;
+        setPendingArchiveShare(activeHostedShare);
+      }
+      else if (key === "r") resetPlayback();
       else if (key === " ") togglePlayback();
       else if (key === "arrowleft" || key === "arrowup") navigateFile(-1);
       else if (key === "arrowright" || key === "arrowdown") navigateFile(1);
@@ -1548,7 +1584,7 @@ export function RiveViewerApp({
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [activeFile, adjustSpeed, navigateFile, resetPlayback, togglePlayback]);
+  }, [activeFile, activeHostedShare, adjustSpeed, hostedBusyCode, isHostedPlatform, navigateFile, resetPlayback, togglePlayback, versionUploading]);
 
   const expandCatalog = async () => {
     if (catalogLoading) return;
@@ -1966,6 +2002,19 @@ export function RiveViewerApp({
     />
   ) : null;
 
+  const fileActions: FileActionsProps = {
+    hostedMode: isHostedPlatform,
+    uploadBusy,
+    versionUploading,
+    archiveBusy: Boolean(hostedBusyCode),
+    onShare: shareFile,
+    onPublish: requestPublishFile,
+    onArchive: setPendingArchiveShare,
+    onUploadVersion: (item) => {
+      if (item.hostedCode) requestVersionUpload({ code: item.hostedCode, format: item.share?.format || item.file.format || "rive" });
+    },
+  };
+
   if (isPublicRoute && publicShareState !== "ready" && !activeFile) {
     const kind = publicShareState === "archived" ? "archived" : publicShareState === "error" ? "error" : "loading";
     return (
@@ -2016,7 +2065,7 @@ export function RiveViewerApp({
           className="sr-only"
           type="file"
           accept={SUPPORTED_ANIMATION_ACCEPT}
-          disabled={versionUploading || !activeHostedCode}
+          disabled={versionUploading}
           onChange={(event) => void updateHostedVersion(event)}
         />
       )}
@@ -2041,19 +2090,17 @@ export function RiveViewerApp({
             </button>
             <Brand hosted={isHostedPlatform} label="Rive 预览台" />
             <div className="topbar-actions preview-actions">
-              {hostedVersioningEnabled && activeHostedCode && (
+              {isHostedPlatform && activeHostedShare?.status === "active" && (
                 <button
-                  className="topbar-action topbar-version-update press-feedback"
+                  className="topbar-action topbar-archive press-feedback"
                   type="button"
-                  onClick={() => versionInputRef.current?.click()}
-                  disabled={versionUploading}
-                  aria-label="更新文件版本"
-                  title="上传同格式的新文件版本"
+                  onClick={() => setPendingArchiveShare(activeHostedShare)}
+                  disabled={Boolean(hostedBusyCode) || versionUploading}
+                  aria-label="归档当前文件"
+                  aria-keyshortcuts="Delete Backspace"
+                  title="归档当前文件 (Delete)"
                 >
-                  <Icon name="cloud-arrow-up" size={18} />
-                  <span className="topbar-action-label">
-                    {versionUploading ? `${versionUploadProgress}%` : "上传新版本"}
-                  </span>
+                  <Icon name="archive" size={18} /><span className="topbar-action-label">归档</span>
                 </button>
               )}
               <button
@@ -2064,6 +2111,21 @@ export function RiveViewerApp({
               >
                 <Icon name="download-simple" size={18} /><span className="topbar-action-label">下载</span>
               </button>
+              {hostedVersioningEnabled && activeHostedCode && (
+                <button
+                  className="topbar-action topbar-version-update press-feedback"
+                  type="button"
+                  onClick={() => requestVersionUpload({ code: activeHostedCode, format: activeHostedShare?.format || activeFile.file.format || "rive" })}
+                  disabled={versionUploading}
+                  aria-label="更新文件版本"
+                  title="上传同格式的新文件版本"
+                >
+                  <Icon name="cloud-arrow-up" size={18} />
+                  <span className="topbar-action-label">
+                    {versionUploading ? `${versionUploadProgress}%` : "上传新版本"}
+                  </span>
+                </button>
+              )}
               {activeHostedCode && (
                 <button
                   className={`topbar-action topbar-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
@@ -2085,7 +2147,7 @@ export function RiveViewerApp({
         <header className="topbar">
           <Brand hosted={isHostedPlatform} label="Rive 预览台" />
           <div className="topbar-actions">
-            <ShortcutHelp />
+            <ShortcutHelp hosted={isHostedPlatform} />
           </div>
         </header>
       )}
@@ -2100,6 +2162,7 @@ export function RiveViewerApp({
               uploadStates={uploadStates}
               uploadBusy={uploadBusy}
               importError={importError}
+              onContextMenu={openFileContextMenu}
               onAdd={() => fileInputRef.current?.click()}
               onOpen={(item) => openUnifiedFile(item, "preserve")}
               onRetry={(fileId) => void retryFileUpload(fileId)}
@@ -2120,6 +2183,8 @@ export function RiveViewerApp({
                 : "支持 Rive / Lottie / PAG，只保存在当前浏览器"}</small>
             </button>
             {importError && <div className="inline-error import-error" role="alert">{importError}</div>}
+            {versionUploading && <div className="version-upload-status" role="status">正在上传新版本 {versionUploadProgress}%</div>}
+            {versionUploadError && <div className="version-upload-error" role="alert">{versionUploadError}</div>}
 
             {error && !activeFile && <div className="inline-error">{error}</div>}
 
@@ -2151,15 +2216,13 @@ export function RiveViewerApp({
               coverUrls={coverUrls}
               expandedFileId={expandedFileId}
               activeFile={activeFile}
-              hostedMode={isHostedPlatform}
+              actions={fileActions}
+              onContextMenu={openFileContextMenu}
               uploadStates={uploadStates}
               uploadBusy={uploadBusy}
               onOpen={openUnifiedFile}
-              onShare={shareFile}
-              onPublish={requestPublishFile}
-              onArchive={setPendingArchiveShare}
               onRetry={(fileId) => void retryFileUpload(fileId)}
-              onToggleMenu={(id) => setExpandedFileId(expandedFileId === id ? "" : id)}
+              onToggleMenu={(id) => { closeFileContextMenu(); setExpandedFileId(expandedFileId === id ? "" : id); }}
             />
             {hostingError && <div className="inline-error hosting-error" role="alert">{hostingError}</div>}
             <div className="library-footer-actions">
@@ -2199,17 +2262,12 @@ export function RiveViewerApp({
             {versionUploadError && <div className="version-upload-error" role="alert">{versionUploadError}</div>}
           </div>
           <div className="file-heading-actions">
-            {hostedVersioningEnabled && activeHostedCode && (
-              <button
-                className="file-heading-version-update press-feedback"
-                type="button"
-                onClick={() => versionInputRef.current?.click()}
-                disabled={versionUploading}
-                aria-label="更新文件版本"
-                title={versionUploading ? `正在上传 ${versionUploadProgress}%` : "上传同格式的新文件版本"}
-              >
-                <Icon name="cloud-arrow-up" size={18} />
-                <span>{versionUploading ? `${versionUploadProgress}%` : "上传新版本"}</span>
+            {isHostedPlatform && activeHostedShare?.status === "active" && (
+              <button className="file-heading-archive press-feedback" type="button"
+                onClick={() => setPendingArchiveShare(activeHostedShare)}
+                disabled={Boolean(hostedBusyCode) || versionUploading}
+                aria-label="归档当前文件" aria-keyshortcuts="Delete Backspace" title="归档当前文件 (Delete)">
+                <Icon name="archive" size={18} />
               </button>
             )}
             <button
@@ -2220,6 +2278,19 @@ export function RiveViewerApp({
             >
               <Icon name="download-simple" size={18} />
             </button>
+            {hostedVersioningEnabled && activeHostedCode && (
+              <button
+                className="file-heading-version-update press-feedback"
+                type="button"
+                onClick={() => requestVersionUpload({ code: activeHostedCode, format: activeHostedShare?.format || activeFile.file.format || "rive" })}
+                disabled={versionUploading}
+                aria-label="更新文件版本"
+                title={versionUploading ? `正在上传 ${versionUploadProgress}%` : "上传同格式的新文件版本"}
+              >
+                <Icon name="cloud-arrow-up" size={18} />
+                <span>{versionUploading ? `${versionUploadProgress}%` : "上传新版本"}</span>
+              </button>
+            )}
             {activeHostedCode && (
               <button
                 className={`file-heading-copy-link press-feedback ${activeDetailCopyStatus === "copied" ? "is-copied" : ""}`}
@@ -2459,6 +2530,7 @@ export function RiveViewerApp({
 
       </section>}
       </div>
+      {fileContextTarget && <FileContextMenu target={fileContextTarget} actions={fileActions} onClose={closeFileContextMenu} />}
       {isHostedPlatform && pendingArchiveShare && (
         <ArchiveConfirmDialog
           share={pendingArchiveShare}
@@ -2667,7 +2739,7 @@ function PlaybackSpeedMenu({
   );
 }
 
-function ShortcutHelp() {
+function ShortcutHelp({ hosted }: { hosted: boolean }) {
   const [open, setOpen] = useState(false);
   const popoverId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -2714,6 +2786,7 @@ function ShortcutHelp() {
         <div><span>下一个文件</span><span className="key-group"><kbd>↓</kbd><kbd>→</kbd></span></div>
         <div><span>播放速度</span><span className="key-group"><kbd>-</kbd><kbd>+</kbd></span></div>
         <div><span>返回文件列表</span><kbd>Esc</kbd></div>
+        {hosted && <div><span>归档当前文件</span><kbd>Delete</kbd></div>}
       </div>
     </div>
   );
@@ -2860,6 +2933,7 @@ function PreviewFileRail({
   onAdd,
   onOpen,
   onRetry,
+  onContextMenu,
 }: {
   items: UnifiedFileItem[];
   activeFile: ActiveFile;
@@ -2870,6 +2944,7 @@ function PreviewFileRail({
   onAdd: () => void;
   onOpen: (item: UnifiedFileItem) => void;
   onRetry: (fileId: string) => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLElement>, item: UnifiedFileItem) => void;
 }) {
   const railRef = useRef<HTMLElement>(null);
   const resizeStartRef = useRef({ x: 0, width: FILE_RAIL_DEFAULT_WIDTH });
@@ -2982,6 +3057,7 @@ function PreviewFileRail({
             <article
               key={item.key}
               className={`preview-file-rail-row ${current ? "is-current" : ""}`}
+              onContextMenu={(event) => { setFileNameTooltip(null); onContextMenu(event, item); }}
               aria-current={current ? "true" : undefined}
             >
               <button
@@ -3068,13 +3144,11 @@ function LibraryList({
   coverUrls,
   expandedFileId,
   activeFile,
-  hostedMode,
+  actions,
+  onContextMenu,
   uploadStates,
   uploadBusy,
   onOpen,
-  onShare,
-  onPublish,
-  onArchive,
   onRetry,
   onToggleMenu,
 }: {
@@ -3082,13 +3156,11 @@ function LibraryList({
   coverUrls: Map<string, string>;
   expandedFileId: string;
   activeFile: ActiveFile | null;
-  hostedMode: boolean;
+  actions: FileActionsProps;
+  onContextMenu: (event: ReactMouseEvent<HTMLElement>, item: UnifiedFileItem) => void;
   uploadStates: Record<string, FileUploadState>;
   uploadBusy: boolean;
   onOpen: (item: UnifiedFileItem) => void;
-  onShare: (file: LibraryFile, hostedCode?: string) => void;
-  onPublish: (file: LibraryFile) => void;
-  onArchive: (share: HostedShare) => void;
   onRetry: (fileId: string) => void;
   onToggleMenu: (id: string) => void;
 }) {
@@ -3112,6 +3184,7 @@ function LibraryList({
         return <article
           className={`file-row ${current ? "is-current" : ""} ${expandedFileId === item.key ? "is-menu-open" : ""}`}
           key={item.key}
+          onContextMenu={(event) => onContextMenu(event, item)}
           aria-current={current ? "true" : undefined}
         >
           <button className="file-open press-feedback-large" onClick={() => onOpen(item)} aria-label={`打开 ${file.name}`}>
@@ -3135,6 +3208,8 @@ function LibraryList({
             <button
               className={`square-button press-feedback ${expandedFileId === item.key ? "is-active" : ""}`}
               aria-label={`操作 ${file.name}`}
+              aria-haspopup="menu"
+              aria-expanded={expandedFileId === item.key}
               onClick={() => onToggleMenu(item.key)}
             >
               <Icon name="caret-down" size={18} />
@@ -3150,22 +3225,8 @@ function LibraryList({
             />
           )}
           {expandedFileId === item.key && (
-            <div className="file-menu">
-              {hostedMode && (
-                <button className="press-feedback" onClick={() => onPublish(item.localFile || file)} disabled={uploadBusy}>
-                  <Icon name="link-simple" size={17} />
-                  {item.hostedCode ? "复制公开链接" : "上传并生成链接"}
-                </button>
-              )}
-              <button className="press-feedback" onClick={() => onShare(item.localFile || file, item.hostedCode)}>
-                <Icon name={item.hostedCode ? "download-simple" : "share-network"} size={17} />
-                {item.hostedCode ? "下载文件" : "发送文件"}
-              </button>
-              {item.share?.status === "active" && (
-                <button className="press-feedback hosted-archive" onClick={() => onArchive(item.share!)}>
-                  <Icon name="archive" size={17} />归档文件
-                </button>
-              )}
+            <div className="file-menu" role="menu" aria-label={`${file.name} 的文件操作`}>
+              <FileMenuActions item={item} actions={actions} onClose={() => onToggleMenu(item.key)} />
             </div>
           )}
         </article>;
