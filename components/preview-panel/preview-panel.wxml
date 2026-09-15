@@ -1,4 +1,4 @@
-<navigation-bar title="Rive 预览" back="{{true}}" external-back="{{true}}" bindback="closeEmbedded" color="#f2f0e8" background="#0b0f14"></navigation-bar>
+<navigation-bar title="Rive 预览" back="{{true}}" external-back="{{embedded}}" bindback="closeEmbedded" color="#f2f0e8" background="#0b0f14"></navigation-bar>
 
 <image
   wx:if="{{previewTransitionVisible}}"
@@ -20,7 +20,7 @@
       </view>
     </view>
     <button class="file-heading__save" bindtap="showSaveMenu" hover-class="is-pressed" hover-start-time="0" hover-stay-time="70" aria-label="保存或发送文件">
-      <image src="/assets/icons/download.svg"></image>
+      <image class="file-heading__save-icon" src="/assets/icons/download.svg"></image>
     </button>
   </view>
 
@@ -96,7 +96,7 @@
     </view>
     <view class="stage-resizer__surface" data-stage-resizer="true">
       <view class="stage-resizer__grip" data-stage-resizer="true">
-        <view data-stage-resizer="true"></view>
+        <view class="stage-resizer__grip-bar" data-stage-resizer="true"></view>
       </view>
       <view class="stage-resizer__modes" aria-hidden="{{!stageResizeMenuActive}}">
         <view class="stage-resizer__mode stage-resizer__mode--contain {{fit === 'contain' ? 'is-current' : ''}} {{stageResizeHoverFit === 'contain' ? 'is-hovered' : ''}}" data-fit="contain" hover-class="is-hovered" hover-start-time="0" hover-stay-time="70" role="button" aria-label="完整显示">
@@ -200,7 +200,7 @@
         <text class="parameter-row__label">画板</text>
         <view class="parameter-actions">
           <parameter-tag
-            compact="{{true}}"
+            compact="{{embedded}}"
             wx:for="{{artboardNames}}"
             wx:key="*this"
             label="{{item}}"
@@ -235,7 +235,7 @@
         <text class="parameter-row__label">状态机</text>
         <view class="parameter-actions">
           <parameter-tag
-            compact="{{true}}"
+            compact="{{embedded}}"
             wx:for="{{stateMachineNames}}"
             wx:key="*this"
             label="{{item}}"
@@ -252,7 +252,7 @@
         <text class="parameter-row__label">时间轴</text>
         <view class="parameter-actions timeline-actions">
           <parameter-tag
-            compact="{{true}}"
+            compact="{{embedded}}"
             wx:for="{{animationNames}}"
             wx:key="*this"
             label="{{item}}"
@@ -271,7 +271,7 @@
         <text class="parameter-row__label">状态机输入</text>
         <view class="parameter-actions">
           <parameter-tag
-            compact="{{true}}"
+            compact="{{embedded}}"
             wx:for="{{inputs}}"
             wx:key="name"
             label="{{item.name}}"
@@ -300,7 +300,7 @@
         <text class="parameter-row__label">声音</text>
         <view class="parameter-actions">
           <parameter-tag
-            compact="{{true}}"
+            compact="{{embedded}}"
             label="{{audioSupported ? (audioEnabled ? '开启' : '静音') : (audioBlockedReason === '大文件已启用性能保护' ? '性能保护' : '不可用')}}"
             selected="{{audioEnabled && audioSupported}}"
             tagvalue="audio"

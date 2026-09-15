@@ -39,6 +39,13 @@ page {
   background: #0b0f14;
 }
 
+.desktop-preview-content {
+  width: 200%;
+  height: 200%;
+  transform: scale(.5);
+  transform-origin: left top;
+}
+
 .desktop-workspace.is-split.has-preview .desktop-home-pane {
   width: 50%;
   flex: none;

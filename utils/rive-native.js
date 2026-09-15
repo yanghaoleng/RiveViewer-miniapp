@@ -1,4 +1,12 @@
 let runtimePromise = null
+const rivePolicy = require('../shared/rive-policy.js')
+const {
+  getAudioBlockedReason,
+  getPlaybackPerformanceProfile,
+  isComplexRiveFile,
+  MAX_AUDIO_SOURCE_BYTES,
+  QUALITY_PROFILES
+} = require('./rive-performance')
 let animationCanvas = null
 let RiveFactory = null
 let embeddedImageSequence = 0
@@ -8,16 +16,6 @@ const audioResumeTasks = new WeakMap()
 const audioDesiredStates = new WeakMap()
 const resumedAudioContexts = new WeakSet()
 
-const MAX_AUDIO_SOURCE_BYTES = 8 * 1024 * 1024
-const IOS_AUDIO_FRAME_INTERVAL = 1000 / 30
-const IOS_AUDIO_PIXEL_RATIO_LIMIT = 1.5
-const IOS_COMPLEX_FRAME_INTERVAL = 1000 / 24
-const IOS_COMPLEX_PIXEL_RATIO_LIMIT = 1.25
-const QUALITY_PROFILES = {
-  performance: { frameInterval: 1000 / 30, pixelRatio: 1 },
-  balanced: { frameInterval: 1000 / 45, pixelRatio: 1.5 },
-  high: { frameInterval: 0, pixelRatio: 2 }
-}
 const PIANO_AUDIO_ASSET_NAMES = new Set([
   'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#',
   'switch', 'power01', 'power02'
@@ -75,14 +73,6 @@ function isCompatibleWebAudioContext(context) {
   )
 }
 
-function getAudioBlockedReason(sourceSize, platformSupported) {
-  if (!platformSupported) return '当前微信版本不支持声音'
-  if (Math.max(0, Number(sourceSize) || 0) > MAX_AUDIO_SOURCE_BYTES) {
-    return '大文件已启用性能保护'
-  }
-  return ''
-}
-
 function isIOSMiniProgram() {
   if (typeof wx === 'undefined') return false
   try {
@@ -93,33 +83,6 @@ function isIOSMiniProgram() {
       || /iphone|ipad|ios/i.test(`${info?.system || ''} ${info?.model || ''}`)
   } catch (error) {
     return false
-  }
-}
-
-function getPlaybackPerformanceProfile({
-  hasAudio = false,
-  isIOS = false,
-  isComplexFile = false,
-  pixelRatio = 1,
-  qualityMode = ''
-} = {}) {
-  const isIOSAudio = Boolean(isIOS && hasAudio)
-  const isIOSComplex = Boolean(isIOS && isComplexFile && !hasAudio)
-  const qualityProfile = QUALITY_PROFILES[qualityMode] || null
-  const requestedPixelRatio = qualityProfile
-    ? Math.min(Math.max(1, Number(pixelRatio) || 1), qualityProfile.pixelRatio)
-    : Math.max(1, Number(pixelRatio) || 1)
-  const automaticFrameInterval = isIOSAudio
-    ? IOS_AUDIO_FRAME_INTERVAL
-    : (isIOSComplex ? IOS_COMPLEX_FRAME_INTERVAL : (isComplexFile ? 30 : 0))
-  const automaticPixelRatio = isIOSAudio
-    ? Math.min(requestedPixelRatio, IOS_AUDIO_PIXEL_RATIO_LIMIT)
-    : (isIOSComplex
-        ? Math.min(requestedPixelRatio, IOS_COMPLEX_PIXEL_RATIO_LIMIT)
-        : (isComplexFile ? Math.min(requestedPixelRatio, 1.25) : requestedPixelRatio))
-  return {
-    frameInterval: Math.max(automaticFrameInterval, qualityProfile?.frameInterval || 0),
-    pixelRatio: automaticPixelRatio
   }
 }
 
@@ -1205,10 +1168,12 @@ class NativeRivePlayer {
     const artboards = (this.metadata?.artboards || []).filter((item) => item.loaded !== false)
     const animationCount = artboards.reduce((sum, item) => sum + item.animations.length, 0)
     const stateMachineCount = artboards.reduce((sum, item) => sum + item.stateMachines.length, 0)
-    const isComplexFile = this.sourceSize >= 2 * 1024 * 1024
-      || (this.metadata?.artboardCount || artboards.length) >= 32
-      || animationCount >= 120
-      || stateMachineCount >= 64
+    const isComplexFile = isComplexRiveFile({
+      sourceSize: this.sourceSize,
+      artboardCount: this.metadata?.artboardCount || artboards.length,
+      animationCount,
+      stateMachineCount
+    })
     this.isComplexFile = isComplexFile
     const profile = getPlaybackPerformanceProfile({
       hasAudio: this.hasAudio && this.audioSupported,
@@ -1375,7 +1340,12 @@ class NativeRivePlayer {
     if (!target?.bind) return
     const viewModelInstances = []
     try {
-      const viewModel = this.file.defaultArtboardViewModel?.(this.artboard)
+      const viewModelCount = Number(this.file.viewModelCount?.() || 0)
+      const globalNames = this.file.globalViewModelNames?.() || []
+      if (viewModelCount <= 0 && !globalNames.length) return
+      const viewModel = viewModelCount > 0
+        ? this.file.defaultArtboardViewModel?.(this.artboard)
+        : null
       const viewModelInstance = viewModel?.defaultInstance?.()
       if (viewModelInstance) {
         viewModelInstances.push(viewModelInstance)
@@ -1384,7 +1354,6 @@ class NativeRivePlayer {
         target.setViewModelInstance(viewModelInstance)
       }
 
-      const globalNames = this.file.globalViewModelNames?.() || []
       globalNames.forEach((name) => {
         const globalInstance = this.file.viewModelByName?.(name)?.defaultInstance?.()
         if (!globalInstance) return
@@ -1445,7 +1414,7 @@ class NativeRivePlayer {
       return
     }
     const now = Date.now()
-    if (!force && now - this.lastProgressEmitAt < 180) return
+    if (!force && now - this.lastProgressEmitAt < rivePolicy.telemetry.miniProgressMs) return
     this.lastProgressEmitAt = now
     const duration = this.animationDuration || 0
     const isLoopingIdle = this.activeAnimationName.trim().toLowerCase() === 'idle'

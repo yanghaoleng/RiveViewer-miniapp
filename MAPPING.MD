@@ -1,5 +1,15 @@
 # 元素映射
 
+## 基础设施俗称
+
+| 俗称 | 学名 | 配置 / 代码位置 | 说明 |
+| --- | --- | --- | --- |
+| 叫叫版服务器 | JOJO 托管版生产主机 | `ssh mikeywa-rive`、`124.221.104.244`、`rive-host.service` | 腾讯云上海锐驰型轻量服务器，承载 H5、API 和 `.riv` 本体 |
+| 旧叫叫服务器 | 迁移回滚主机 | `ssh mikeywa-rive-old`、`115.159.25.169` | Nginx 与迁移前备份保留，`rive-host` 已禁用以避免双写 |
+| 下载带宽 | 公网出方向吞吐 | 云控制台公网带宽 / 轻量套餐峰值带宽 | 新机完整下载实测约 `10.05 MB/s`；不能用 CPU、内存或前端假进度替代 |
+| 锐驰服务器 | 腾讯云锐驰型轻量应用服务器 | `lhins-qgi1l9jg`、`2C2G / 40G / 200Mbps 峰值 / 无限流量` | 当前正式生产主机，首月观察高峰期稳定性 |
+| 文件加速 | 对象存储与内容分发 | COS + CDN，自定义下载域名 | 后续稳定并发方案；必须保留 Range、ETag、归档和恢复语义 |
+
 当前发布版本为 `1.0.7`；下表补充统一渲染档位、性能状态、H5 缩略图、双栏布局与 Gentle 手柄反馈。
 
 | 俗称 | 学名 | 代码名称 |
@@ -8,6 +18,7 @@
 | JOJO 版 / 叫叫版 | Hosted H5 collaboration edition | `https://rive.mikeywa.site/`、`mode: hosted`、`.brand-signature`、`for JOJO`；上传、三位短链接、评论、归档与恢复 |
 | README 版本说明 | Product edition overview | `README.MD` 的“版本说明”表格；统一说明入口、文件保存与适用场景 |
 | 黑客松包装文案 | Hackathon messaging pack | `HACKATHON-2026.MD`；作品名、卖点、报名简介、路演与拉票文案 |
+| 最新版产品介绍 | Current product introduction | `HACKATHON-2026.MD` 的“最新版产品介绍（2026-08-26）”；一句话场景定位和 8 项特色 |
 | 黑客松宣传封面 | Hackathon campaign posters | `h5/assets/hackathon/posters/01-stop-recording.png` 至 `06-understand-interaction.png`；`1536×1024`、`3:2`、居中 `86%` 安全区 |
 | 黑客松真实页面参考 | Hackathon live-page references | `h5/assets/hackathon/references/vgd-desktop.png`、`vgd-mobile.png`、`https://rive.mikeywa.site/vGd` |
 | 首页导入框 | Import dropzone | `.import-dropzone`、`showImportMenu` |
@@ -146,10 +157,10 @@
 | 双端共享性能策略 | Cross-platform Rive policy | `shared/rive-policy.json` 是唯一真源，`shared/rive-policy.js` 是微信生成物；集中倍速、手势、遥测节流和复杂文件阈值 |
 | H5 本地生产预览 | Local production preview | `npm run preview -- --host 127.0.0.1 --port 4173`；端口占用时 Vite 自动顺延，本轮为 `4174` |
 | H5 大文件切换保护 | Stale-load session guard | `activeLoadSessionRef`、session token；旧文件异步读取完成后不能覆盖当前文件 |
-| 正式服务器 SSH | Deployment SSH alias | `ssh mikeywa-rive`、`~/.ssh/mikeywa_rive_deploy`、用户 `ubuntu` |
+| 正式服务器 SSH | Deployment SSH alias | `ssh mikeywa-rive` → `124.221.104.244`、`~/.ssh/mikeywa_rive_deploy`、用户 `ubuntu`；旧机为 `ssh mikeywa-rive-old` |
 | H5 版本切换 | Atomic release symlink | `/var/www/rive-viewer/releases/<时间戳>`、`/var/www/rive-viewer/current` |
-| H5 当前正式版本 | Current production release | `/var/www/rive-viewer/releases/20260818-093940`；`current` 已指向该目录 |
-| H5 回滚版本 | Production rollback release | `/var/www/rive-viewer/releases/20260813-215427`、`/etc/nginx/snippets/rive-viewer.conf.bak-20260818-093940-retry` |
+| H5 当前正式版本 | Current production release | `/var/www/rive-viewer/releases/20260825-230508`；`current` 已指向该目录 |
+| H5 回滚版本 | Production rollback release | `/var/www/rive-viewer/releases/20260818-093940`、`/etc/nginx/snippets/rive-viewer.conf.bak-20260825-230508` |
 | H5 发布权限 | Static file permissions | `root:root`；发布目录 `755`、静态文件 `644` |
 | 生成公开链接 | Publish hosted share | `requestPublishFile`、`uploadSavedFiles`、`createHostedShare`、`XMLHttpRequest.upload.onprogress`、`POST /api/v1/shares`；自动上传和历史本地文件补传共用同一链路 |
 | 托管上传框 | Hosted upload dropzone | `.import-dropzone`、`handleIncomingFiles`、`enterDropTarget`、`showDropTarget`、`dropFiles`；整页接收拖入，首文件本地打开与上传并行，旧入口仅本地保存 |
@@ -172,7 +183,7 @@
 | 最近交互时间 | Last file activity timestamp | `ActivityPolicy`、`touchLocalFile`、`rememberRecentHostedFile`、`FileUploadState.updatedAt`；首页打开、评论和上传推动排序，详情侧栏使用 `preserve` |
 | 侧栏保持顺序 | Stable detail rail selection | `ActivityPolicy = "record" | "preserve"`、`RAIL_ACTIVITY_STATE_KEY`、`openHostedShareWithActivity`、`preserveExistingActivity`；跨三位路由切换也只更新选中态 |
 | 公开缩略图缓存 | Hosted local cover cache | `hosted-<code>`、IndexedDB `covers`、`saveLibraryCover`；只缓存元信息与 WebP，不缓存远端 `.riv` |
-| 托管平台域名 | Hosted platform domain | `rive.mikeywa.site`、A 记录 `115.159.25.169`、TTL 600、独立 Nginx 与 Let's Encrypt、根路径 `/` |
+| 托管平台域名 | Hosted platform domain | `rive.mikeywa.site`、A 记录 `124.221.104.244`、TTL 600、独立 Nginx 与 Let's Encrypt、根路径 `/` |
 | 详情文件窄栏 | Desktop preview file rail | `PreviewFileRail`、`.preview-file-rail`、`FILE_RAIL_DEFAULT_WIDTH`、`FILE_RAIL_MIN_WIDTH`、`FILE_RAIL_MAX_WIDTH`、桌面 `min-width: 860px`；默认 `184px`，可在 `160–360px` 间调整，显示统一文件列表与顶部加号 |
 | 文件栏调整线 | Accessible file rail separator | `.preview-file-rail-resizer`、`applyFileRailWidth`、`role="separator"`；支持指针拖动、方向键、Home 和 End，Hover/聚焦/拖动时变黄 |
 | 完整文件名浮层 | File name hover tooltip | `.preview-file-rail-name-tooltip`、`data-full-name`；文件名 Hover 或聚焦时在文件栏外显示完整名称 |
@@ -234,3 +245,20 @@
 | 数据汇总接口 | 受保护的实时汇总 API | `GET /api/v1/analytics/summary` |
 | 密码验证接口 | 六位密码登录与签名 Cookie 签发 | `POST /api/v1/analytics/auth`、`AnalyticsAccess` |
 | 事件收集接口 | 三套 H5 公用采集 API | `POST /api/v1/analytics/events` |
+
+
+## H5 多格式规划映射
+
+| 俗称 | 学名 | 规划代码名称 / 文件契约 |
+| --- | --- | --- |
+| 格式路由器 | Animation runtime adapter | `AnimationPlayerAdapter`；统一加载、播放、进度、倍速、尺寸、快照和销毁 |
+| Lottie 文件 | Lottie JSON / dotLottie archive | 自包含 `.json`；后续 `.lottie`，禁止默认拉取外部资源 |
+| PAG 文件 | Portable Animated Graphics | 单 `.pag`；WebGL + WASM，视频层单独标记兼容状态 |
+| Spine 包 | Spine runtime export bundle | 约定 ZIP：`.json` / `.skel` + `.atlas` + 纹理；不支持 `.spine` 工程文件 |
+| 格式元数据 | Hosted animation format | `format: rive | lottie | pag | spine`；旧分享迁移时默认 `rive` |
+| 格式准入 | Per-format admission policy | 文件头、解压后总量、条目数、纹理像素、时长、版本和外部 URL 限制 |
+
+
+## 2026-09-15 本地与远端整理
+
+保留 Beta 多格式播放器和数据后台更新，合并本地小程序预览组件重构；结构检查改为验证当前多格式播放器的动态加载入口。小程序检查、交互验证与 H5 检查通过。依赖审计仍有 2 项既有告警，本轮未升级依赖。未执行微信上传或生产部署。

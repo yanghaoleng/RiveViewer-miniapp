@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sourceRoot = path.join(root, 'node_modules/@phosphor-icons/core/assets/bold')
 const targetRoot = path.join(root, 'assets/icons')
+const h5TargetRoot = path.join(root, 'h5/public/rive-viewer/icons')
 
 const icons = [
   ['arrow-left.svg', 'arrow-left', '#d8dde5'],
@@ -26,7 +27,41 @@ const icons = [
   ['circle-notch.svg', 'circle-notch', '#aeb7c3'],
 ]
 
-await fs.mkdir(targetRoot, { recursive: true })
+const h5Icons = [
+  'archive',
+  'arrow-counter-clockwise',
+  'arrow-left',
+  'arrow-right',
+  'arrow-square-out',
+  'arrows-in-simple',
+  'arrows-out-simple',
+  'caret-down',
+  'check',
+  'chat-circle-dots',
+  'cloud-arrow-up',
+  'cloud-check',
+  'cloud-x',
+  'copy-simple',
+  'desktop',
+  'download-simple',
+  'gauge',
+  'keyboard',
+  'link-simple',
+  'pause',
+  'play',
+  'plus',
+  'share-network',
+  'speaker-high',
+  'speaker-slash',
+  'trash',
+  'wechat-logo',
+  'x'
+]
+
+await Promise.all([
+  fs.mkdir(targetRoot, { recursive: true }),
+  fs.mkdir(h5TargetRoot, { recursive: true })
+])
 
 for (const [targetName, sourceName, color] of icons) {
   const sourcePath = path.join(sourceRoot, `${sourceName}-bold.svg`)
@@ -41,4 +76,16 @@ for (const [targetName, sourceName, color] of icons) {
   await fs.writeFile(targetPath, `${output}\n`)
 }
 
-console.log(`Vendored ${icons.length} Phosphor Bold icons.`)
+await Promise.all(h5Icons.map(async (name) => {
+  const sourcePath = path.join(sourceRoot, `${name}-bold.svg`)
+  const source = await fs.readFile(sourcePath, 'utf8')
+  const output = source
+    .replace(
+      'fill="currentColor"',
+      `fill="#000" data-icon-family="phosphor" data-icon-name="${name}" data-icon-weight="bold"`
+    )
+    .trim()
+  await fs.writeFile(path.join(h5TargetRoot, `${name}.svg`), `${output}\n`)
+}))
+
+console.log(`Vendored ${icons.length} Mini Program and ${h5Icons.length} H5 Phosphor Bold icons.`)

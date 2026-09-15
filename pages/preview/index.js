@@ -1,14 +1,21 @@
-const previewDefinition = require('./preview-definition')
 const {
   getDesktopSplitUrl,
   getWindowInfo,
   supportsDesktopSplit
 } = require('../../utils/desktop-split')
+const {
+  enableShareMenu,
+  FRIEND_SHARE_IMAGE,
+  HOME_PATH,
+  SHARE_TITLE,
+  TIMELINE_SHARE_IMAGE,
+  TIMELINE_QUERY
+} = require('../../utils/share')
 
 function redirectToDesktopSplit(page, fileId) {
   if (!fileId || page.desktopSplitRedirecting) return false
   page.desktopSplitRedirecting = true
-  page.disposePreview?.()
+  page.selectComponent('#pagePreview')?.disposePreview?.()
   wx.reLaunch({
     url: getDesktopSplitUrl(fileId),
     fail: () => {
@@ -19,7 +26,9 @@ function redirectToDesktopSplit(page, fileId) {
 }
 
 Page({
-  ...previewDefinition,
+  data: {
+    fileId: ''
+  },
 
   onLoad(options = {}) {
     const fileId = decodeURIComponent(options.id || '')
@@ -27,14 +36,18 @@ Page({
       redirectToDesktopSplit(this, fileId)
       return
     }
-    previewDefinition.onLoad.call(this, options)
+    this.setData({ fileId })
     this.desktopWindowResizeHandler = (result) => {
-      if (!this.data.file || !supportsDesktopSplit(result?.size || getWindowInfo())) return
-      redirectToDesktopSplit(this, this.data.file.id)
+      if (!this.data.fileId || !supportsDesktopSplit(result?.size || getWindowInfo())) return
+      redirectToDesktopSplit(this, this.data.fileId)
     }
     if (typeof wx.onWindowResize === 'function') {
       wx.onWindowResize(this.desktopWindowResizeHandler)
     }
+  },
+
+  onShow() {
+    enableShareMenu()
   },
 
   onUnload() {
@@ -42,6 +55,21 @@ Page({
       wx.offWindowResize(this.desktopWindowResizeHandler)
     }
     this.desktopWindowResizeHandler = null
-    previewDefinition.onUnload.call(this)
+  },
+
+  onShareAppMessage() {
+    return {
+      title: SHARE_TITLE,
+      path: HOME_PATH,
+      imageUrl: FRIEND_SHARE_IMAGE
+    }
+  },
+
+  onShareTimeline() {
+    return {
+      title: SHARE_TITLE,
+      query: TIMELINE_QUERY,
+      imageUrl: TIMELINE_SHARE_IMAGE
+    }
   }
 })

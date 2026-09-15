@@ -48,4 +48,4 @@ npm run check
 - 托管平台：<https://rive.mikeywa.site/>
 - 旧本地预览：<https://mikeywa.site/rive-viewer/>
 
-两个域名均由腾讯云轻量服务器上的 Nginx 托管并使用独立原子发布目录。托管前端发布到 `/var/www/rive-host/releases/<时间戳>`，旧本地预览发布到 `/var/www/rive-viewer/releases/<时间戳>/rive-viewer`；服务器连接别名为 `ssh mikeywa-rive`，对应规则为 `deploy/nginx-rive-host.conf` 与 `deploy/nginx-rive-viewer.conf`。
+两个域名均由腾讯云轻量服务器上的 Nginx 托管并使用独立原子发布目录。托管前端发布到新机的 `/var/www/rive-host/releases/<时间戳>`，使用 `ssh mikeywa-rive`；旧本地预览发布到旧机的 `/var/www/rive-viewer/releases/<时间戳>/rive-viewer`，使用 `ssh mikeywa-rive-old`。对应规则为 `deploy/nginx-rive-host.conf` 与 `deploy/nginx-rive-viewer.conf`。

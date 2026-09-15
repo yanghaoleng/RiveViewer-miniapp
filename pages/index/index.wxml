@@ -130,10 +130,13 @@
   </view>
 
   <view wx:if="{{desktopSplitEnabled && desktopPreviewFileId}}" class="desktop-preview-pane">
-    <preview-panel
-      file-id="{{desktopPreviewFileId}}"
-      bindclose="closeDesktopPreview"
-      bindselectfile="selectDesktopPreviewFile"
-    ></preview-panel>
+    <view class="desktop-preview-content">
+      <preview-panel
+        file-id="{{desktopPreviewFileId}}"
+        embedded="{{true}}"
+        bindclose="closeDesktopPreview"
+        bindselectfile="selectDesktopPreviewFile"
+      ></preview-panel>
+    </view>
   </view>
 </view>

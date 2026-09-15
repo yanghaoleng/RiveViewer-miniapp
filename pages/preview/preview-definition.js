@@ -15,6 +15,23 @@ const {
 } = require('../../utils/file-actions')
 const { NativeRivePlayer } = require('../../utils/rive-native')
 const {
+  AUDIO_STORAGE_KEY,
+  createPreviewInitialData,
+  QUALITY_OPTIONS,
+  QUALITY_STORAGE_KEY,
+  rivePolicy,
+  SPEED_OPTIONS,
+  STAGE_RESIZE_DOUBLE_TAP_DELAY,
+  STAGE_RESIZE_GESTURE_SLOP_RPX,
+  STAGE_RESIZE_MENU_DISMISS_DELAY
+} = require('./preview-config')
+const {
+  formatTimelineTime,
+  loadPlayerWithTimeout,
+  sortTimelineNames,
+  waitForLoadingPaint
+} = require('./preview-helpers')
+const {
   enableShareMenu,
   FRIEND_SHARE_IMAGE,
   HOME_PATH,
@@ -25,141 +42,12 @@ const {
   TIMELINE_QUERY
 } = require('../../utils/share')
 
-const FIT_OPTIONS = [
-  { key: 'contain', label: '完整' },
-  { key: 'cover', label: '铺满' }
-]
-
-const SPEED_OPTIONS = [
-  { value: 1, label: '1x' },
-  { value: 1.5, label: '1.5x' },
-  { value: 2, label: '2x' },
-  { value: 8, label: '8x' },
-  { value: 0.5, label: '0.5x' },
-]
-const AUDIO_STORAGE_KEY = 'riveAudioEnabled'
-const QUALITY_STORAGE_KEY = 'riveQualityMode'
-const QUALITY_OPTIONS = [
-  { key: 'performance', label: '性能' },
-  { key: 'balanced', label: '平衡' },
-  { key: 'high', label: '高清' }
-]
-const STAGE_RESIZE_MENU_DISMISS_DELAY = 3000
-const STAGE_RESIZE_DOUBLE_TAP_DELAY = 500
-const STAGE_RESIZE_GESTURE_SLOP_RPX = 16
-
-function formatTimelineTime(seconds) {
-  const value = Math.max(0, Number(seconds) || 0)
-  const minutes = Math.floor(value / 60)
-  const remainder = value - minutes * 60
-  return `${String(minutes).padStart(2, '0')}:${remainder.toFixed(1).padStart(4, '0')}`
-}
-
-function sortTimelineNames(names = []) {
-  const priority = { in: 0, idle: 1, out: 2 }
-  return [...names].sort((left, right) => {
-    const leftKey = String(left).trim().toLowerCase()
-    const rightKey = String(right).trim().toLowerCase()
-    const leftPriority = priority[leftKey] ?? 10
-    const rightPriority = priority[rightKey] ?? 10
-    return leftPriority - rightPriority
-  })
-}
-
-function loadPlayerWithTimeout(player, bytes, timeoutMs) {
-  let timeoutId = 0
-  const timeout = new Promise((resolve, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error('Rive 解析超时，请重试或换用较小的文件'))
-    }, timeoutMs)
-  })
-  return Promise.race([player.load(bytes), timeout])
-    .finally(() => clearTimeout(timeoutId))
-}
-
-function waitForLoadingPaint() {
-  return new Promise((resolve) => {
-    const finish = () => setTimeout(resolve, 16)
-    if (typeof wx.nextTick === 'function') wx.nextTick(finish)
-    else finish()
-  })
-}
-
 const previewDefinition = {
-  data: {
-    file: null,
-    loading: true,
-    loadingProgress: 0,
-    loadingPhase: '正在准备文件',
-    error: '',
-    fitOptions: FIT_OPTIONS,
-    qualityOptions: QUALITY_OPTIONS,
-    qualityMode: 'performance',
-    speedMenuOptions: [...SPEED_OPTIONS].reverse(),
-    fit: 'cover',
-    alignment: 'center',
-    speedValue: 1,
-    speedLabel: '1x',
-    showSpeedMenu: false,
-    speedMenuLeaving: false,
-    speedMenuStyle: '',
-    speedHoverValue: 1,
-    isPlaying: true,
-    artboardNames: [],
-    artboardIndex: 0,
-    artboardCount: 0,
-    artboardRemainingCount: 0,
-    artboardCatalogLoaded: true,
-    artboardCatalogLoading: false,
-    artboardCatalogProgress: 0,
-    stateMachineNames: [],
-    stateMachineIndex: 0,
-    animationNames: [],
-    activeAnimation: '',
-    animationProgress: 0,
-    timelineTimecode: '--:--.- / --:--.-',
-    inputs: [],
-    hasAudio: false,
-    audioEnabled: true,
-    audioSupported: true,
-    audioBlockedReason: '',
-    dimensions: '',
-    activeState: '等待状态变化',
-    fps: 0,
-    canvasTone: 'mist',
-    stageHeight: 480,
-    stageWidth: 702,
-    stageMinHeight: 320,
-    stageMaxHeight: 980,
-    stageDragging: false,
-    stageResizeMenuActive: false,
-    stageResizeTapOpen: false,
-    stageResizePressActive: false,
-    stageResizeHoverFit: '',
-    stageViewMode: 'auto',
-    resizeAdjustmentCount: 0,
-    showResizeGuide: false,
-    resizeGuideLeaving: false,
-    previewTransitionVisible: false,
-    previewTransitionExpanding: false,
-    previewTransitionLeaving: false,
-    previewTransitionCover: '',
-    previewTransitionStyle: '',
-    hasPreviousFile: false,
-    hasNextFile: false,
-    showFileNavigation: false,
-    fileMenuOptions: [],
-    showFileMenu: false,
-    fileMenuLeaving: false,
-    fileMenuStyle: '',
-    fileHoverId: ''
-  },
+  data: createPreviewInitialData(),
 
   createPreviewSelectorQuery() {
     const query = wx.createSelectorQuery()
-    return this.isEmbeddedPreview && typeof query.in === 'function'
-      ? query.in(this)
-      : query
+    return typeof query.in === 'function' ? query.in(this) : query
   },
 
   onLoad(options) {
@@ -247,6 +135,7 @@ const previewDefinition = {
 
   disposePreview() {
     clearTimeout(this.canvasResizeTimer)
+    clearTimeout(this.stageResizeFrameTimer)
     clearTimeout(this.coverCaptureTimer)
     clearTimeout(this.resizeGuideTimer)
     clearTimeout(this.stageResizeMenuDismissTimer)
@@ -276,6 +165,8 @@ const previewDefinition = {
     this.stageResizeFromHandle = false
     this.stageResizeTapWasOpen = false
     this.stageResizeSelectorRect = null
+    this.stageResizeFrameTimer = 0
+    this.pendingStageSize = null
     if (
       this.data.stageDragging
       || this.data.stageResizeMenuActive
@@ -362,15 +253,19 @@ const previewDefinition = {
     const windowWidth = Math.max(1, this.windowInfo.windowWidth || 375)
     const toRpx = (pixels) => pixels * 750 / windowWidth
     const windowHeight = this.windowInfo.windowHeight || 667
+    const layoutScale = this.isEmbeddedPreview ? 2 : 1
     if (this.isEmbeddedPreview) {
-      const panelContentWidth = Math.max(260, windowWidth * 0.5 - 48)
+      const panelContentWidth = Math.max(260, windowWidth * 0.5 - 48) * layoutScale
       this.previewAvailableWidth = Math.round(toRpx(panelContentWidth))
     } else {
       this.previewAvailableWidth = 702
     }
-    this.autoStageMaxHeight = Math.min(980, Math.round(toRpx(windowHeight * 0.62)))
-    this.baseStageMinHeight = Math.max(320, Math.round(toRpx(180)))
-    this.baseStageMaxHeight = Math.max(720, Math.min(1120, Math.round(toRpx(windowHeight * 0.74))))
+    this.autoStageMaxHeight = Math.min(980, Math.round(toRpx(windowHeight * layoutScale * 0.62)))
+    this.baseStageMinHeight = Math.max(320, Math.round(toRpx(180 * layoutScale)))
+    this.baseStageMaxHeight = Math.max(
+      720,
+      Math.min(1120, Math.round(toRpx(windowHeight * layoutScale * 0.74)))
+    )
     this.setData({
       stageMinHeight: this.baseStageMinHeight,
       stageMaxHeight: this.baseStageMaxHeight
@@ -818,6 +713,20 @@ const previewDefinition = {
     return stageResizeHoverFit
   },
 
+  queueStageResizeSize(stageSize) {
+    this.pendingStageSize = {
+      stageHeight: stageSize.height,
+      stageWidth: stageSize.width
+    }
+    if (this.stageResizeFrameTimer) return
+    this.stageResizeFrameTimer = setTimeout(() => {
+      this.stageResizeFrameTimer = 0
+      const pendingStageSize = this.pendingStageSize
+      this.pendingStageSize = null
+      if (pendingStageSize) this.setData(pendingStageSize)
+    }, rivePolicy.gesture.miniDragFrameMs)
+  },
+
   stageResizeMove(event) {
     const touch = event.touches?.[0]
     if (!touch || this.stageResizeStartY === undefined) return
@@ -855,14 +764,15 @@ const previewDefinition = {
       this.activeResourceSize?.height,
       this.stageResizeStartHeight + deltaRpx
     )
+    const currentStageSize = this.pendingStageSize || {
+      stageHeight: this.data.stageHeight,
+      stageWidth: this.data.stageWidth
+    }
     if (
-      stageSize.height !== this.data.stageHeight
-      || stageSize.width !== this.data.stageWidth
+      stageSize.height !== currentStageSize.stageHeight
+      || stageSize.width !== currentStageSize.stageWidth
     ) {
-      this.setData({
-        stageHeight: stageSize.height,
-        stageWidth: stageSize.width
-      })
+      this.queueStageResizeSize(stageSize)
     }
   },
 
@@ -879,7 +789,12 @@ const previewDefinition = {
     this.stageResizeFromHandle = false
     this.stageResizeTapWasOpen = false
     this.stageResizeSelectorRect = null
+    clearTimeout(this.stageResizeFrameTimer)
+    this.stageResizeFrameTimer = 0
+    const pendingStageSize = this.pendingStageSize
+    this.pendingStageSize = null
     this.setData({
+      ...(pendingStageSize || {}),
       stageDragging: false,
       stageResizeMenuActive: false,
       stageResizeTapOpen: false,

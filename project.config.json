@@ -32,7 +32,27 @@
       },
       {
         "type": "folder",
+        "value": "server"
+      },
+      {
+        "type": "folder",
+        "value": "dist"
+      },
+      {
+        "type": "folder",
         "value": "rive测试文件"
+      },
+      {
+        "type": "folder",
+        "value": "tests"
+      },
+      {
+        "type": "file",
+        "value": "assets/samples/guide.riv"
+      },
+      {
+        "type": "file",
+        "value": "assets/samples/question.riv"
       },
       {
         "type": "file",
@@ -45,6 +65,10 @@
       {
         "type": "file",
         "value": ".eslintrc.js"
+      },
+      {
+        "type": "file",
+        "value": ".gitignore"
       },
       {
         "type": "file",
@@ -69,6 +93,22 @@
       {
         "type": "file",
         "value": "HANDOF.MD"
+      },
+      {
+        "type": "file",
+        "value": "AGENTS.md"
+      },
+      {
+        "type": "file",
+        "value": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "type": "file",
+        "value": "LICENSE"
+      },
+      {
+        "type": "file",
+        "value": "NOTICE"
       }
     ],
     "include": []

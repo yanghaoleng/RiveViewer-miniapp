@@ -45,16 +45,19 @@ const requiredFiles = [
   'assets/icons/player-play.svg',
   'assets/icons/plus.svg',
   'assets/icons/restore.svg',
-  'share-friend.png',
+  'share-friend.jpg',
   'share-timeline.png',
   'pages/index/index.js',
   'pages/preview/index.js',
   'pages/preview/preview-definition.js',
+  'pages/preview/preview-config.js',
+  'pages/preview/preview-helpers.js',
   'components/preview-panel/preview-panel.js',
   'components/preview-panel/preview-panel.json',
   'components/preview-panel/preview-panel.wxml',
   'components/preview-panel/preview-panel.wxss',
   'utils/desktop-split.js',
+  'utils/rive-performance.js',
   'components/navigation-bar/navigation-layout.js',
   'utils/share.js',
   'scripts/verify-rive-interactions.mjs'
@@ -110,9 +113,10 @@ for (const relativePath of [
 
 for (const relativePath of [
   'h5/package.json',
-  'h5/app/rive-viewer/page.tsx',
+  'h5/static/main.tsx',
+  'h5/app/rive-viewer/RiveViewerApp.tsx',
   'h5/lib/rive-player.ts',
-  'h5/public/rive-viewer/rive.wasm'
+  'h5/public/rive-viewer/rive-2.39.1.wasm'
 ]) {
   await fs.access(path.join(root, relativePath))
 }
@@ -120,6 +124,9 @@ for (const relativePath of [
 const ignoredPackPaths = projectManifest.packOptions?.ignore || []
 if (!ignoredPackPaths.some((item) => item.type === 'folder' && item.value === 'h5')) {
   throw new Error('独立 H5 目录必须从微信小程序上传包中排除')
+}
+if (!ignoredPackPaths.some((item) => item.type === 'folder' && item.value === 'server')) {
+  throw new Error('托管后端目录必须从微信小程序上传包中排除')
 }
 
 for (const relativePath of ['assets/samples/guide.riv', 'assets/samples/question.riv']) {
@@ -131,7 +138,8 @@ for (const relativePath of ['assets/samples/guide.riv', 'assets/samples/question
 
 const visibleFiles = [
   'pages/index/index.wxml',
-  'pages/preview/index.wxml'
+  'pages/preview/index.wxml',
+  'components/preview-panel/preview-panel.wxml'
 ]
 for (const relativePath of visibleFiles) {
   const source = await fs.readFile(path.join(root, relativePath), 'utf8')
@@ -140,11 +148,13 @@ for (const relativePath of visibleFiles) {
   }
 }
 
-const previewMarkup = await fs.readFile(path.join(root, 'pages/preview/index.wxml'), 'utf8')
+const previewPageMarkup = await fs.readFile(path.join(root, 'pages/preview/index.wxml'), 'utf8')
 const homeMarkup = await fs.readFile(path.join(root, 'pages/index/index.wxml'), 'utf8')
 const previewLogic = [
   await fs.readFile(path.join(root, 'pages/preview/index.js'), 'utf8'),
-  await fs.readFile(path.join(root, 'pages/preview/preview-definition.js'), 'utf8')
+  await fs.readFile(path.join(root, 'pages/preview/preview-definition.js'), 'utf8'),
+  await fs.readFile(path.join(root, 'pages/preview/preview-config.js'), 'utf8'),
+  await fs.readFile(path.join(root, 'pages/preview/preview-helpers.js'), 'utf8')
 ].join('\n')
 const embeddedPreviewLogic = await fs.readFile(
   path.join(root, 'components/preview-panel/preview-panel.js'),
@@ -154,22 +164,34 @@ const embeddedPreviewMarkup = await fs.readFile(
   path.join(root, 'components/preview-panel/preview-panel.wxml'),
   'utf8'
 )
+const previewMarkup = embeddedPreviewMarkup
 const embeddedPreviewStyle = await fs.readFile(
   path.join(root, 'components/preview-panel/preview-panel.wxss'),
   'utf8'
 )
-const previewStyle = await fs.readFile(path.join(root, 'pages/preview/index.wxss'), 'utf8')
+const previewStyle = embeddedPreviewStyle
+if (
+  /(?:^|,)\s*(?:view|text|button|image|canvas|slider|switch)(?=\s|::|\[|,|\{)/m.test(embeddedPreviewStyle)
+  || /\[[^\]]+\]/.test(embeddedPreviewStyle)
+) {
+  throw new Error('预览组件 WXSS 必须使用类选择器，避免开发者工具拒绝标签或属性选择器')
+}
 const h5AppSource = await fs.readFile(
   path.join(root, 'h5/app/rive-viewer/RiveViewerApp.tsx'),
   'utf8'
 )
 const h5StyleSource = await fs.readFile(path.join(root, 'h5/app/globals.css'), 'utf8')
+const h5PlaybackSource = await fs.readFile(
+  path.join(root, 'h5/app/rive-viewer/PlaybackTelemetryView.tsx'),
+  'utf8'
+)
 const h5LibrarySource = await fs.readFile(path.join(root, 'h5/lib/library.ts'), 'utf8')
 const homeLogic = await fs.readFile(path.join(root, 'pages/index/index.js'), 'utf8')
 const appLogic = await fs.readFile(path.join(root, 'app.js'), 'utf8')
 const libraryLogic = await fs.readFile(path.join(root, 'utils/library.js'), 'utf8')
 const shareLogic = await fs.readFile(path.join(root, 'utils/share.js'), 'utf8')
 const nativeRuntime = await fs.readFile(path.join(root, 'utils/rive-native.js'), 'utf8')
+const nativePerformance = await fs.readFile(path.join(root, 'utils/rive-performance.js'), 'utf8')
 const nativeVendor = await fs.readFile(path.join(root, 'vendor/rive/canvas_advanced.js'), 'utf8')
 const vendorScript = await fs.readFile(path.join(root, 'scripts/vendor-rive.mjs'), 'utf8')
 const navigationLogic = await fs.readFile(path.join(root, 'components/navigation-bar/navigation-bar.js'), 'utf8')
@@ -232,25 +254,25 @@ if (
   throw new Error('自定义导航栏缺少电脑端对齐、完整返回热区或单页栈回首页兜底')
 }
 
-const h5IconElements = h5AppSource.match(
-  /<[A-Z][A-Za-z0-9]*\s+[^>]*\bsize=\{[^}]+\}[^>]*>/g
-) || []
+const h5IconElements = h5AppSource.match(/<Icon\s+name="[^"]+"\s+size=\{[^}]+\}/g) || []
 if (
-  h5IconElements.length < 20
-  || h5IconElements.some((element) => !/\bweight="bold"/.test(element))
-  || /weight="(?:fill|regular|light|thin|duotone)"/.test(h5AppSource)
+  h5IconElements.length < 19
+  || /@phosphor-icons\/react/.test(h5AppSource)
 ) {
-  throw new Error('H5 功能图标必须全部显式使用 Phosphor Icons Bold')
+  throw new Error('H5 功能图标必须使用本地按需加载的 Phosphor Icons Bold 资源')
 }
 if (
   !/DESKTOP_SPLIT_MIN_WIDTH\s*=\s*960/.test(desktopSplitLogic)
   || !/desktopSplitEnabled/.test(homeLogic + homeMarkup)
   || !/desktopPreviewFileId/.test(homeLogic + homeMarkup)
   || !/<preview-panel/.test(homeMarkup)
-  || !/isEmbeddedPreview\s*=\s*true/.test(embeddedPreviewLogic)
-  || !/createPreviewSelectorQuery/.test(previewLogic + embeddedPreviewLogic)
-  || !/external-back="\{\{true\}\}"/.test(embeddedPreviewMarkup)
-  || (embeddedPreviewMarkup.match(/compact="\{\{true\}\}"/g) || []).length !== 5
+  || !/isEmbeddedPreview\s*=\s*Boolean\(this\.data\.embedded\)/.test(embeddedPreviewLogic)
+  || !/createPreviewSelectorQuery\(\)\s*\{[\s\S]{0,120}const query = wx\.createSelectorQuery\(\)[\s\S]{0,120}return typeof query\.in === 'function' \? query\.in\(this\) : query/.test(previewLogic)
+  || !/external-back="\{\{embedded\}\}"/.test(embeddedPreviewMarkup)
+  || (embeddedPreviewMarkup.match(/compact="\{\{embedded\}\}"/g) || []).length !== 5
+  || !/id="pagePreview"/.test(previewPageMarkup)
+  || !/desktop-preview-content/.test(homeMarkup)
+  || !/const layoutScale = this\.isEmbeddedPreview \? 2 : 1/.test(previewLogic)
   || !/:host\s*\{[\s\S]{0,180}background:\s*#0b0f14/.test(embeddedPreviewStyle)
   || !/getDesktopSplitUrl/.test(previewLogic)
   || !/wx\.reLaunch\(\{[\s\S]{0,100}url:\s*getDesktopSplitUrl/.test(previewLogic)
@@ -371,9 +393,9 @@ if (
   || !/updateStageResizeHover/.test(previewLogic)
   || !/stageResizeLongPress/.test(previewLogic)
   || !/openStageResizeTapMenu\(\)[\s\S]{0,500}stageResizeTapOpen:\s*true/.test(previewLogic)
-  || !/STAGE_RESIZE_MENU_DISMISS_DELAY\s*=\s*3000/.test(previewLogic)
-  || !/STAGE_RESIZE_DOUBLE_TAP_DELAY\s*=\s*500/.test(previewLogic)
-  || !/STAGE_RESIZE_GESTURE_SLOP_RPX\s*=\s*16/.test(previewLogic)
+  || !/STAGE_RESIZE_MENU_DISMISS_DELAY:\s*rivePolicy\.gesture\.menuDismissMs/.test(previewLogic)
+  || !/STAGE_RESIZE_DOUBLE_TAP_DELAY:\s*rivePolicy\.gesture\.miniDoubleTapMs/.test(previewLogic)
+  || !/STAGE_RESIZE_GESTURE_SLOP_RPX:\s*rivePolicy\.gesture\.miniSlopRpx/.test(previewLogic)
   || !/stageResizeMenuDismissTimer\s*=\s*setTimeout/.test(previewLogic)
   || !/clearTimeout\(this\.stageResizeMenuDismissTimer\)/.test(previewLogic)
   || !/stageResizeEnd\(event\)[\s\S]{0,1200}STAGE_RESIZE_DOUBLE_TAP_DELAY[\s\S]{0,300}closeStageResizeTapMenu\(\(\) => this\.applyFit\(nextFit, true\), nextFit\)/.test(previewLogic)
@@ -384,13 +406,13 @@ if (
   || !/ratio > 2 \/ 3[\s\S]{0,80}'cover'/.test(previewLogic)
   || !/applyFit\(selectedFit, true\)/.test(previewLogic)
   || !/grid-template-columns:\s*repeat\(3/.test(embeddedPreviewStyle)
-  || !/is-selecting \.stage-resizer__grip\s*\{[\s\S]{0,100}width:\s*calc\(33\.333% - 16rpx\)/.test(embeddedPreviewStyle)
+  || !/is-selecting \.stage-resizer__grip\s*\{[\s\S]{0,100}width:\s*calc\(33\.333% - 32rpx\)/.test(embeddedPreviewStyle)
   || !/is-tap-open \.stage-resizer__grip\s*\{[\s\S]{0,80}color:\s*#687588/.test(embeddedPreviewStyle)
   || !/is-press-active \.stage-resizer__grip\s*\{[\s\S]{0,80}color:\s*#f2c94c/.test(embeddedPreviewStyle)
   || !/stage-resizer__mode\s*\{[\s\S]{0,220}flex-direction:\s*row/.test(embeddedPreviewStyle)
   || ![previewStyle, embeddedPreviewStyle].every((style) => /stage-resizer\.is-selecting \.stage-resizer__mode\s*\{[\s\S]{0,140}pointer-events:\s*auto/.test(style))
-  || !/stage-resizer__grip view\s*\{[\s\S]{0,80}height:\s*4rpx[\s\S]{0,180}transition:\s*height 360ms cubic-bezier\(\.22, 1\.22, \.36, 1\)/.test(embeddedPreviewStyle)
-  || !/is-selecting \.stage-resizer__grip view\s*\{[\s\S]{0,60}height:\s*2\.5rpx/.test(embeddedPreviewStyle)
+  || !/stage-resizer__grip-bar\s*\{[\s\S]{0,80}height:\s*8rpx[\s\S]{0,180}transition:\s*height 360ms cubic-bezier\(\.22, 1\.22, \.36, 1\)/.test(embeddedPreviewStyle)
+  || !/is-selecting \.stage-resizer__grip-bar\s*\{[\s\S]{0,60}height:\s*5rpx/.test(embeddedPreviewStyle)
   || !/stage-resizer__mode\.is-hovered\s*\{[\s\S]{0,100}background:\s*rgba\(242, 201, 76, \.14\)/.test(embeddedPreviewStyle)
   || !/stage-resizer-grip\s*\{[\s\S]{0,100}height:\s*5px[\s\S]{0,260}height 360ms var\(--spring-gentle\)/.test(h5StyleSource)
   || !/stage-resizer\.is-selecting \.stage-resizer-grip\s*\{[\s\S]{0,100}height:\s*3px/.test(h5StyleSource)
@@ -398,13 +420,13 @@ if (
   || /bindtap="stageResizerTap"/.test(previewMarkup + embeddedPreviewMarkup)
   || /ignoreNextStageTap|stageResizerTap\(\)|selectStageResizeFit\(event\)/.test(previewLogic)
   || /stage-resizer__mode\.is-hovered\s*\{[\s\S]{0,120}(?:box-shadow|border)/.test(embeddedPreviewStyle)
-  || !/stage-resizer\.is-selecting\s*\{\s*height:\s*40rpx/.test(embeddedPreviewStyle)
-  || !/stage-resizer__modes\s*\{[\s\S]{0,180}top:\s*8rpx;[\s\S]{0,40}bottom:\s*8rpx/.test(embeddedPreviewStyle)
-  || !/stage-resizer__mode--contain[\s\S]{0,140}translateX\(calc\(100% \+ 8rpx\)\) scale\(\.94\)/.test(embeddedPreviewStyle)
-  || !/stage-resizer__mode--cover[\s\S]{0,140}translateX\(calc\(-100% - 8rpx\)\) scale\(\.94\)/.test(embeddedPreviewStyle)
+  || !/stage-resizer\.is-selecting\s*\{\s*height:\s*80rpx/.test(embeddedPreviewStyle)
+  || !/stage-resizer__modes\s*\{[\s\S]{0,180}top:\s*16rpx;[\s\S]{0,40}bottom:\s*16rpx/.test(embeddedPreviewStyle)
+  || !/stage-resizer__mode--contain[\s\S]{0,140}translateX\(calc\(100% \+ 16rpx\)\) scale\(\.94\)/.test(embeddedPreviewStyle)
+  || !/stage-resizer__mode--cover[\s\S]{0,140}translateX\(calc\(-100% - 16rpx\)\) scale\(\.94\)/.test(embeddedPreviewStyle)
   || !/stage-resizer\.is-selecting \.stage-resizer__mode[\s\S]{0,140}translateX\(0\) scale\(1\)/.test(embeddedPreviewStyle)
   || !/stage-resizer__mode--contain[\s\S]{0,100}justify-content:\s*center/.test(embeddedPreviewStyle)
-  || !/stage-resizer__mode\s*\{[\s\S]{0,420}border-radius:\s*5rpx/.test(embeddedPreviewStyle)
+  || !/stage-resizer__mode\s*\{[\s\S]{0,620}border-radius:\s*10rpx/.test(embeddedPreviewStyle)
   || !/arrows-in-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
   || !/arrows-out-simple-active\.svg/.test(previewMarkup + embeddedPreviewMarkup)
   || !/stage-resizer__mode\.is-hovered \.stage-resizer__mode-icon--active[\s\S]{0,60}opacity:\s*1/.test(embeddedPreviewStyle)
@@ -441,7 +463,7 @@ if (
       && /parameter-row parameter-row--last[\s\S]{0,100}缩放方式/.test(markup)
   })
   || !/loading-ring__spinner\s*\{[\s\S]{0,260}border-radius:\s*50%/.test(embeddedPreviewStyle)
-  || !/\.tone\s*\{[\s\S]{0,100}width:\s*30rpx;[\s\S]{0,100}height:\s*20rpx/.test(embeddedPreviewStyle)
+  || !/\.tone\s*\{[\s\S]{0,100}width:\s*60rpx;[\s\S]{0,100}height:\s*40rpx/.test(embeddedPreviewStyle)
 ) {
   throw new Error('参数顺序、Loading 圆环或 1.5 倍背景色块未按设计实现')
 }
@@ -470,19 +492,20 @@ if (
   || !/stageResizeTapOpen/.test(h5AppSource)
   || !/stageResizePressActive/.test(h5AppSource)
   || !/className="stage-resizer-modes"/.test(h5AppSource)
-  || !/ShareNetwork[\s\S]{0,160}发送文件/.test(h5AppSource)
+  || !/name=\{item\.hostedCode \? "download-simple" : "share-network"\}/.test(h5AppSource)
+  || !/\{item\.hostedCode \? "下载文件" : "发送文件"\}/.test(h5AppSource)
   || /不能删除/.test(h5AppSource)
-  || !/getVisibleBuiltinFiles/.test(h5LibrarySource)
-  || !/hideBuiltinFile/.test(h5LibrarySource)
+  || /getVisibleBuiltinFiles|hideBuiltinFile/.test(h5LibrarySource)
   || !/\.tone-button\s*\{[\s\S]{0,100}width:\s*45px;[\s\S]{0,80}height:\s*30px/.test(h5StyleSource)
-  || /label="文件操作"|继续导入|下载文件/.test(h5AppSource)
-  || !/className="topbar-download"/.test(h5AppSource)
+  || /label="文件操作"|继续导入/.test(h5AppSource)
+  || !/className="topbar-action topbar-download press-feedback"/.test(h5AppSource)
   || !/className="file-heading-download press-feedback"/.test(h5AppSource)
-  || !/className="timeline-tag"/.test(h5AppSource)
+  || !/className=\{`parameter-tag press-feedback timeline-tag/.test(h5PlaybackSource)
   || !/\.parameter-tag\.timeline-tag\s*\{[\s\S]{0,100}padding-right:\s*25px;[\s\S]{0,60}padding-left:\s*25px;/.test(h5StyleSource)
-  || !/const timelineProgress = `\$\{clamp\(timeline\.progress, 0, 1\) \* 100\}%`/.test(h5AppSource)
-  || !/progress=\{metadata\.activeAnimation === name \? timelineProgress : undefined\}/.test(h5AppSource)
-  || !/<i className="timeline-progress" style=\{\{ width: progress \}\} aria-hidden="true" \/>/.test(h5AppSource)
+  || !/<i className="timeline-progress" style=\{\{ width: progress \}\} aria-hidden="true" \/>/.test(h5PlaybackSource)
+  || !/await import\("\.\.\/\.\.\/lib\/animation-player"\)/.test(h5AppSource)
+  || /const \[timeline, setTimeline\]|const \[fps, setFps\]/.test(h5AppSource)
+  || !/pendingPlayerSizeRef/.test(h5AppSource)
   || !/\.timeline-progress\s*\{[\s\S]{0,120}position:\s*absolute;[\s\S]{0,160}background:\s*rgb\(242 201 76 \/ \.32\);[\s\S]{0,120}transition:\s*width 100ms linear/.test(h5StyleSource)
   || /var\(--timeline-progress\)/.test(h5StyleSource)
   || !/fit === "contain" && hasStageAspect/.test(h5AppSource)
@@ -533,7 +556,7 @@ if (/thumbnailCanvas|generateMissingThumbnails|scheduleMissingThumbnails/.test(h
 }
 if (
   !/showShareMenu/.test(shareLogic)
-  || !/FRIEND_SHARE_IMAGE\s*=\s*['"]\/share-friend\.png['"]/.test(shareLogic)
+  || !/FRIEND_SHARE_IMAGE\s*=\s*['"]\/share-friend\.jpg['"]/.test(shareLogic)
   || !/TIMELINE_SHARE_IMAGE\s*=\s*['"]\/share-timeline\.png['"]/.test(shareLogic)
   || !/menus:\s*SHARE_MENUS/.test(shareLogic)
   || !/shareAppMessage/.test(shareLogic)
@@ -541,8 +564,8 @@ if (
   || !/showShareMenu\.object\.menus/.test(shareLogic)
   || /canIUse\(['"]showShareMenu\.menus['"]\)/.test(shareLogic)
   || ![homeLogic, previewLogic].every((source) => (
-    /onShareAppMessage:\s*function\s*\(\)/.test(source)
-    && /onShareTimeline:\s*function\s*\(\)/.test(source)
+    /onShareAppMessage(?:\s*:\s*function)?\s*\(\)/.test(source)
+    && /onShareTimeline(?:\s*:\s*function)?\s*\(\)/.test(source)
     && /imageUrl:\s*FRIEND_SHARE_IMAGE/.test(source)
     && /imageUrl:\s*TIMELINE_SHARE_IMAGE/.test(source)
     && /onShow\(\)\s*{[\s\S]{0,120}enableShareMenu\(\)/.test(source)
@@ -551,7 +574,7 @@ if (
   throw new Error('首页或原生预览没有完整开启微信分享菜单')
 }
 
-const friendShareBytes = (await fs.stat(path.join(root, 'share-friend.png'))).size
+const friendShareBytes = (await fs.stat(path.join(root, 'share-friend.jpg'))).size
 const timelineShareBytes = (await fs.stat(path.join(root, 'share-timeline.png'))).size
 if (friendShareBytes > 140 * 1024 || timelineShareBytes > 40 * 1024) {
   throw new Error('分享缩略图体积过大，请先压缩再打包')
@@ -657,8 +680,8 @@ if (
   !/prewarmRuntime/.test(homeLogic)
   || !/setTimeout\(\(\) => this\.startRivePrewarm\(\), 600\)/.test(homeLogic)
   || !/installRuntimeShims\(null, \{ probeAudio: false \}\)/.test(nativeRuntime)
-  || !/IOS_AUDIO_FRAME_INTERVAL/.test(nativeRuntime)
-  || !/IOS_AUDIO_PIXEL_RATIO_LIMIT/.test(nativeRuntime)
+  || !/IOS_AUDIO_FRAME_INTERVAL/.test(nativePerformance)
+  || !/IOS_AUDIO_PIXEL_RATIO_LIMIT/.test(nativePerformance)
   || !/audioResumeTasks/.test(nativeRuntime)
   || !/queueActiveState/.test(previewLogic)
 ) {
@@ -669,8 +692,8 @@ if (
   || !/artboardCatalogLoaded/.test(nativeRuntime + previewLogic)
   || !/artboardCount/.test(nativeRuntime + previewLogic)
   || !/bindtap="expandArtboardCatalog"/.test(previewMarkup)
-  || !/IOS_COMPLEX_FRAME_INTERVAL/.test(nativeRuntime)
-  || !/IOS_COMPLEX_PIXEL_RATIO_LIMIT/.test(nativeRuntime)
+  || !/IOS_COMPLEX_FRAME_INTERVAL/.test(nativePerformance)
+  || !/IOS_COMPLEX_PIXEL_RATIO_LIMIT/.test(nativePerformance)
   || !/cancelFrame\(this\.frameRequest\)/.test(nativeRuntime)
   || /artboards:\s*metadata\.artboards/.test(previewLogic)
 ) {
@@ -704,7 +727,7 @@ if (
   || !/shouldBypassEmbeddedAudio/.test(nativeRuntime)
   || !/artboard\.volume/.test(nativeRuntime)
   || !/suspendRuntimeAudio/.test(nativeRuntime)
-  || !/MAX_AUDIO_SOURCE_BYTES/.test(nativeRuntime)
+  || !/MAX_AUDIO_SOURCE_BYTES/.test(nativePerformance)
   || !/audioWindow:\s*runtimeAudioWindow/.test(nativeRuntime)
   || !/moduleArg\.audioWindow\.AudioContext/.test(nativeVendor)
   || !/moduleArg\.audioWindow\.miniaudio/.test(nativeVendor)

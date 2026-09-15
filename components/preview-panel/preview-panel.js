@@ -33,6 +33,11 @@ Component({
       type: String,
       value: '',
       observer: '_fileIdChanged'
+    },
+    embedded: {
+      type: Boolean,
+      value: false,
+      observer: '_embeddedChanged'
     }
   },
 
@@ -42,7 +47,7 @@ Component({
 
   lifetimes: {
     attached() {
-      this.isEmbeddedPreview = true
+      this.isEmbeddedPreview = Boolean(this.data.embedded)
       this.embeddedPreviewAttached = true
       this.pageVisible = true
       this._loadEmbeddedFile(this.data.fileId)
@@ -68,6 +73,10 @@ Component({
   methods: {
     ...sharedMethods,
 
+    _embeddedChanged(embedded) {
+      this.isEmbeddedPreview = Boolean(embedded)
+    },
+
     _fileIdChanged(fileId) {
       if (!this.embeddedPreviewAttached || !fileId) return
       this._loadEmbeddedFile(fileId)
@@ -89,7 +98,7 @@ Component({
       })
       previewDefinition.onLoad.call(this, {
         id: encodeURIComponent(fileId),
-        embedded: '1'
+        embedded: this.isEmbeddedPreview ? '1' : '0'
       })
       if (replacingFile && this.previewReady && this.data.file) {
         this.startPreview()

@@ -1,7 +1,7 @@
 const SHARE_TITLE = 'Rive 预览台｜在微信中预览 Rive 动效'
 const HOME_PATH = '/pages/index/index'
 const TIMELINE_QUERY = 'shareLanding=1'
-const FRIEND_SHARE_IMAGE = '/share-friend.png'
+const FRIEND_SHARE_IMAGE = '/share-friend.jpg'
 const TIMELINE_SHARE_IMAGE = '/share-timeline.png'
 const SHARE_MENUS = ['shareAppMessage', 'shareTimeline']
 
