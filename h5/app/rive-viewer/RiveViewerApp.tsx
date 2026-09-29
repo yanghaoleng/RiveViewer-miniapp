@@ -318,6 +318,8 @@ export function RiveViewerApp({
   const stageRef = useRef<HTMLDivElement>(null);
   const previewWorkbenchRef = useRef<HTMLDivElement>(null);
   const previewInspectorRef = useRef<HTMLElement>(null);
+  const controlPanelRef = useRef<HTMLDivElement>(null);
+  const pendingStateMachineScrollTopRef = useRef<number | null>(null);
   const previewColumnResizerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<WebRivePlayer | null>(null);
   const activeSourceRef = useRef<{ sessionId: number; data: ArrayBuffer } | null>(null);
@@ -508,7 +510,7 @@ export function RiveViewerApp({
         const openedSize = selectedVersion?.size || share.size;
         const openedAt = selectedVersion?.createdAt || share.createdAt;
         setPublicShare(share);
-        document.title = `${openedFilename} - Rive 预览`;
+        document.title = `${openedFilename} - Rive 预览台`;
         if (share.status === "archived") {
           activeSourceRef.current = null;
           telemetry.reset();
@@ -624,7 +626,7 @@ export function RiveViewerApp({
   }, [commentsReload, publicShare?.status, shareCode]);
 
   useEffect(() => () => {
-    if (shareCode) document.title = "Rive 预览台 H5";
+    if (shareCode) document.title = "Rive 预览台";
   }, [shareCode]);
 
   useEffect(() => {
@@ -985,7 +987,7 @@ export function RiveViewerApp({
       activeSourceRef.current = { sessionId, data };
       telemetry.reset();
       setActiveFile({ file: openedFile, sessionId });
-      document.title = `${openedFile.name} - Rive 预览`;
+      document.title = `${openedFile.name} - Rive 预览台`;
       if (activityPolicy === "record") {
         void touchLocalFile(file.id, updatedAt).catch((touchError) => {
           console.warn("更新最近打开时间失败", touchError);
@@ -1871,6 +1873,17 @@ export function RiveViewerApp({
     commentTimelineInsertionIdRef.current += 1;
     setCommentTimelineInsertion({ id: commentTimelineInsertionIdRef.current, name });
   }, []);
+  const selectStateMachine = useCallback((name: string) => {
+    if (metadata.activeStateMachine === name) return;
+    pendingStateMachineScrollTopRef.current = controlPanelRef.current?.scrollTop ?? 0;
+    playerRef.current?.selectStateMachine(name);
+  }, [metadata.activeStateMachine]);
+  useLayoutEffect(() => {
+    const scrollTop = pendingStateMachineScrollTopRef.current;
+    if (scrollTop === null) return;
+    if (controlPanelRef.current) controlPanelRef.current.scrollTop = scrollTop;
+    pendingStateMachineScrollTopRef.current = null;
+  }, [metadata.activeStateMachine]);
   const commentsPanel = publicShare && publicShare.status === "active" ? (
     <ShareCommentsPanel
       comments={comments}
@@ -2314,7 +2327,7 @@ export function RiveViewerApp({
           </div>
 
           <aside ref={previewInspectorRef} id="preview-inspector" className="preview-inspector" aria-label="评论与预览参数">
-            <div className="control-panel">
+            <div ref={controlPanelRef} className="control-panel">
           <RuntimeEventConsole log={runtimeEventLog} />
           {isPublicRoute && commentsPanel && (
             <div className="public-comments-inline">{commentsPanel}</div>
@@ -2334,7 +2347,7 @@ export function RiveViewerApp({
 
           <ParameterRow label="状态机">
             {metadata.stateMachines.length ? metadata.stateMachines.map((name) => (
-              <Tag key={name} selected={metadata.activeStateMachine === name} onClick={() => playerRef.current?.selectStateMachine(name)}>{name}</Tag>
+              <Tag key={name} selected={metadata.activeStateMachine === name} onClick={() => selectStateMachine(name)}>{name}</Tag>
             )) : <EmptyTag>无状态机</EmptyTag>}
           </ParameterRow>
 
