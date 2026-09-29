@@ -2,15 +2,23 @@
 
 更新日期：2026-09-29
 
+## 2026-09-29 钉钉单文件分享卡片标题（已正式发布）
+
+- 正式分享链接 `/<code>` 与 Beta `/beta/<code>` 的原始 HTML 会按当前文件版本输出 `<title>`、Open Graph 和 Twitter 标题，格式为“文件名 ｜ Rive 预览台”；浏览器打开后的标题也一致。
+- 公网 `https://rive.mikeywa.site/6Bt` 与 `/beta/6Bt` 均返回 `200`，HTML 标题和 `og:title` 为 `赛博叫叫_（黑）_(心形气球).riv ｜ Rive 预览台`，正式与 Beta JS 资源均返回 `200`。钉钉可能缓存旧卡片，重新分享链接可刷新。
+- 后端当前 `/opt/rive-host/releases/20260929-152900`，回滚点 `/opt/rive-host/releases/20260909-153532`；正式前端当前 `/var/www/rive-host/releases/20260929-152533`，回滚点 `/var/www/rive-host/releases/20260929-150000`；Beta 当前 `/var/www/rive-host-beta/releases/20260929-154400`（站点文件位于其 `beta/` 子目录），回滚点 `/var/www/rive-host-beta/releases/20260929-165300`。正式数据目录未切换。
+- Nginx 配置检查和重载通过。已加载主站配置实际位于 `/etc/nginx/sites-enabled/rive.mikeywa.site`；发布前备份在 `/var/backups/rive-host-nginx/20260929-152533/`，内含原已加载主站配置和 Beta 片段。`sites-available` 已与当前配置同步，并保留 `jocam-origin`、分析、Beta 和数据服务配置。
+- 提交 `c3a1840`、`9f875e1`、`b6ca8be` 已推送到 `release/beta`。
+
 ## 2026-09-29 矮窗口三栏独立滚动、分享标题与状态机滚动保持（已正式发布）
 
-- 桌面预览工作台锁定在窗口内；左侧最近文件、中央画面和右侧参数栏各自滚动，滚动不会移动整个页面。切换状态机时保留右栏滚动位置；重复点击当前状态机不触发重载。单文件标题为“文件名 - Rive 预览台”。
+- 桌面预览工作台锁定在窗口内；左侧最近文件、中央画面和右侧参数栏各自滚动，滚动不会移动整个页面。切换状态机时保留右栏滚动位置；重复点击当前状态机不触发重载。单文件标题为“文件名 ｜ Rive 预览台”。
 - Beta 当前 `/var/www/rive-host-beta/releases/20260929-165300`，直接回滚点 `/var/www/rive-host-beta/releases/20260929-144106`；正式前端已原子切到 `/var/www/rive-host/releases/20260929-150000`，直接回滚点 `/var/www/rive-host/releases/20260911-172135`。后端和数据目录未切换。
 - Beta 与正式入口的 HTML、CSS、JS 均返回 `200`，SHA-256 与本地构建相符。Beta 的 HTML/CSS/JS 为 `b49b9932e20740005c2f12b4ce87ba00217312ef6983a3a68feb2d1b93763879` / `570b4e302da086702c8ee3811fbcbaf15905d7d1e8d3b78ce6bcf91fc0ca970e` / `efae152397b86aaf0aa70a2246feba064f08415f69193fcdd46567eb0e68861b`；正式入口对应为 `c004c5d63cdfb65fb868d61df22c24834535742441cba4afd7ba51df2012c859` / `570b4e302da086702c8ee3811fbcbaf15905d7d1e8d3b78ce6bcf91fc0ca970e` / `3e51a31b2fd6a280c41e0f3372b6451bd71f71a53778625e18a0131ebafc2a4a`。正式 Rive WASM 两文件也与构建匹配，分别为 `0e018bfd0826a276c4fbefae4d3dd0fe1be127eed10bedce4268f3890e54d47b` 和 `b5efee7df4ca89763c3eec2f8f5fc0ecae7624b0cf87aedc8627fd2ecb694b40`。Safari 高缩放（较小有效窗口）下左栏滚动正常；右栏滚动独立于页面。
 
 ## 2026-09-29 Beta 分享标题与状态机滚动保持（已发布）
 
-- 单文件分享页加载后将浏览器标题设为“文件名 - Rive 预览台”；选择不同状态机时参数栏保留原滚动位置，重复选择当前状态机不重新初始化。
+- 单文件分享页加载后将浏览器标题设为“文件名 ｜ Rive 预览台”；选择不同状态机时参数栏保留原滚动位置，重复选择当前状态机不重新初始化。
 - H5 Beta 构建和 TypeScript 类型检查通过；此项已整合到 `/var/www/rive-host-beta/releases/20260929-165300`。正式版现已同步发布。
 - 线上 `/beta/`、CSS 与 JS 均返回 `200`；HTML、CSS、JS 解压 SHA-256 分别为 `928b522bfa19503229dca0b9db8ddf7787ff0b2904fa1b493074bfbabeb1e571`、`cb9b5d1e1064688976bed227e312f843bf515d439a7f44eaac994d0b87e53e47`、`d0162bc49b2f34eadcc4156d5a23794221f42f229848e044f31edb339e5f5552`，与本地构建一致。
 

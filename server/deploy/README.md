@@ -34,10 +34,13 @@ server/deploy/rive-host.service          -> /etc/systemd/system/rive-host.servic
 h5/deploy/nginx-rive-host.conf           -> /etc/nginx/sites-available/rive.mikeywa.site
 ```
 
-线上已经启用同名站点软链接。正式切换时应先备份并替换该站点文件，不能再
-并行启用第二个包含相同 `server_name` 或 `upstream rive_host_api` 的配置。
-Beta 配置片段 `/etc/nginx/snippets/rive-host-beta.conf` 与正式站点分开管理；
-正式站点可能还包含分析及数据服务配置，更新时须保留这些线上专用配置。
+正式虚拟主机已由 `sites-enabled` 加载。切换时应先备份并更新实际加载的站点文件，
+不能并行启用第二个包含相同 `server_name` 或 `upstream rive_host_api` 的配置。
+注意：线上实际加载的 `/etc/nginx/sites-enabled/rive.mikeywa.site` 是独立文件，
+不是指向 `sites-available` 的软链接；发布时应以已加载文件为基线更新，并同步
+维护 `sites-available` 副本。当前主站还包含 `jocam-origin`、分析、Beta 和数据服务
+配置，更新时须保留所有这些线上专用配置。
+Beta 配置片段 `/etc/nginx/snippets/rive-host-beta.conf` 与正式站点分开管理。
 
 三位分享码页面（`/<code>` 与 `/beta/<code>`）通过服务端 `/api/v1/share-page/<code>`
 返回对应的 H5 模板，并根据当前分享版本文件名渲染 `<title>`、Open Graph 和
