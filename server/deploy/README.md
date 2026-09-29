@@ -9,7 +9,7 @@
 /opt/rive-host/current                     后端原子软链接
 /var/www/rive-host/releases/<时间戳>/      H5 根路径静态产物
 /var/www/rive-host/current                 H5 原子软链接
-/var/www/rive-host-beta/releases/<时间戳>/  Beta H5 静态产物
+/var/www/rive-host-beta/releases/<时间戳>/beta/ Beta H5 静态产物
 /var/www/rive-host-beta/current             Beta H5 原子软链接
 /var/lib/rive-host                         文件与状态数据
 ```
