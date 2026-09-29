@@ -6,7 +6,7 @@
 
 - 桌面预览工作台锁定在窗口内；左侧最近文件、中央画面和右侧参数栏各自滚动，滚动不会移动整个页面。切换状态机时保留右栏滚动位置；重复点击当前状态机不触发重载。单文件标题为“文件名 - Rive 预览台”。
 - Beta 当前 `/var/www/rive-host-beta/releases/20260929-165300`，直接回滚点 `/var/www/rive-host-beta/releases/20260929-144106`；正式前端已原子切到 `/var/www/rive-host/releases/20260929-150000`，直接回滚点 `/var/www/rive-host/releases/20260911-172135`。后端和数据目录未切换。
-- Beta 与正式入口的 HTML、CSS、JS 均返回 `200`，发布后 SHA-256 与本地构建相符；Beta 已在 Safari 高缩放（较小有效窗口）下实测左栏滚动，右栏独立滚动已在分享页实测。
+- Beta 与正式入口的 HTML、CSS、JS 均返回 `200`，SHA-256 与本地构建相符。Beta 的 HTML/CSS/JS 为 `b49b9932e20740005c2f12b4ce87ba00217312ef6983a3a68feb2d1b93763879` / `570b4e302da086702c8ee3811fbcbaf15905d7d1e8d3b78ce6bcf91fc0ca970e` / `efae152397b86aaf0aa70a2246feba064f08415f69193fcdd46567eb0e68861b`；正式入口对应为 `c004c5d63cdfb65fb868d61df22c24834535742441cba4afd7ba51df2012c859` / `570b4e302da086702c8ee3811fbcbaf15905d7d1e8d3b78ce6bcf91fc0ca970e` / `3e51a31b2fd6a280c41e0f3372b6451bd71f71a53778625e18a0131ebafc2a4a`。正式 Rive WASM 两文件也与构建匹配，分别为 `0e018bfd0826a276c4fbefae4d3dd0fe1be127eed10bedce4268f3890e54d47b` 和 `b5efee7df4ca89763c3eec2f8f5fc0ecae7624b0cf87aedc8627fd2ecb694b40`。Safari 高缩放（较小有效窗口）下左栏滚动正常；右栏滚动独立于页面。
 
 ## 2026-09-29 Beta 分享标题与状态机滚动保持（已发布）
 
