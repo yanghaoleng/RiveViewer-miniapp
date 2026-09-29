@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
 import { readFile, unlink } from "node:fs/promises";
+import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { MAX_FILE_BYTES } from "./config.mjs";
 import { AppError, isAppError } from "./errors.mjs";
