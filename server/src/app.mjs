@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { unlink } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { MAX_FILE_BYTES } from "./config.mjs";
 import { AppError, isAppError } from "./errors.mjs";
@@ -12,6 +12,7 @@ import { ShareStore } from "./store.mjs";
 
 const CODE_PATH = "([0-9A-Za-z]{3})";
 const SHARE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}$`);
+const SHARE_PAGE_PATTERN = new RegExp(`^/api/v1/share-page/${CODE_PATH}$`);
 const FILE_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/file$`);
 const VERSIONS_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/versions$`);
 const COMMENTS_PATTERN = new RegExp(`^/api/v1/shares/${CODE_PATH}/comments$`);
@@ -43,6 +44,33 @@ function sendJson(response, status, value, extraHeaders = {}) {
     ...extraHeaders,
   });
   response.end(payload);
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]);
+}
+
+function renderSharePage(template, filename) {
+  const title = `${filename} ｜ Rive 预览台`;
+  const escapedTitle = escapeHtml(title);
+  const pageMetadata = [
+    `<meta property="og:title" content="${escapedTitle}" />`,
+    '<meta property="og:site_name" content="Rive 预览台" />',
+    '<meta property="og:type" content="website" />',
+    `<meta name="twitter:title" content="${escapedTitle}" />`,
+  ].join("\n    ");
+  if (!/<title>[\s\S]*?<\/title>/i.test(template) || !/<\/head>/i.test(template)) {
+    throw new Error("托管前端 HTML 模板缺少 title 或 head 标签");
+  }
+  return template
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapedTitle}</title>`)
+    .replace(/<\/head>/i, `    ${pageMetadata}\n  </head>`);
 }
 
 function sendError(response, error) {
@@ -266,6 +294,8 @@ async function sendFile(request, response, file) {
 
 export async function createRiveHostApp({
   dataDir,
+  publicRoot = "/var/www/rive-host/current",
+  betaPublicRoot = "/var/www/rive-host-beta/current/beta",
   maxTotalBytes,
   codeGenerator,
   now,
@@ -289,6 +319,33 @@ export async function createRiveHostApp({
 
       if (request.method === "GET" && pathname === "/healthz") {
         sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      const sharePageMatch = SHARE_PAGE_PATTERN.exec(pathname);
+      if (sharePageMatch) {
+        if (!['GET', 'HEAD'].includes(request.method)) {
+          throw new AppError(405, "method_not_allowed", "请求方法不支持");
+        }
+        const code = sharePageMatch[1];
+        const share = store.get(code);
+        const basePath = url.searchParams.get("basePath") === "/beta/" ? "/beta/" : "/";
+        const htmlRoot = basePath === "/beta/" ? betaPublicRoot : publicRoot;
+        const template = await readFile(path.join(htmlRoot, "index.html"), "utf8");
+        const file = share?.status === "active"
+          ? store.getFile(code, url.searchParams.get("versionId"))
+          : null;
+        const body = file
+          ? renderSharePage(template, file.metadata.filename)
+          : template;
+        const payload = Buffer.from(body);
+        response.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": payload.length,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "X-Robots-Tag": "noindex, nofollow",
+        });
+        response.end(request.method === "HEAD" ? undefined : payload);
         return;
       }
 

@@ -9,6 +9,8 @@
 /opt/rive-host/current                     后端原子软链接
 /var/www/rive-host/releases/<时间戳>/      H5 根路径静态产物
 /var/www/rive-host/current                 H5 原子软链接
+/var/www/rive-host-beta/releases/<时间戳>/  Beta H5 静态产物
+/var/www/rive-host-beta/current             Beta H5 原子软链接
 /var/lib/rive-host                         文件与状态数据
 ```
 
@@ -34,6 +36,15 @@ h5/deploy/nginx-rive-host.conf           -> /etc/nginx/sites-available/rive.mike
 
 线上已经启用同名站点软链接。正式切换时应先备份并替换该站点文件，不能再
 并行启用第二个包含相同 `server_name` 或 `upstream rive_host_api` 的配置。
+Beta 配置片段 `/etc/nginx/snippets/rive-host-beta.conf` 与正式站点分开管理；
+正式站点可能还包含分析及数据服务配置，更新时须保留这些线上专用配置。
+
+三位分享码页面（`/<code>` 与 `/beta/<code>`）通过服务端 `/api/v1/share-page/<code>`
+返回对应的 H5 模板，并根据当前分享版本文件名渲染 `<title>`、Open Graph 和
+Twitter 标题。正式与 Beta HTML 根目录分别由 `RIVE_HOST_PUBLIC_ROOT` 和
+`RIVE_HOST_BETA_PUBLIC_ROOT` 指定，默认值对应各自 `current` 软链接。更新这类
+分享页路由时，先部署并重启后端，再切换 Nginx；验证原始 HTML 的标题以及 H5
+资源路径后再完成发布。钉钉可能缓存已生成的旧卡片，修改后重新分享链接以刷新卡片。
 
 ## 发布前检查
 

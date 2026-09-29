@@ -30,8 +30,16 @@ export function loadConfig(environment = process.env) {
     throw new Error("RIVE_HOST_DATA_DIR 必须是绝对路径");
   }
 
+  const publicRoot = environment.RIVE_HOST_PUBLIC_ROOT || "/var/www/rive-host/current";
+  const betaPublicRoot = environment.RIVE_HOST_BETA_PUBLIC_ROOT || "/var/www/rive-host-beta/current/beta";
+  if (!path.isAbsolute(publicRoot) || !path.isAbsolute(betaPublicRoot)) {
+    throw new Error("托管前端目录必须是绝对路径");
+  }
+
   return {
     dataDir: path.resolve(rawDataDir),
+    publicRoot: path.resolve(publicRoot),
+    betaPublicRoot: path.resolve(betaPublicRoot),
     host: environment.RIVE_HOST_HOST || "127.0.0.1",
     port: parseInteger(environment.RIVE_HOST_PORT, 8097, "RIVE_HOST_PORT", 1, 65535),
     maxTotalBytes: parseInteger(

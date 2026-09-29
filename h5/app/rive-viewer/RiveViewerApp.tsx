@@ -510,7 +510,7 @@ export function RiveViewerApp({
         const openedSize = selectedVersion?.size || share.size;
         const openedAt = selectedVersion?.createdAt || share.createdAt;
         setPublicShare(share);
-        document.title = `${openedFilename} - Rive 预览台`;
+        document.title = `${openedFilename} ｜ Rive 预览台`;
         if (share.status === "archived") {
           activeSourceRef.current = null;
           telemetry.reset();
